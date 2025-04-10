@@ -30,6 +30,8 @@ const isChatbotOpen = ref(false);  // Toggle for chatbot
 const chatbotInput = ref('');  // User input for chatbot
 const chatbotMessages = ref([]);  // Store chat messages
 
+const loading = ref(false);
+
 
 const form = useForm();
 
@@ -217,6 +219,8 @@ const displayCity = ref('');
 // Fetch weather data method
 async function fetchWeather() {
   errorMessage.value = null;  // Clear previous error message
+  loading.value = true; // ✅ Start spinner
+
 
   try {
     if (!city.value) {
@@ -284,6 +288,9 @@ async function fetchWeather() {
     calculationResults.value = null;  // Reset it to `null` in case of error
     aiResponseResults.value = null;
     console.error(error);
+
+  } finally {
+    loading.value = false; // ✅ Stop spinner
   }
 }
 
@@ -342,6 +349,16 @@ function setCityInput(input) {
                                 <!-- Weather Search Input -->
                                 <div class="weather-search">
                                     <input id="weather-search-input" type="text" v-debounce:300="setCityInput" class="input w-full max-w-xs placeholder-white text-white" placeholder="Enter City..."/>
+
+                                     <!-- Spinner shown while loading -->
+                                    <div v-if="loading" class="flex items-center">
+                                        <svg class="animate-spin h-5 w-5 mt-3 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor"
+                                                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                        </svg>
+                                    </div>
+                                    
                                     <button @click="fetchWeather" class="fetch-button mt-4 btn btn-accent block max-w-ws"><strong>Get Weather</strong></button>
                                 </div>
 

@@ -15,55 +15,60 @@ const showingNavigationDropdown = ref(false);
         <div class="min-h-screen bg-gray-900">
             <nav class="bg-gray-800 border-b border-gray-700">
                 <!-- Primary Navigation Menu -->
-                <div class="nav-header max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="nav-header max-w-7xl mx-auto">
                     <div class="flex justify-between h-16">
-                        <div class="flex">
-                            <!-- Logo -->
-                            <div class="px-7 shrink-0 flex items-center">
-                                <Link :href="route('dashboard')">
-                                    <BreezeApplicationLogo class="block h-7 w-auto text-white" />
-                                </Link>
+
+                            <div class="flex">
+                                <!-- Logo -->
+                                <div class="px-7 shrink-0 flex items-center">
+                                    <Link :href="route('dashboard')">
+                                        <BreezeApplicationLogo class="block h-7 w-auto text-white" />
+                                    </Link>
+                                </div>
+                                <!-- Navigation Links -->
+                                <div class="hidden space-x-8 sm:-my-px sm:ml-5 sm:flex">
+                                    <BreezeNavLink 
+                                        :href="route('dashboard')" 
+                                        :active="route().current('dashboard')" 
+                                        class="text-xs !text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
+                                    >
+                                        Dashboard
+                                    </BreezeNavLink>
+                                    <BreezeNavLink 
+                                        :href="route('posts.index')" 
+                                        :active="route().current('posts.index')" 
+                                        class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
+                                    >
+                                        Posts
+                                    </BreezeNavLink>
+                                    <BreezeNavLink 
+                                        :href="route('weather.index')" 
+                                        :active="route().current('weather.index')" 
+                                        class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
+                                    >
+                                        Weather API
+                                    </BreezeNavLink>
+                                    <BreezeNavLink 
+                                        :href="route('parse-xml')" 
+                                        :active="route().current('parse-xml')" 
+                                        class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
+                                    >
+                                        XML Parser
+                                    </BreezeNavLink>
+                                    <BreezeNavLink 
+                                        :href="route('react.index')" 
+                                        :active="route().current('react.index')" 
+                                        class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
+                                    >
+                                        React Page
+                                    </BreezeNavLink>
+                                </div>
                             </div>
 
-                            <!-- Navigation Links -->
-                            <div class="hidden space-x-8 sm:-my-px sm:ml-5 sm:flex">
-                                <BreezeNavLink 
-                                    :href="route('dashboard')" 
-                                    :active="route().current('dashboard')" 
-                                    class="text-xs !text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
-                                >
-                                    Dashboard
-                                </BreezeNavLink>
-                                <BreezeNavLink 
-                                    :href="route('posts.index')" 
-                                    :active="route().current('posts.index')" 
-                                    class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
-                                >
-                                    Posts
-                                </BreezeNavLink>
-                                <BreezeNavLink 
-                                    :href="route('weather.index')" 
-                                    :active="route().current('weather.index')" 
-                                    class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
-                                >
-                                    Weather API
-                                </BreezeNavLink>
-                                <BreezeNavLink 
-                                    :href="route('parse-xml')" 
-                                    :active="route().current('parse-xml')" 
-                                    class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
-                                >
-                                    XML Parser
-                                </BreezeNavLink>
-                                <BreezeNavLink 
-                                    :href="route('react.index')" 
-                                    :active="route().current('react.index')" 
-                                    class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
-                                >
-                                    React Page
-                                </BreezeNavLink>
+                            <div class="absolute left-5 -bottom-5 py-3 text-xs text-gray-600">
+                                Max Behrens
                             </div>
-                        </div>
+
 
                         <div class="hidden sm:flex sm:items-center sm:ml-6">
                             <!-- Settings Dropdown -->

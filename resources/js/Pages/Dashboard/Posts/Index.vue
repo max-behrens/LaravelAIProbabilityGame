@@ -156,17 +156,7 @@ const getPostImage = (post) => {
                 </div>
                 <div class="shadow-sm sm:rounded-lg max-w-7xl mx-auto overflow-x-hidden">
                     <div class="p-5 border-b border-gray-200">
-                        <div class="mb-2">
-                            <Link class="btn btn-accent" :href="route('posts.create')">Add Post</Link>
-                        </div>
                         <div class="relative">
-                            <div class="mt-6 mb-6">
-                                <label for="default-search"
-                                    class="mb-2 text-sm font-medium text-gray-900 sr-only dark:text-gray-300">Search</label>
-                                <input id="default-search" type="text" v-debounce:300="setSearchInput"
-                                    @keydown="setSearchInput($event.target.value, $event)" 
-                                    class="input w-full max-w-xs placeholder-white text-white" placeholder="Search...">
-                            </div>
                             <div class="block md:block">
 
 
@@ -228,6 +218,20 @@ const getPostImage = (post) => {
                                     <table class="table table-compact w-full text-center table-zebra border-collapse">
                                         <thead
                                             class=" text-xs uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 ">
+
+                                            <tr>
+                                                <th colspan="4" class="w-1/2 px-6 py-3 text-left">
+                                                    <Link :href="route('posts.create')" 
+                                                        class="bg-[#578b87] text-white px-4 py-3 rounded hover:bg-[#406865] transition">
+                                                        + Add Post
+                                                    </Link>
+                                                </th>
+                                                <th colspan="3" class="w-1/2 px-6 py-3 text-right">
+                                                    <input id="default-search" type="text" v-debounce:300="setSearchInput"
+                                                    @keydown="setSearchInput($event.target.value, $event)" 
+                                                    class="input w-full max-w-xs placeholder-white text-white" placeholder="Search...">
+                                                </th>
+                                            </tr>
                                             <tr>
                                                 <th class="w-1/12 sticky top-0 ">Image</th>
                                                 <th class="w-1/12" scope="col" @click="sort('id')">
@@ -276,8 +280,8 @@ const getPostImage = (post) => {
                                                 <td scope="row"
                                                     class="w-1/12 px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap whitespace-normal break-words">
                                                     <div class="avatar">
-                                                        <div class="w-22 rounded">
-                                                            <img :src="getPostImage(post)" class="w-22 rounded" />
+                                                        <div class="w-16 rounded">
+                                                            <img :src="getPostImage(post)" class="w-16 rounded" />
                                                         </div>
                                                     </div>
                                                 </td>
