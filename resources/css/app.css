@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+/* Add global styles below */
+input {
+    background-color: rgba(103, 172, 166, 0.473) !important; /* Change input background globally */
+    color: black !important;
+}
+
+main {
+    transform: scale(0.75); /* Shrinks everything */
+    transform-origin: top center; /* Ensures scaling happens from the top */
+    width: 100vw; /* Ensures the body spans the full width */
+    height: auto; /* Allows content to dictate height */
+    overflow-x: hidden; /* Prevents horizontal scrolling */
+    margin: 0; /* Removes default margin */
+}
+
+.nav-header {
+    transform: scale(0.75);
+}
+
+.header-title {
+    transform: scale(0.68);
+}
+
+.postLogo {
+    aspect-ratio: auto !important;
+}
+
+
+.checkbox {
+    background-color: #578b87 !important;
+    border-color: #3d625f !important;
+}
+
+
+/* Ensures that table columns fit the available width */
+.table {
+    table-layout: fixed;
+    width: 100%; /* Ensure the table takes the full width */
+}
+
+/* Adjust the padding in table cells to reduce their width */
+.table td {
+    padding: 8px; /* Reduce the padding for compactness */
+    text-overflow: ellipsis; /* If content overflows, show ellipsis */
+    overflow: hidden; /* Hide overflowing content */
+    word-wrap: break-word; /* Ensure content wraps to the next line if necessary */
+}
+
+/* Optional: Adjust specific columns if needed */
+.table th, .table td {
+    white-space: nowrap; /* Prevent text from wrapping */
+}
+
+
+/* Override the table header */
+.table thead tr,
+.table thead th {
+    background-color: rgba(58, 94, 91, 0.432) !important;
+    color: white !important;
+}
+/* Body styles - more specific selectors */
+.table tbody tr,
+.table tbody td,
+.table.table-zebra tbody tr,
+.table.table-zebra tbody tr:nth-child(even) {
+    background-color: rgba(186, 235, 232, 0.636) !important;
+    color: black !important;
+
+}
+
+.table tbody tr,
+.table tbody td,
+.table.table-zebra tbody tr,
+.table.table-zebra tbody tr:nth-child(odd) {
+    background-color: rgba(144, 184, 181, 0.636) !important;
+    color: black !important;
+}
+
+.btn-warning {
+    background-color: rgba(255, 255, 255, 0.541) !important;
+    border-color: white !important;
+}
+
+.btn-error {
+    background-color: rgba(255, 255, 255, 0.541) !important;
+    border-color: white !important;
+}
+
+
+/* .py-12 {
+    background-color: rgba(171, 221, 213, 0.342) !important;
+} */
+
+
+
+/* Make the sticky position only apply on larger screens */
+.table th:first-child {
+    position: -webkit-sticky;
+    position: sticky;
+    left: 0;
+    z-index: 11;
+}
+
+/* Disable sticky on mobile */
+@media (max-width: 767px) {
+    .table th:first-child {
+        position: static;
+    }
+}
