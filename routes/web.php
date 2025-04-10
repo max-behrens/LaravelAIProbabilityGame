@@ -36,7 +36,12 @@ Route::prefix('dashboard')
             Route::post('/update/{post}', [DashboardPostController::class, 'update'])->name('posts.update');
         });
 
-         // Add these new weather routes
+
+        Route::get('/aigame', function () {
+            return Inertia::render('Dashboard/AIGame/Index');
+        })->name('ai-game');
+        
+
          Route::get('/weather', function () {
             return Inertia::render('Dashboard/Weather/Index');
         })->name('weather.index');

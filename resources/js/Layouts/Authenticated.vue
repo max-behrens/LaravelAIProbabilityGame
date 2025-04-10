@@ -41,7 +41,14 @@ const showingNavigationDropdown = ref(false);
                                         Posts
                                     </BreezeNavLink>
                                     <BreezeNavLink 
-                                        :href="route('weather.index')" 
+                                        :href="route('ai-game')" 
+                                        :active="route().current('ai-game')" 
+                                        class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
+                                    >
+                                        AI Game
+                                    </BreezeNavLink>
+                                    <BreezeNavLink 
+                                        :href="route('ai-game')" 
                                         :active="route().current('weather.index')" 
                                         class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
                                     >
@@ -121,6 +128,13 @@ const showingNavigationDropdown = ref(false);
                             class="text-xs text-white !bg-transparent hover:text-white focus:text-white active:text-white"
                         >
                             Posts
+                        </BreezeResponsiveNavLink>
+                        <BreezeResponsiveNavLink 
+                            :href="route('ai-game')" 
+                            :active="route().current('ai-game')" 
+                            class="text-xs text-white !bg-transparent hover:text-white focus:text-white active:text-white"
+                        >
+                            AI Game
                         </BreezeResponsiveNavLink>
                         <BreezeResponsiveNavLink 
                             :href="route('weather.index')" 
