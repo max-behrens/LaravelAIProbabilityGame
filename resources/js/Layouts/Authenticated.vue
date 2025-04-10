@@ -18,7 +18,6 @@ const showingNavigationDropdown = ref(false);
                 <div class="nav-header max-w-7xl mx-auto">
                     <div class="flex justify-between h-16">
 
-                            <div class="flex">
                                 <!-- Logo -->
                                 <div class="px-7 shrink-0 flex items-center">
                                     <Link :href="route('dashboard')">
@@ -63,7 +62,6 @@ const showingNavigationDropdown = ref(false);
                                         React Page
                                     </BreezeNavLink>
                                 </div>
-                            </div>
 
                             <div class="absolute left-5 -bottom-5 py-3 text-xs text-gray-600">
                                 Max Behrens
