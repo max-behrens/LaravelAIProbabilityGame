@@ -122,7 +122,7 @@ const getPostImage = (post) => {
     }
 
     // Local URL
-    return `/storage/posts/${post.id}/${post.featured_image}`;
+    return `${post.featured_image}`;
 };
  
 

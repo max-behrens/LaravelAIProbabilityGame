@@ -58,9 +58,10 @@ return [
 
         'single' => [
             'driver' => 'single',
-            'path' => storage_path('logs/laravel.log'),
+            'path' => env('LOG_PATH', '/tmp/laravel.log'), // default to /tmp
             'level' => env('LOG_LEVEL', 'debug'),
         ],
+
 
         'daily' => [    
             'driver' => 'daily',

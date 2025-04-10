@@ -45,7 +45,7 @@ const getImageUrl = (imageName, postId = null) => {
         return imageName;
     }
 
-    return `/storage/posts/${postId}/${imageName}`;
+    return `${imageName}`;
 };
 
 // Create a reactive ref to hold the image URL
