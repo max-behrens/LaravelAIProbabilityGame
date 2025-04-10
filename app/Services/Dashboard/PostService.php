@@ -96,23 +96,19 @@ class PostService
     {
         if ($request->hasFile('featured_image') && $request->file('featured_image')->isValid()) {
             $this->removePreviousFeaturedImage($post);
+
+            $isLocal = app()->environment('local');
     
             $file = $request->file('featured_image');
             Log::info('File:', ['file' => $file]);
             $filename = $file->getClientOriginalName();
             Log::info('Filename:', ['filename' => $filename]);
-            
-            // Local environment detection
-            $isLocal = app()->environment('local');
-            $path = $isLocal 
-                ? "posts/{$post->id}/{$filename}" // Save to public/posts/ if on localhost
-                : "posts/{$post->id}/{$filename}"; // Default path for production
-    
+            $path = "posts/{$post->id}/{$filename}";
             Log::info('Path:', ['path' => $path]);
     
             // Use configured disk
-            $disk = $isLocal ? 'public' : config('filesystems.default'); // Use 'public' disk for local, else default disk
-    
+            $disk = $isLocal ? 'public' : config('filesystems.default');
+
             Log::info('Uploading featured image', [
                 'environment' => app()->environment(),
                 'disk' => $disk,
@@ -122,47 +118,53 @@ class PostService
                 'file_size' => $file->getSize(),
                 'file_mime' => $file->getMimeType()
             ]);
+
+                // Actually store the file
+                $filename = Str::random(40) . '.' . $file->getClientOriginalExtension(); // make it unique manually
+
+
+                $path = "posts/{$post->id}/{$filename}";
+
+                Log::info('Storing file', [
+                    'path' => $path,
+                    'filename' => $filename,
+                    'disk' => $disk,
+                    'isLocal' => $isLocal,
+                ]);
+
+                if ($isLocal) {
+                    Storage::disk($disk)->put($path, file_get_contents($file), 'public');
+                } else {
+                    Storage::disk($disk)->put($path, file_get_contents($file), $filename, 'public');
+                }
+
+                // Then store just $filename in DB:
+                $post->featured_image = $filename;
+
+                Log::info('post->featured_image:', ['post->featured_image' => $post->featured_image]);
+                $post->save();
+
     
-            // Actually store the file with a unique filename
-            $uniqueFilename = Str::random(40) . '.' . $file->getClientOriginalExtension();
+                Log::info('Successfully uploaded image', [
+                    'disk' => $disk, 
+                    'stored_path' => $path,
+                    'public_url' => Storage::disk($disk)->url($path)
+                ]);
+
+
+                if ($isLocal) {
+                    return asset('storage/' . $path); // Local URL for local environment
+                } else {
+                    // ✅ Return the public URL for S3 (or just the stored path if you prefer)
+                    return Storage::disk($disk)->url($path);
+                }
+
     
-            $path = $isLocal 
-                ? "posts/{$post->id}/{$uniqueFilename}" 
-                : "posts/{$post->id}/{$uniqueFilename}"; // Adjust path for local vs production
-    
-            Log::info('Storing file', [
-                'path' => $path,
-                'filename' => $uniqueFilename,
-                'disk' => $disk
-            ]);
-    
-            Storage::disk($disk)->put($path, file_get_contents($file), 'public');
-    
-            // Then store just $filename in DB:
-            $post->featured_image = $uniqueFilename;
-    
-            Log::info('post->featured_image:', ['post->featured_image' => $post->featured_image]);
-            $post->save();
-    
-            Log::info('Successfully uploaded image', [
-                'disk' => $disk, 
-                'stored_path' => $path,
-                'public_url' => Storage::disk($disk)->url($path)
-            ]);
-    
-            // ✅ For local, return the correct local URL
-            // On localhost, we will return the URL directly with the `storage` path
-            if ($isLocal) {
-                return asset('storage/' . $path); // Local URL for local environment
-            }
-    
-            // ✅ For production, return the S3 or configured storage URL
-            return Storage::disk($disk)->url($path); // Production (S3, etc.) URL
         }
+
     
         return $post->featured_image ?? '';
     }
-    
     
 
 
