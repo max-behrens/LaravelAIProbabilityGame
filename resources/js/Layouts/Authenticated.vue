@@ -48,7 +48,7 @@ const showingNavigationDropdown = ref(false);
                                         AI Game
                                     </BreezeNavLink>
                                     <BreezeNavLink 
-                                        :href="route('ai-game')" 
+                                        :href="route('weather.index')" 
                                         :active="route().current('weather.index')" 
                                         class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
                                     >
