@@ -42,7 +42,7 @@ const submit = () => {
 
             <div class="mt-4">
                 <BreezeLabel for="password" value="Password" />
-                <BreezeInput id="password" type="password" class="mt-1 block w-full" v-model="form.password" required autocomplete="current-password" />
+                <BreezeInput id="password" class="mt-1 block w-full" v-model="form.password" required autocomplete="current-password" />
                 <BreezeInputError class="mt-2" :message="form.errors.password" />
             </div>
 

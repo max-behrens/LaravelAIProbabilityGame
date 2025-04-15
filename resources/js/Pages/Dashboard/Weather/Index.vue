@@ -255,7 +255,7 @@ async function fetchWeather() {
 
     // ✅ Ensure `calculationResults` is set before calling `askAI`
     calculationResults.value = {
-      city: city.value,
+      city: city.value + ',',
       temperatureChanges: response.data.temperatureChanges,
       humidityChanges: response.data.humidityChanges,
       pressureChanges: response.data.pressureChanges,
