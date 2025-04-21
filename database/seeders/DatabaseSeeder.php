@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use App\Models\Games;
 
 class DatabaseSeeder extends Seeder
 {
@@ -12,12 +13,14 @@ class DatabaseSeeder extends Seeder
      *
      * @return void
      */
-    public function run()
+    public function run(): void
     {
         $this->call([
             RolesAndPermissionSeeder::class,
             UserSeeder::class,
             PostSeeder::class,
         ]);
+
+        Games::factory(10)->create();
     }
 }

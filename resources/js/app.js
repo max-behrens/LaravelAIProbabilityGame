@@ -10,6 +10,8 @@ import { ZiggyVue } from 'ziggy-js';
 // Import React and ReactDOM
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import Echo from 'laravel-echo';
+
 
 // Make React available globally
 window.React = React;
@@ -18,6 +20,14 @@ window.createReactRoot = createRoot;
 // Log to confirm React is available
 console.log('React version:', React.version);
 console.log('createRoot available:', typeof createRoot === 'function');
+
+if (window.gameId) {
+    Echo.channel(`game.${window.gameId}`)
+        .listen('GameJoined', (e) => {
+            console.log('Game joined broadcast received:', e);
+            // Don't mutate reactivity here - handle updates in Vue composables
+        });
+}
 
 const appName = window.document.getElementsByTagName('title')[0]?.innerText || 'Laravel';
 

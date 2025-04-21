@@ -10,6 +10,7 @@ use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Models\Permission;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 
 class User extends Authenticatable
@@ -66,5 +67,10 @@ class User extends Authenticatable
                 return $permissions;
             }
         );
+    }
+
+    public function games(): BelongsToMany
+    {
+        return $this->belongsToMany(Games::class, 'games_user', 'user_id', 'games_id');
     }
 }

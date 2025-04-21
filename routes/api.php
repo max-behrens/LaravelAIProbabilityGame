@@ -2,6 +2,8 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Models\Games;
+use App\Http\Controllers\Dashboard\GamesController;
 use App\Http\Controllers\Dashboard\DashboardAIController;
 use App\Http\Controllers\Dashboard\PostController;
 use App\Http\Controllers\Dashboard\ParseXmlController;

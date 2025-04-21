@@ -15,13 +15,25 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie/*'],
+    'paths' => ['api/*', 'sanctum/csrf-cookie'],
 
     'allowed_methods' => ['*'],
-    'allowed_origins' => ['*'],
+
+    'allowed_origins' => [
+        'http://localhost:3000',  // Vite default dev server
+        'http://localhost:5173',  // Another common Vite port
+        'http://localhost:8000',  // If your frontend is served from Laravel
+        'https://kxixav0h4j.execute-api.eu-west-2.amazonaws.com'
+    ],
+
+    'allowed_origins_patterns' => [],
+
     'allowed_headers' => ['*'],
+
     'exposed_headers' => [],
+
     'max_age' => 0,
-    'supports_credentials' => false,
+
+    'supports_credentials' => true,
 
 ];

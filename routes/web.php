@@ -6,6 +6,7 @@ use Illuminate\Foundation\Application;
 use App\Http\Controllers\Front\IndexController;
 use App\Http\Controllers\Dashboard\WeatherController;
 use App\Http\Controllers\Dashboard\DashboardAIController;
+use App\Http\Controllers\Dashboard\GamesController;
 use App\Http\Controllers\Dashboard\ParseXmlController;
 use App\Http\Controllers\Front\PostController as FrontPostController;
 use App\Http\Controllers\Dashboard\PostController as DashboardPostController;
@@ -36,6 +37,10 @@ Route::prefix('dashboard')
             Route::post('/update/{post}', [DashboardPostController::class, 'update'])->name('posts.update');
         });
 
+
+        Route::get('/games', [GamesController::class, 'index']);
+        Route::post('/games/{game}/join', [GamesController::class, 'join']);
+        Route::post('/games/{game}/leave', [GamesController::class, 'leave']);
 
         Route::get('/aigame', function () {
             return Inertia::render('Dashboard/AIGame/Index');
