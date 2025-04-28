@@ -1,4 +1,3 @@
-// resources/js/Composables/useGames.js
 import { ref, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
 import Pusher from 'pusher-js';
@@ -13,9 +12,11 @@ export function useGames() {
     try {
       const response = await axios.get('/dashboard/games');
       games.value = response.data;
+      return response.data;
     } catch (err) {
       console.error('Error fetching games:', err);
       error.value = err;
+      return [];
     }
   };
 
@@ -26,19 +27,15 @@ export function useGames() {
     });
 
     generalChannel = pusher.subscribe('games');
-    generalChannel.bind('game.updated', (data) => {
+    generalChannel.bind('game.updated', async (data) => {
       console.log('Game updated:', data);
-
-      const gameIndex = games.value.findIndex(g => g.id === data.game_id);
-      if (gameIndex !== -1) {
-        games.value[gameIndex].players_count = data.players_count;
-        games.value = [...games.value]; // Force reactivity
-      }
+      // Refresh all games data on update
+      await fetchGames();
     });
   };
 
-  onMounted(async () => {
-    await fetchGames();
+  onMounted(() => {
+    fetchGames();
     setupPusher();
   });
 

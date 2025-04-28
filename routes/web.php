@@ -10,6 +10,7 @@ use App\Http\Controllers\Dashboard\GamesController;
 use App\Http\Controllers\Dashboard\ParseXmlController;
 use App\Http\Controllers\Front\PostController as FrontPostController;
 use App\Http\Controllers\Dashboard\PostController as DashboardPostController;
+use App\Models\Games;
 
 /*
 |--------------------------------------------------------------------------
@@ -23,6 +24,15 @@ use App\Http\Controllers\Dashboard\PostController as DashboardPostController;
 */
 
 Route::get('/', IndexController::class)->name('index');
+
+
+
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/favicon.ico', function () {
+        return Response::file(public_path('favicon.ico'));
+    });
+});
+
 
 Route::prefix('dashboard')
     ->middleware(['auth', 'verified'])
@@ -43,8 +53,18 @@ Route::prefix('dashboard')
         Route::post('/games/{game}/leave', [GamesController::class, 'leave']);
 
         Route::get('/aigame', function () {
-            return Inertia::render('Dashboard/AIGame/Index');
+            // Get games with users relationship and players count
+            $games = Games::with('users')->withCount('users as players_count')->get();
+            
+            return Inertia::render('Dashboard/AIGame/Index', [
+                'games' => $games,
+                'user' => auth()->user()
+            ]);
         })->name('ai-game');
+
+        Route::get('/room/{game}/{user}', [GamesController::class, 'showRoom'])
+        ->name('room')
+        ->middleware('auth');
         
 
          Route::get('/weather', function () {
@@ -143,7 +163,3 @@ Route::get('/image/{path}', function ($path) {
     }
 })->name('get-image')->where('path', '.*');
 
-
-Route::get('/favicon.ico', function () {
-    return Response::file(public_path('favicon.ico'));
-});
