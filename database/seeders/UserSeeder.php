@@ -7,56 +7,51 @@ use Illuminate\Support\Str;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-
 
 class UserSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     *
-     * @return void
-     */
     public function run()
     {
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-        DB::table('users')->truncate();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
-
-        DB::table('users')->insert([
+        // Instead of truncating, just create users if they don't exist
+        DB::table('users')->updateOrInsert(
+            ['email' => 'test_readonly@test.com'],  // Check for existing user by email
             [
                 'name' => 'ReadOnly Tester',
-                'email' => 'test_readonly@test.com',
-                'password' => Hash::make('password'),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'name' => 'Regular Tester',
-                'email' => 'test@test.com',
-                'password' => Hash::make('password'),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'name' => 'Admin Tester',
-                'email' => 'test_admin@test.com',
-                'password' => Hash::make('password'),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-        ]);
-
-        // Add 1 random user
-        DB::table('users')->insert([
-            [
-                'name' => Str::random(10),
-                'email' => Str::random(10) . '@gmail.com',
                 'password' => Hash::make('password'),
                 'created_at' => now(),
                 'updated_at' => now(),
             ]
-        ]);
-    }
+        );
 
+        DB::table('users')->updateOrInsert(
+            ['email' => 'test@test.com'],
+            [
+                'name' => 'Regular Tester',
+                'password' => Hash::make('password'),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+
+        DB::table('users')->updateOrInsert(
+            ['email' => 'test_admin@test.com'],
+            [
+                'name' => 'Admin Tester',
+                'password' => Hash::make('password'),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+
+        // Create a random user if it doesn't exist
+        DB::table('users')->updateOrInsert(
+            ['email' => 'randomuser' . Str::random(10) . '@gmail.com'],
+            [
+                'name' => Str::random(10),
+                'password' => Hash::make('password'),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+    }
 }
