@@ -1,9 +1,9 @@
 <script setup>
-import { ref, watchEffect, onMounted } from 'vue';
+import { ref, watchEffect, onMounted, computed } from 'vue';
 import BreezeAuthenticatedLayout from '@/Layouts/Authenticated.vue';
 import { Head, Link } from '@inertiajs/inertia-vue3';
 import { useGames } from '@/Composables/useGames';
-
+import DynamicPagination from '@/Components/DynamicPagination.vue';
 
 const props = defineProps({
   games: Array,
@@ -17,8 +17,10 @@ const playersCount = ref({});
 const userInGames = ref({});
 const errorMessage = ref('');
 const successMessage = ref('');
-// const router = useRouter();
 
+// Internal states for pagination
+const currentPage = ref(1);
+const gamesPerPage = 6;  // Define how many games per page
 
 // Initialize with props and then update with live data
 onMounted(() => {
@@ -27,17 +29,18 @@ onMounted(() => {
 });
 
 watchEffect(() => {
+  currentPage.value = 1;
   if (liveGames.value && liveGames.value.length > 0) {
     updateGameState(liveGames.value);
   }
 });
 
+// Update local game state from the list of games
 const updateGameState = (gamesList) => {
   if (!Array.isArray(gamesList)) return;
-  
+
   gamesData.value = gamesList;
 
-  
   // Update players count and user participation for each game
   gamesList.forEach(game => {
     playersCount.value[game.id] = game.players_count || 0;
@@ -50,7 +53,25 @@ const updateGameState = (gamesList) => {
       userInGames.value[game.id] = false;
     }
   });
-  
+};
+
+// Compute total pages based on the games array length
+const totalPages = computed(() => {
+  return Math.ceil(gamesData.value.length / gamesPerPage);
+});
+
+// Get the games for the current page
+const currentPageGames = computed(() => {
+  const startIndex = (currentPage.value - 1) * gamesPerPage;
+  const endIndex = startIndex + gamesPerPage;
+  return gamesData.value.slice(startIndex, endIndex);
+});
+
+// Change the current page
+const changePage = (page) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page;
+  }
 };
 
 const joinGame = async (gameId) => {
@@ -107,7 +128,6 @@ const leaveGame = async (gameId) => {
 const enterGame = (gameId) => {
   window.location.href = `/dashboard/room/${gameId}/${props.user.id}`;
 };
-
 </script>
 
 <template>
@@ -128,8 +148,8 @@ const enterGame = (gameId) => {
           {{ successMessage }}
         </div>
 
-        <div v-if="gamesData.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div v-for="game in gamesData" :key="game.id" class="bg-white shadow-md rounded-lg p-6 flex flex-col justify-between">
+        <div v-if="currentPageGames.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div v-for="game in currentPageGames" :key="game.id" class="bg-white shadow-md rounded-lg p-6 flex flex-col justify-between">
             <h2 class="text-xl text-gray-700 font-semibold mb-2">{{ game.title }}</h2>
             <p class="text-gray-600 mb-2">
               {{ playersCount[game.id] || 0 }} / {{ game.max_players }} players
@@ -139,16 +159,13 @@ const enterGame = (gameId) => {
             </p>
 
             <div class="flex justify-between">
-
-              <!-- Enter Game Button -->
               <Link
-                  class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    :href="route('room', { game: game.id, user: props.user.id })"
+                class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                :href="route('room', { game: game.id, user: props.user.id })"
               >
-                  Enter Game
+                Enter Game
               </Link>
 
-              <!-- Join Game Button -->
               <button
                 @click="joinGame(game.id)"
                 :disabled="userInGames[game.id] || (playersCount[game.id] >= game.max_players)"
@@ -157,7 +174,6 @@ const enterGame = (gameId) => {
                 + Join Game
               </button>
 
-              <!-- Leave Game Button -->
               <button
                 @click="leaveGame(game.id)"
                 :disabled="!userInGames[game.id]"
@@ -172,6 +188,13 @@ const enterGame = (gameId) => {
         <div v-else class="text-gray-500 text-center mt-6">
           Loading games or none available.
         </div>
+
+        <!-- Pagination Controls -->
+        <DynamicPagination
+          :currentPage="currentPage"
+          :totalPages="totalPages"
+          @change-page="changePage"
+        />
       </div>
     </div>
   </BreezeAuthenticatedLayout>

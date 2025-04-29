@@ -22,7 +22,7 @@ class GamesController extends Controller
 
     public function index()
     {
-        $games = Games::with(['users', 'gameType'])->withCount('users as players_count')->get();
+        $games = Games::with(['users', 'gameType'])->withCount('users as players_count')->paginate(10);
         return $games;
     }
 
