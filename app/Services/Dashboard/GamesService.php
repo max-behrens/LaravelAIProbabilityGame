@@ -13,19 +13,6 @@ use Illuminate\Support\Facades\Log;
 
 class GamesService
 {
-    public function recordScore($userId, $gameId, $sessionId, $answer)
-    {
-        $question = GameQuestion::where('game_type_id', Games::find($gameId)->game_type_id)->first();
-
-        $score = $answer == $question->answer ? $question->score_awarded : 0;
-
-        GameScore::create([
-            'player_id' => $userId,
-            'game_id' => $gameId,
-            'session_id' => $sessionId,
-            'score' => $score,
-        ]);
-    }
 
     public function getGameScores($gameId)
     {
@@ -62,7 +49,7 @@ class GamesService
         Log::info('Game Type:', ['gameType' => $game->gameType]);
         Log::info('Game Type ID:', ['gameTypeId' => $game->game_type_id]);
         Log::info('Game Type Score Awarded:', ['scoreAwarded' => $game->gameType->score_awarded]);
-        
+
 
         $scoreAwarded = $game->gameType->score_awarded ?? 0;
 

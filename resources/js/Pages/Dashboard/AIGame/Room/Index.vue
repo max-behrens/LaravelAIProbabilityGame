@@ -84,6 +84,7 @@ const startGame = async () => {
 
 const submitAnswer = async (answer) => {
   try {
+    console.log('gameId:', props.gameId)
     const response = await axios.post('/submit-answer', {
       gameId: props.gameId,
       answer,
