@@ -8,6 +8,7 @@ use App\Models\GameType;
 use App\Models\GameQuestion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 
 class GamesService
