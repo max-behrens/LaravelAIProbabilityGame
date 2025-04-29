@@ -13,15 +13,11 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('games', function (Blueprint $table) {
-            $table->id();
-            $table->string('title');
-            $table->foreignId('game_type_id')->constrained('game_types');
-            $table->unsignedInteger('max_players')->default(2);
-            $table->timestamps();
+        Schema::table('game_types', function (Blueprint $table) {
+            $table->integer('score_awarded')->default(5);
         });
     }
-
+    
     /**
      * Reverse the migrations.
      *
@@ -29,6 +25,8 @@ return new class extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('games');
+        Schema::table('game_types', function (Blueprint $table) {
+            //
+        });
     }
 };

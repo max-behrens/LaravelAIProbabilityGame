@@ -36,6 +36,11 @@ Route::get('/chart-data', function () {
     ]);
 });
 
+Route::get('/player-averages', [GamesController::class, 'getPlayerAverages']);
+
+Route::post('/submit-answer', [GamesController::class, 'submitAnswer']);
+
+
 
 
 // Define the route that the Vue component is calling

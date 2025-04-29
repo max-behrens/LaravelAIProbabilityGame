@@ -25,4 +25,16 @@ class Games extends Model
     {
         return $this->belongsToMany(User::class, 'games_user', 'games_id', 'user_id');
     }
+
+    public function gameType()
+    {
+        return $this->belongsTo(GameType::class);
+    }
+
+    public function gameScores()
+    {
+        return $this->hasMany(GameScore::class);
+    }
+
+
 }
