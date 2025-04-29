@@ -23,7 +23,7 @@ const showingNavigationDropdown = ref(false);
                     <div class="flex justify-between h-16">
 
                                 <!-- Logo -->
-                                <div class="px-7 shrink-0 flex items-center">
+                                <div class="shrink-0 flex items-center">
                                     <Link :href="route('dashboard')">
                                         <BreezeApplicationLogo class="block h-7 w-auto text-white" />
                                     </Link>
@@ -74,7 +74,7 @@ const showingNavigationDropdown = ref(false);
                                     </BreezeNavLink>
                                 </div>
 
-                            <div class="absolute left-5 -bottom-5 py-3 text-xs text-gray-600">
+                            <div class="absolute -bottom-5 py-3 text-xs text-gray-600">
                                 Max Behrens
                             </div>
 
