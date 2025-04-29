@@ -16,6 +16,12 @@ class GamesService
     {
         $question = GameQuestion::where('game_type_id', Games::find($gameId)->game_type_id)->first();
 
+        Log::info('Game Question:', ['question' => $question]);
+        Log::info('User Answer:', ['answer' => $answer]);
+        Log::info('Correct Answer:', ['correct_answer' => $question->answer]);
+        Log::info('Score Awarded:', ['score_awarded' => $question->score_awarded]);
+        Log::info('game_type_id:', ['game_type_id' => $question->game_type_id]);
+
         $score = $answer == $question->answer ? $question->score_awarded : 0;
 
         GameScore::create([
