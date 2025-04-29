@@ -30,6 +30,10 @@ Route::get('/', IndexController::class)->name('index');
 Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::post('/submit-answer', [GamesController::class, 'submitAnswer']);
+
+    Route::get('/games/{gameId}/scores', [GamesController::class, 'getScores']);
+
+
     
     Route::get('/favicon.ico', function () {
         return Response::file(public_path('favicon.ico'));

@@ -10,11 +10,13 @@ import axios from 'axios';
 const props = defineProps({
   gameId: String,
   userId: String,
-  gameScores: Array,
 });
 
 // Set up composables and state
-const { games: liveGames, fetchGames } = useGames();
+const { games: liveGames, fetchGames, fetchGameScores, gameScores } = useGames();
+
+const gameGraphRef = ref(null);
+
 
 const playerCount = ref("1");
 const playAgainstAI = ref(false);
@@ -37,6 +39,7 @@ watchEffect(() => {
   if (currentGame.value) {
     playersCount.value = currentGame.value.players_count || 0;
     userInGame.value = currentGame.value.users?.some(u => u.id === parseInt(props.userId)) || false;
+    fetchGameScores(props.gameId);  // Fetch the game scores when the game data is updated
   }
 });
 
@@ -93,7 +96,10 @@ const submitAnswer = async (answer) => {
     if (response.data.success) {
       currentQuestion.value = null;
       isGameStarted.value = false;
-      successMessage.value = response.data.message; // <- Just flash it here
+      successMessage.value = response.data.message;
+
+      await fetchGameScores(props.gameId);
+      await gameGraphRef.value?.fetchPlayerAverages?.();
     }
   } catch (error) {
     console.error('Error submitting answer:', error);
@@ -208,7 +214,7 @@ const submit = () => {
 
           <!-- Game Graph -->
           <div class="basis-[20rem] flex-grow p-4 bg-gray-800 rounded shadow">
-            <GameGraphComponent :gameId="gameId" />
+            <GameGraphComponent ref="gameGraphRef" :gameId="gameId" />
           </div>
 
           <!-- Player Scores Table -->

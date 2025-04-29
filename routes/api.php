@@ -40,6 +40,8 @@ Route::get('/player-averages', [GamesController::class, 'getPlayerAverages']);
 
 Route::post('/submit-answer', [GamesController::class, 'submitAnswer']);
 
+Route::get('/games/{gameId}/scores', [GamesController::class, 'getScores']);
+
 
 
 

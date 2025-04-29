@@ -1,9 +1,11 @@
+// useGames.js
 import { ref, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
 import Pusher from 'pusher-js';
 
 export function useGames() {
   const games = ref([]);
+  const gameScores = ref([]); // Make it reactive and local
   const error = ref(null);
   let pusher = null;
   let generalChannel = null;
@@ -12,11 +14,17 @@ export function useGames() {
     try {
       const response = await axios.get('/dashboard/games');
       games.value = response.data;
-      return response.data;
     } catch (err) {
-      console.error('Error fetching games:', err);
       error.value = err;
-      return [];
+    }
+  };
+
+  const fetchGameScores = async (gameId) => {
+    try {
+      const response = await axios.get(`/games/${gameId}/scores`);
+      gameScores.value = response.data;
+    } catch (err) {
+      error.value = err;
     }
   };
 
@@ -27,9 +35,7 @@ export function useGames() {
     });
 
     generalChannel = pusher.subscribe('games');
-    generalChannel.bind('game.updated', async (data) => {
-      console.log('Game updated:', data);
-      // Refresh all games data on update
+    generalChannel.bind('game.updated', async () => {
       await fetchGames();
     });
   };
@@ -48,7 +54,9 @@ export function useGames() {
 
   return {
     games,
-    error,
+    gameScores,        // Expose this to the component
     fetchGames,
+    fetchGameScores,
+    error,
   };
 }

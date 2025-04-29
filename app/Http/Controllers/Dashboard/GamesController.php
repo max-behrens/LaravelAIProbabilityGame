@@ -60,16 +60,19 @@ class GamesController extends Controller
         return response()->json(['success' => true]);
     }
 
+    public function getScores(Request $request)
+    {
+
+        $gameScores = $this->gamesService->getGameScores($request->gameId);
+
+        return response()->json($gameScores);
+    }
+
     public function showRoom($game, $user)
     {
         // Fetch the game details and user info
         $gameDetails = Games::findOrFail($game);
         $userDetails = User::findOrFail($user);
-
-        // Get the game scores for the gameId
-        $gameScores = $this->gamesService->getGameScores($game);
-
-        Log::info('Game Scores:', $gameScores->toArray());
 
         // Return using Inertia
         return Inertia::render('Dashboard/AIGame/Room/Index', [
@@ -77,7 +80,6 @@ class GamesController extends Controller
             'userId' => $user,
             'gameDetails' => $gameDetails,
             'userDetails' => $userDetails,
-            'gameScores' => $gameScores, // Pass game scores to the view
         ]);
     }
 
