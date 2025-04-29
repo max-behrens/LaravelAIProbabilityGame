@@ -17,12 +17,6 @@ class GamesService
     {
         $question = GameQuestion::where('game_type_id', Games::find($gameId)->game_type_id)->first();
 
-        Log::info('Game Question:', ['question' => $question]);
-        Log::info('User Answer:', ['answer' => $answer]);
-        Log::info('Correct Answer:', ['correct_answer' => $question->answer]);
-        Log::info('Score Awarded:', ['score_awarded' => $question->score_awarded]);
-        Log::info('game_type_id:', ['game_type_id' => $question->game_type_id]);
-
         $score = $answer == $question->answer ? $question->score_awarded : 0;
 
         GameScore::create([
@@ -62,6 +56,13 @@ class GamesService
     {
         // Retrieve the game and its players
         $game = Games::findOrFail($gameId);
+
+        Log::info('Game ID:', ['gameId' => $gameId]);
+        Log::info('Answer:', ['answer' => $answer]);
+        Log::info('Game Type:', ['gameType' => $game->gameType]);
+        Log::info('Game Type ID:', ['gameTypeId' => $game->game_type_id]);
+        Log::info('Game Type Score Awarded:', ['scoreAwarded' => $game->gameType->score_awarded]);
+        
 
         $scoreAwarded = $game->gameType->score_awarded ?? 0;
 
