@@ -9,7 +9,7 @@ return new class extends Migration
     public function up()
     {
         Schema::table('games', function (Blueprint $table) {
-            $table->foreignId('game_type_id')->constrained('game_types')->onDelete('cascade');
+            $table->unsignedBigInteger('game_type_id')->nullable();
         });
     }
     
