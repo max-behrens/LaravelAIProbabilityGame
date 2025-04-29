@@ -218,6 +218,7 @@ const submit = () => {
           </div>
 
           <!-- Player Scores Table -->
+          <div class="w-full">
           <div class="basis-[20rem] flex-grow p-4 bg-gray-800 rounded shadow">
             <h3 class="font-semibold text-lg mb-2 text-white">Player Scores</h3>
             <table class="w-full text-left border-collapse text-white">
@@ -239,6 +240,7 @@ const submit = () => {
               </tbody>
 
             </table>
+          </div>
           </div>
 
         </div>
