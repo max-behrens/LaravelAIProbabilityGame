@@ -14,12 +14,13 @@ use Illuminate\Support\Facades\Log;
 class GamesService
 {
 
-    public function getGameScores($gameId)
+    public function getGameScores($gameId, $page = 1, $perPage = 5)
     {
         return GameScore::with('user:id,name') // Only fetch user id and name
             ->where('game_id', $gameId)
             ->orderBy('created_at', 'desc') // Most recent first
-            ->get(['id', 'session_id', 'player_id', 'game_id', 'score', 'created_at']); // Limit fields returned
+            ->select('id', 'session_id', 'player_id as user_id', 'game_id', 'score', 'created_at')
+            ->paginate($perPage, ['*'], 'page', $page); // This generates correct pagination metadata
     }
     
 

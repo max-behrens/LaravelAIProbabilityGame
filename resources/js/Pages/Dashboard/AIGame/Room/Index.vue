@@ -1,10 +1,10 @@
 <script setup>
-import { ref, defineProps, computed, watchEffect } from 'vue';
+import { ref, defineProps, computed, watchEffect, onMounted } from 'vue';
 import BreezeAuthenticatedLayout from '@/Layouts/Authenticated.vue';
 import { Head, Link } from '@inertiajs/inertia-vue3';
-import { router } from '@inertiajs/inertia';
-import GameGraphComponent from '@/Components/GameGraphComponent.vue';
 import { useGames } from '@/Composables/useGames';
+import DynamicPagination from '@/Components/DynamicPagination.vue';
+import GameGraphComponent from '@/Components/GameGraphComponent.vue';
 import axios from 'axios';
 
 const props = defineProps({
@@ -13,14 +13,12 @@ const props = defineProps({
 });
 
 // Set up composables and state
-const { games: liveGames, fetchGames, fetchGameScores, gameScores } = useGames();
+const { games: liveGames, fetchGames, fetchGameScores, gameScores, scoresMetadata } = useGames();
 
 const gameGraphRef = ref(null);
 
-
 const playerCount = ref("1");
 const playAgainstAI = ref(false);
-const playersCount = ref(0);
 const userInGame = ref(false);
 const errorMessage = ref('');
 const successMessage = ref('');
@@ -28,26 +26,50 @@ const successMessage = ref('');
 const currentQuestion = ref(null);
 const isGameStarted = ref(false);
 const userAnswer = ref('');
+const currentGame = ref(null);
 
-// Get the live current game
-const currentGame = computed(() => {
-  return liveGames.value.find((g) => g.id === parseInt(props.gameId));
+// Score pagination
+const scoresCurrentPage = ref(1);
+const scoresPerPage = ref(10);
+const scoresTotalPages = computed(() => scoresMetadata.value?.lastPage || 1);
+
+// Initialize with props and then update with live data
+onMounted(() => {
+  fetchGames(); // Get latest data from API
+  fetchGameScores(props.gameId, scoresCurrentPage.value); // Get scores with pagination
 });
 
 // Watch for game updates
 watchEffect(() => {
-  if (currentGame.value) {
-    playersCount.value = currentGame.value.players_count || 0;
-    userInGame.value = currentGame.value.users?.some(u => u.id === parseInt(props.userId)) || false;
-    fetchGameScores(props.gameId);  // Fetch the game scores when the game data is updated
+  if (liveGames.value && liveGames.value.length > 0) {
+    updateGameState(liveGames.value);
+    
+    // Find current game in the list
+    currentGame.value = liveGames.value.find(game => game.id.toString() === props.gameId);
   }
 });
 
-// Functions
-const handlePlay = () => {
-  console.log(`Playing with ${playerCount.value} player(s), against AI: ${playAgainstAI.value}`);
+// Update local game state from the list of games
+const updateGameState = (gamesList) => {
+  if (!Array.isArray(gamesList)) return;
+  
+  gamesList.forEach(game => {
+    // Check if current user is in this game
+    if (game.users && game.id.toString() === props.gameId) {
+      userInGame.value = game.users.some(u => u.id === parseInt(props.userId));
+    }
+  });
 };
 
+// Handle score pagination
+const changeScoresPage = (page) => {
+  if (page >= 1 && page <= scoresTotalPages.value) {
+    scoresCurrentPage.value = page;
+    fetchGameScores(props.gameId, page); // Fetch scores for the new page
+  }
+};
+
+// Functions for managing game participation
 const joinGame = async () => {
   errorMessage.value = '';
   successMessage.value = '';
@@ -87,7 +109,7 @@ const startGame = async () => {
 
 const submitAnswer = async (answer) => {
   try {
-    console.log('gameId:', props.gameId)
+    console.log('gameId:', props.gameId);
     const response = await axios.post('/submit-answer', {
       gameId: props.gameId,
       answer,
@@ -98,7 +120,8 @@ const submitAnswer = async (answer) => {
       isGameStarted.value = false;
       successMessage.value = response.data.message;
 
-      await fetchGameScores(props.gameId);
+      // Refresh scores with current pagination
+      await fetchGameScores(props.gameId, scoresCurrentPage.value);
       await gameGraphRef.value?.fetchPlayerAverages?.();
     }
   } catch (error) {
@@ -143,10 +166,8 @@ const submit = () => {
             </button>
           </div>
 
-           <!-- Controls -->
-           <div class="basis-full flex flex-wrap gap-4 justify-center p-4 bg-gray-800 rounded shadow">
-
-            <!-- Player Count Dropdown -->
+          <!-- Controls -->
+          <div class="basis-full flex flex-wrap gap-4 justify-center p-4 bg-gray-800 rounded shadow">
             <div class="flex items-center gap-2">
               <label for="players" class="font-medium text-white">Number of Players:</label>
               <select id="players" v-model="playerCount" class="border rounded px-2 py-1 bg-gray-700 text-white">
@@ -155,22 +176,12 @@ const submit = () => {
               </select>
             </div>
 
-            <!-- Play Against AI Checkbox -->
             <div class="flex items-center text-white">
               <input type="checkbox" v-model="playAgainstAI" class="mr-2">
               <span>Play against AI</span>
             </div>
 
-            <!-- Play Button -->
-            <!-- <div>
-              <button @click="handlePlay" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                Play
-              </button>
-            </div> -->
-
-            <!-- Join/Leave/Start/Exit -->
             <div class="flex flex-wrap gap-4 justify-center mt-4 w-full">
-
               <button @click="startGame" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
                 Start Game
               </button>
@@ -194,10 +205,8 @@ const submit = () => {
               >
                 Leave Game
               </button>
-
             </div>
-
-            </div>
+          </div>
 
           <!-- Players In Game -->
           <div class="basis-[20rem] flex-grow p-4 bg-gray-800 rounded shadow overflow-y-auto">
@@ -219,32 +228,39 @@ const submit = () => {
 
           <!-- Player Scores Table -->
           <div class="w-full">
-          <div class="basis-[20rem] flex-grow p-4 bg-gray-800 rounded shadow">
-            <h3 class="font-semibold text-lg mb-2 text-white">Player Scores</h3>
-            <table class="w-full text-left border-collapse text-white">
-              <thead>
-                <tr class="bg-gray-700">
-                  <th class="p-2 border-b">Player</th>
-                  <th class="p-2 border-b">Game Session</th>
-                  <th class="p-2 border-b">Score</th>
-                  <th class="p-2 border-b">Date Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="score in gameScores" :key="score.id">
-                  <td class="p-2 border-b">{{ score.user.name }}</td>
-                  <td class="p-2 border-b">{{ score.session_id }}</td>
-                  <td class="p-2 border-b">{{ score.score }}</td>
-                  <td class="p-2 border-b">{{ score.created_at }}</td> <!-- Optional -->
-                </tr>
-              </tbody>
-
-            </table>
+            <div class="basis-[20rem] flex-grow p-4 bg-gray-800 rounded shadow">
+              <h3 class="font-semibold text-lg mb-2 text-white">Player Scores</h3>
+              <table class="w-full text-left border-collapse text-white">
+                <thead>
+                  <tr class="bg-gray-700">
+                    <th class="p-2 border-b">Player</th>
+                    <th class="p-2 border-b">Game Session</th>
+                    <th class="p-2 border-b">Score</th>
+                    <th class="p-2 border-b">Date Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="score in gameScores" :key="score.id">
+                    <td class="p-2 border-b">{{ score.user?.name }}</td>
+                    <td class="p-2 border-b">{{ score.session_id }}</td>
+                    <td class="p-2 border-b">{{ score.score }}</td>
+                    <td class="p-2 border-b">{{ score.created_at }}</td>
+                  </tr>
+                  <tr v-if="gameScores.length === 0">
+                    <td colspan="4" class="p-2 text-center text-gray-400">No scores available</td>
+                  </tr>
+                </tbody>
+              </table>
+              
+              <!-- Add Pagination for Scores -->
+              <DynamicPagination
+                :currentPage="scoresCurrentPage"
+                :totalPages="scoresTotalPages"
+                @change-page="changeScoresPage"
+              />
+            </div>
           </div>
-          </div>
-
         </div>
-
       </div>
     </div>
   </BreezeAuthenticatedLayout>

@@ -62,9 +62,13 @@ class GamesController extends Controller
 
     public function getScores(Request $request)
     {
-
-        $gameScores = $this->gamesService->getGameScores($request->gameId);
-
+        $gameId = $request->gameId;
+        $page = $request->query('page', 1); // Get page number from request
+        
+        $gameScores = $this->gamesService->getGameScores($gameId, $page);
+    
+        Log::info('Game Scores:', ['gameScores' => $gameScores]);
+    
         return response()->json($gameScores);
     }
 
