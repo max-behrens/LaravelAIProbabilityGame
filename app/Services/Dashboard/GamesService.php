@@ -16,12 +16,34 @@ class GamesService
 
     public function getGameScores($gameId, $page = 1, $perPage = 5)
     {
-        return GameScore::with('user:id,name') // Only fetch user id and name
-            ->where('game_id', $gameId)
-            ->orderBy('created_at', 'desc') // Most recent first
-            ->select('id', 'session_id', 'player_id as user_id', 'game_id', 'score', 'created_at')
-            ->paginate($perPage, ['*'], 'page', $page); // This generates correct pagination metadata
+        $scores = GameScore::query()
+            ->join('users', 'game_scores.player_id', '=', 'users.id')
+            ->where('game_scores.game_id', $gameId)
+            ->orderBy('game_scores.created_at', 'desc')
+            ->select(
+                'game_scores.id',
+                'game_scores.session_id',
+                'game_scores.player_id as user_id',
+                'users.name as user_name',
+                'game_scores.game_id',
+                'game_scores.score',
+                'game_scores.created_at'
+            )
+            ->paginate($perPage, ['*'], 'page', $page);
+    
+        // Transform the collection to add "user" object
+        $scores->getCollection()->transform(function ($score) {
+            $score->user = [
+                'id' => $score->user_id,
+                'name' => $score->user_name,
+            ];
+            unset($score->user_name); // optional: clean up
+            return $score;
+        });
+    
+        return $scores;
     }
+    
     
 
         /**

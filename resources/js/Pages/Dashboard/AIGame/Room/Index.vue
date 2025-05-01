@@ -15,6 +15,12 @@ const props = defineProps({
 // Set up composables and state
 const { games: liveGames, fetchGames, fetchGameScores, gameScores, scoresMetadata } = useGames();
 
+console.log('gameScores:', gameScores.value);
+
+console.log('fetchGameScores:', fetchGameScores);
+
+
+
 const gameGraphRef = ref(null);
 
 const playerCount = ref("1");
@@ -134,6 +140,23 @@ const submit = () => {
   submitAnswer(userAnswer.value);
   userAnswer.value = '';
 };
+
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  
+  const date = new Date(dateString);
+  
+  // Use Intl.DateTimeFormat for localized date formatting
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric', 
+    month: 'short', 
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).format(date);
+};
 </script>
 
 <template>
@@ -241,10 +264,10 @@ const submit = () => {
                 </thead>
                 <tbody>
                   <tr v-for="score in gameScores" :key="score.id">
-                    <td class="p-2 border-b">{{ score.user?.name }}</td>
-                    <td class="p-2 border-b">{{ score.session_id }}</td>
-                    <td class="p-2 border-b">{{ score.score }}</td>
-                    <td class="p-2 border-b">{{ score.created_at }}</td>
+                    <td class="p-2 border-b break-words">{{ score.user?.name }}</td>
+                    <td class="p-2 border-b break-words">{{ score.session_id }}</td>
+                    <td class="p-2 border-b break-words">{{ score.score }}</td>
+                    <td class="p-2 border-b break-words">{{ formatDate(score.created_at) }}</td>
                   </tr>
                   <tr v-if="gameScores.length === 0">
                     <td colspan="4" class="p-2 text-center text-gray-400">No scores available</td>
