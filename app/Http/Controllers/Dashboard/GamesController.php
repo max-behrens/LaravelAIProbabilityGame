@@ -78,12 +78,15 @@ class GamesController extends Controller
         $gameDetails = Games::findOrFail($game);
         $userDetails = User::findOrFail($user);
 
+        $gameQuestion = $this->gamesService->getGameQuestion($gameDetails);
+
         // Return using Inertia
         return Inertia::render('Dashboard/AIGame/Room/Index', [
             'gameId' => $game,
             'userId' => $user,
             'gameDetails' => $gameDetails,
             'userDetails' => $userDetails,
+            'gameQuestion' => $gameQuestion,
         ]);
     }
 

@@ -62,21 +62,36 @@ class GamesService
             ->get();
     }
 
+    public function getGameQuestion(Games $game): ?GameQuestion
+    {
+        return $game->gameType->gameQuestions()->first();
+    }
+
+
+
+
     public function submitAnswers($gameId, $answer)
     {
         // Retrieve the game and its players
         $game = Games::findOrFail($gameId);
 
+        $gameTypeQuestion = $this->getGameQuestion($game);
+
         Log::info('Game ID:', ['gameId' => $gameId]);
         Log::info('Answer:', ['answer' => $answer]);
         Log::info('Game Type:', ['gameType' => $game->gameType]);
         Log::info('Game Type ID:', ['gameTypeId' => $game->game_type_id]);
-        Log::info('Game Type Score Awarded:', ['scoreAwarded' => $game->gameType->score_awarded]);
 
+        $players = $game->users;
 
-        $scoreAwarded = $game->gameType->score_awarded ?? 0;
+        Log::info('$gameTypeQuestion:', ['gameTypeQuestion' => $gameTypeQuestion]);
+        Log::info('$answer:', ['answer' => $answer]);
 
-        $players = $game->users; // assuming the players are related via a 'users' relationship
+        if ((int) $answer === $gameTypeQuestion->answer) {
+            $scoreAwarded = $gameTypeQuestion->score_awarded ?? 0;
+        } else {
+            $scoreAwarded = 0;
+        } 
 
         // Generate a new session ID
         $sessionId = Str::uuid()->toString();

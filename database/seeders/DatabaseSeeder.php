@@ -19,6 +19,8 @@ class DatabaseSeeder extends Seeder
             RolesAndPermissionSeeder::class,
             UserSeeder::class,
             PostSeeder::class,
+            GameTypeSeeder::class,
+            GameQuestionSeeder::class,
         ]);
 
         Games::factory(10)->create();

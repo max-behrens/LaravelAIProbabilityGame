@@ -2,8 +2,9 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class GameTypeSeeder extends Seeder
 {
@@ -15,8 +16,10 @@ class GameTypeSeeder extends Seeder
     public function run()
     {
         DB::table('game_types')->insert([
-            'game_title' => 'The Number Game'
+            'id' => 1,
+            'name' => 'The Number Game',
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
         ]);
     }
-    
 }

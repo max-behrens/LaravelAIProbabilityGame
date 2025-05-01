@@ -10,6 +10,7 @@ import axios from 'axios';
 const props = defineProps({
   gameId: String,
   userId: String,
+  gameQuestion: String,
 });
 
 // Set up composables and state
@@ -109,7 +110,7 @@ const leaveGame = async () => {
 };
 
 const startGame = async () => {
-  currentQuestion.value = "What is 10 + 10?";
+  currentQuestion.value = props.gameQuestion.question;
   isGameStarted.value = true;
 };
 

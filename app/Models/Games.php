@@ -28,7 +28,7 @@ class Games extends Model
 
     public function gameType()
     {
-        return $this->belongsTo(GameType::class);
+        return $this->belongsTo(GameType::class, 'game_type_id');
     }
 
     public function gameScores()

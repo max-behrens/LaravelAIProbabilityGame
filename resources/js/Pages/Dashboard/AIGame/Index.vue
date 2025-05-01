@@ -158,7 +158,7 @@ const enterGame = (gameId) => {
               Status: {{ userInGames[game.id] ? 'You have joined' : 'Not joined' }}
             </p>
 
-            <div class="flex justify-between">
+            <div class="flex justify-between text-center gap-12">
               <Link
                 class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
                 :href="route('room', { game: game.id, user: props.user.id })"
