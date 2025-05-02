@@ -15,11 +15,13 @@ class GameTypeSeeder extends Seeder
      */
     public function run()
     {
-        DB::table('game_types')->insert([
-            'id' => 1,
-            'name' => 'The Number Game',
-            'created_at' => Carbon::now(),
-            'updated_at' => Carbon::now(),
-        ]);
+        DB::table('game_types')->updateOrInsert(
+            ['id' => 1],
+            [
+                'name' => 'The Number Game',
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ]
+        );
     }
 }
