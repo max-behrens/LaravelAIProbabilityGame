@@ -18,8 +18,9 @@ class GamesFactory extends Factory
     public function definition()
     {
         return [
-            'title' => fake()->sentence(),
+            'title' => 'Game',
             'game_type_id' => GameType::inRandomOrder()->first()->id ?? GameType::factory(),
+            'max_players' => 2, // Or any default number
         ];
     }
 }

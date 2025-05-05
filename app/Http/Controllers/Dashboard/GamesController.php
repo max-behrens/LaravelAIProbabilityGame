@@ -19,10 +19,24 @@ class GamesController extends Controller
     {
         $this->gamesService = $gamesService;
     }
-
     public function index()
     {
-        $games = Games::with(['users', 'gameType'])->withCount('users as players_count')->paginate(10);
+        $games = Games::with(['users', 'gameType'])
+            ->withCount('users as players_count')
+            ->paginate(10);
+    
+        // Map games to include game_type_name
+        $games->getCollection()->transform(function ($game) {
+            return [
+                'id' => $game->id,
+                'title' => $game->title,
+                'players_count' => $game->players_count,
+                'max_players' => $game->max_players,
+                'users' => $game->users,
+                'game_type_name' => $game->gameType?->name ?? null,
+            ];
+        });
+    
         return $games;
     }
 
@@ -72,21 +86,23 @@ class GamesController extends Controller
         return response()->json($gameScores);
     }
 
-    public function showRoom($game, $user)
+    public function showRoom($gameId, $userId)
     {
         // Fetch the game details and user info
-        $gameDetails = Games::findOrFail($game);
-        $userDetails = User::findOrFail($user);
+        $gameDetails = Games::findOrFail($gameId);
+        $gameType = $this->gamesService->getGameType($gameDetails);
+        $userDetails = User::findOrFail($userId);
 
         $gameQuestion = $this->gamesService->getGameQuestion($gameDetails);
 
         // Return using Inertia
         return Inertia::render('Dashboard/AIGame/Room/Index', [
-            'gameId' => $game,
-            'userId' => $user,
-            'gameDetails' => $gameDetails,
+            'gameId' => $gameId,
+            'userId' => $userId,
+            'gameTitle' => $gameDetails->title,
             'userDetails' => $userDetails,
             'gameQuestion' => $gameQuestion,
+            'gameType' => $gameType,
         ]);
     }
 

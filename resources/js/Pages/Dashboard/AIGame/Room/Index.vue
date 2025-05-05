@@ -11,6 +11,8 @@ const props = defineProps({
   gameId: String,
   userId: String,
   gameQuestion: String,
+  gameTitle: String,
+  gameType: String,
 });
 
 // Set up composables and state
@@ -165,7 +167,7 @@ const formatDate = (dateString) => {
 
   <BreezeAuthenticatedLayout>
     <template #header>
-      <h2 class="font-semibold text-md text-white leading-tight">AI Game Room</h2>
+      <h2 class="font-semibold text-md text-white leading-tight"> {{ props.gameTitle }} {{ props.gameId }}: {{ props.gameType.name }} </h2>
     </template>
 
     <div class="py-12">

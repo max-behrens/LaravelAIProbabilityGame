@@ -150,7 +150,7 @@ const enterGame = (gameId) => {
 
         <div v-if="currentPageGames.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div v-for="game in currentPageGames" :key="game.id" class="bg-white shadow-md rounded-lg p-6 flex flex-col justify-between">
-            <h2 class="text-xl text-gray-700 font-semibold mb-2">{{ game.title }}</h2>
+            <h2 class="text-xl text-gray-700 font-semibold mb-2">  {{ game.title }} {{ game.id }}: {{ game.game_type_name }}</h2>
             <p class="text-gray-600 mb-2">
               {{ playersCount[game.id] || 0 }} / {{ game.max_players }} players
             </p>

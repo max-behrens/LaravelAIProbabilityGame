@@ -67,6 +67,11 @@ class GamesService
         return $game->gameType->gameQuestions()->first();
     }
 
+    public function getGameType(Games $game): ?GameType
+    {
+        return $game->gameType;
+    }
+
 
 
 

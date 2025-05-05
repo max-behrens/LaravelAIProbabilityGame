@@ -9,6 +9,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class Games extends Model
 {
     use HasFactory;
+    
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($game) {
+            // Automatically set the title when a game is created
+            $game->title = 'Game ' . $game->id;
+        });
+    }
 
     protected $appends = ['players_count'];
 
