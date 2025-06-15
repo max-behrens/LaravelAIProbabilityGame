@@ -3,7 +3,7 @@
 
 <head>
 
-    <!-- This fixes the CSRF mismatch on 1st try after reload. -->
+    <!-- This fixes the CSRF mismatch on 1st try after login. -->
     <script>
         $.ajaxSetup({
             headers: {
