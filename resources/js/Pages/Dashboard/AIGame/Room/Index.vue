@@ -145,17 +145,30 @@ const calculateQuestionTotals = () => {
 const getQuestionAveragesByUser = () => {
   const grouped = {};
   const maxScoresByQuestion = {};
+  const userAttempts = {}; // Track attempts per user, not per question
+  const questionCorrectCounts = {}; // Track correct answers per user per question
+
+  // Build max scores from props.gameQuestions first
   props.gameQuestions?.forEach(question => {
     const questionNumber = question.question_number || question.id;
-    maxScoresByQuestion[`Q${questionNumber}`] = question.score_awarded || 0;
+    const label = `Q${questionNumber}`;
+    maxScoresByQuestion[label] = question.score_awarded || 0;
   });
 
   allGameScores.value.forEach(score => {
     const playerName = score.user?.name || 'Anonymous';
-    if (!grouped[playerName]) grouped[playerName] = {};
+    if (!grouped[playerName]) {
+      grouped[playerName] = {};
+      userAttempts[playerName] = 0;
+      questionCorrectCounts[playerName] = {};
+    }
+
+    // Increment user attempts (each score record = one game submission)
+    userAttempts[playerName]++;
 
     let answers = score.answer_json;
     if (!answers) return;
+
     if (typeof answers === 'string') {
       try {
         answers = JSON.parse(answers);
@@ -167,9 +180,25 @@ const getQuestionAveragesByUser = () => {
     Object.entries(answers).forEach(([_, answer]) => {
       const questionNumber = answer?.question_number;
       const scoreValue = answer?.score_awarded ?? 0;
+      const isCorrect = answer?.is_correct ?? false;
+
       if (!questionNumber) return;
 
       const label = `Q${questionNumber}`;
+
+      // Fallback: if we don't have max score from props, use the score_awarded from the answer
+      if (!maxScoresByQuestion[label] && answer?.score_awarded) {
+        maxScoresByQuestion[label] = answer.score_awarded;
+      }
+
+      // Track correct answers per user per question
+      if (!questionCorrectCounts[playerName][label]) {
+        questionCorrectCounts[playerName][label] = 0;
+      }
+      if (isCorrect) {
+        questionCorrectCounts[playerName][label]++;
+      }
+
       if (!grouped[playerName][label]) {
         grouped[playerName][label] = { totalPlayerScore: 0, count: 0 };
       }
@@ -179,63 +208,107 @@ const getQuestionAveragesByUser = () => {
     });
   });
 
+  // Build series
   return Object.entries(grouped).map(([playerName, questions]) => {
+    const playerAttempts = userAttempts[playerName] || 0;
+    
     return {
       name: playerName,
       data: Object.entries(questions)
         .sort(([a], [b]) => parseInt(a.replace('Q', '')) - parseInt(b.replace('Q', '')))
-        .map(([label, { totalPlayerScore, count }]) => ({
-          x: label,
-          y: count > 0 ? totalPlayerScore / count : 0,
-          totalScore: maxScoresByQuestion[label] || 0,
-          playerTotalScore: totalPlayerScore,
-        })),
+        .map(([label, { totalPlayerScore, count }]) => {
+          const correctCount = questionCorrectCounts[playerName][label] || 0;
+          const successRate = playerAttempts > 0 ? (correctCount / playerAttempts) * 100 : 0;
+          
+          return {
+            x: label,
+            y: successRate, // Use success rate for coloring instead of average score
+            avgScore: count > 0 ? totalPlayerScore / count : 0, // Keep average for tooltip
+            totalScore: maxScoresByQuestion[label] || 0,
+            playerTotalScore: totalPlayerScore,
+            attempts: playerAttempts, // Now correctly shows user's total game attempts
+            successRate: successRate, // Success rate for this specific question
+          };
+        }),
     };
   });
 };
 
+
 // Chart Options
+// Updated chartOptions with click interactions disabled
 const chartOptions = ref({
   chart: {
     type: 'heatmap',
     height: 350,
     foreColor: '#ccc',
-    toolbar: { show: false },
+    toolbar: {
+      show: false
+    },
+  },
+  states: {
+    normal: {
+      filter: {
+        type: 'none', // normal state no filter
+      }
+    },
+    hover: {
+      filter: {
+        type: 'none',
+      }
+    },
+    active: {
+      filter: {
+        type: 'none' // disable any active state color change on click
+      }
+    }
   },
   tooltip: {
-    custom: function({ series, seriesIndex, dataPointIndex, w }) {
+    custom({ series, seriesIndex, dataPointIndex, w }) {
       const player = w.globals.seriesNames[seriesIndex];
       const question = w.globals.labels[dataPointIndex];
-      const averageScore = series[seriesIndex][dataPointIndex];
+      const successRate = series[seriesIndex][dataPointIndex];
       const dataPoint = w.globals.initialSeries[seriesIndex].data[dataPointIndex];
+      const attempts = dataPoint?.attempts ?? 1;
+      const avgScore = dataPoint?.avgScore ?? 0;
+
       return `<div style="padding:8px; background-color:#1e1e1e; color:#cccccc; border-radius:4px;">
-                <strong>${player}</strong><br/>
-                <strong>${question}</strong><br/>
-                Average: <strong>${averageScore.toFixed(2)}</strong><br/>
-                Max Possible: <strong>${dataPoint.totalScore}</strong><br/>
-                Player Total Earned: <strong>${dataPoint.playerTotalScore}</strong>
-              </div>`;
+        <strong>${player}</strong><br/>
+        <strong>${question}</strong><br/>
+        Average Score: <strong>${avgScore.toFixed(2)}</strong><br/>
+        No. Attempts: <strong>${attempts}</strong><br/>
+        Success Rate: <strong>${successRate.toFixed(0)}%</strong><br/>
+      </div>`;
     }
   },
   plotOptions: {
     heatmap: {
+      enableShades: true,
+      distributed: false,
       colorScale: {
         ranges: [
-          { from: 0, to: 10, color: '#0d3b66' },
-          { from: 11, to: 20, color: '#144d79' },
-          { from: 21, to: 30, color: '#1b5e8c' },
-          { from: 31, to: 40, color: '#22719f' },
-          { from: 41, to: 50, color: '#2973b2' },
+          // Much darker base color for lowest range for better text readability
+          { from: 0, to: 20, color: '#1a346e' }, // Even darker blue
+          { from: 21, to: 40, color: '#3b82f6' },
+          { from: 41, to: 60, color: '#60a5fa' },
+          { from: 61, to: 80, color: '#1e40af' },
+          { from: 81, to: 100, color: '#1e3a8a' },
         ]
       }
     }
   },
   dataLabels: {
     enabled: true,
-    formatter: function (val, opts) {
+    formatter(_, opts) {
       const dataPoint = opts.w.config.series[opts.seriesIndex].data[opts.dataPointIndex];
+      const avgScore = dataPoint.avgScore ?? 0;
       const totalScore = dataPoint.totalScore ?? 0;
-      return `${val.toFixed(2)} / ${totalScore}`;
+      
+      const formattedAvgScore = (avgScore % 1 === 0) 
+        ? avgScore.toString() 
+        : avgScore.toFixed(2);
+      
+      return `${formattedAvgScore} / ${totalScore}`;
     },
     style: {
       fontSize: '16px',
@@ -253,6 +326,7 @@ const chartOptions = ref({
     labels: { offsetX: 10, style: { colors: '#e5e7eb' } },
   },
 });
+
 
 // Pagination handler
 const changeScoresPage = (page) => {
@@ -459,25 +533,25 @@ onMounted(() => {
           <!-- Players and Scores Row -->
           <div class="flex flex-wrap gap-6 w-full">
             <!-- Players -->
-<div class="min-w-[300px] basis-1/4 p-4 bg-gray-800 rounded shadow text-gray-200">
-  <h3 class="font-semibold text-lg mb-2">Players In Game</h3>
+            <div class="min-w-[300px] basis-1/4 p-4 bg-gray-800 rounded shadow text-gray-200">
+              <h3 class="font-semibold text-lg mb-2">Players In Game</h3>
 
-  <div class="mb-2 text-gray-300 font-semibold">
-    Players: {{ playersCount }} / {{ maxPlayers }}
-  </div>
+              <div class="mb-2 text-gray-300 font-semibold">
+                Players: {{ playersCount }} / {{ maxPlayers }}
+              </div>
 
-  <div v-if="maxPlayersReached" class="mb-2 p-2 bg-red-700 bg-red-800 text-red-100 rounded text-center font-bold">
-    Max Players Reached
-  </div>
-  
-  <ul class="list-disc pl-5">
-    <li v-for="user in currentGame?.users ?? []" :key="user.id">{{ user.name }}</li>
-  </ul>
-  
-  <div v-if="(currentGame?.users?.length ?? 0) === 0" class="text-gray-400 mt-2">
-    Waiting for players to join...
-  </div>
-</div>
+              <div v-if="maxPlayersReached" class="mb-2 p-2 bg-red-700 bg-red-800 text-red-100 rounded text-center font-bold">
+                Max Players Reached
+              </div>
+              
+              <ul class="list-disc pl-5">
+                <li v-for="user in currentGame?.users ?? []" :key="user.id">{{ user.name }}</li>
+              </ul>
+              
+              <div v-if="(currentGame?.users?.length ?? 0) === 0" class="text-gray-400 mt-2">
+                Waiting for players to join...
+              </div>
+            </div>
 
 
             <!-- Player Scores -->
