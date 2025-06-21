@@ -19,32 +19,37 @@ class GameScoreSeeder extends Seeder
             $questions = $game->gameType->gameQuestions;
 
             foreach ($users as $user) {
-                $answerJson = [];
-                $score = 0;
+                // Random number of attempts for this user/game, from 1 to 3 (or 1 to 5, adjust as you want)
+                $attempts = rand(1, 3);
 
-                foreach ($questions as $index => $question) {
-                    $isCorrect = rand(0, 1) === 1;
-                    $submitted = $isCorrect ? $question->answer : fake()->word;
+                for ($attempt = 0; $attempt < $attempts; $attempt++) {
+                    $answerJson = [];
+                    $score = 0;
 
-                    $answerJson[$question->id] = [
-                        'question_number' => $index + 1,
-                        'question' => $question->question,
-                        'submitted' => $submitted,
-                        'correct_answer' => $question->answer,
-                        'is_correct' => $isCorrect,
-                        'score_awarded' => $isCorrect ? ($question->score_awarded ?? 0) : 0,
-                    ];
+                    foreach ($questions as $index => $question) {
+                        $isCorrect = rand(0, 1) === 1;
+                        $submitted = $isCorrect ? $question->answer : fake()->word;
 
-                    $score += $isCorrect ? ($question->score_awarded ?? 0) : 0;
+                        $answerJson[$question->id] = [
+                            'question_number' => $index + 1,
+                            'question' => $question->question,
+                            'submitted' => $submitted,
+                            'correct_answer' => $question->answer,
+                            'is_correct' => $isCorrect,
+                            'score_awarded' => $isCorrect ? ($question->score_awarded ?? 0) : 0,
+                        ];
+
+                        $score += $isCorrect ? ($question->score_awarded ?? 0) : 0;
+                    }
+
+                    GameScore::factory()->create([
+                        'game_id' => $game->id,
+                        'player_id' => $user->id,
+                        'answer_json' => $answerJson,
+                        'score' => $score,
+                        'session_id' => Str::uuid()->toString(),
+                    ]);
                 }
-
-                GameScore::factory()->create([
-                    'game_id' => $game->id,
-                    'player_id' => $user->id,
-                    'answer_json' => $answerJson,
-                    'score' => $score,
-                    'session_id' => Str::uuid()->toString(),
-                ]);
             }
         }
     }
