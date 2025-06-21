@@ -112,17 +112,19 @@ defineExpose({
 
 
 <template>
-  <div class="h-80 p-4 bg-gray-800 rounded shadow text-gray-200 relative">
+  <div class="h-80 p-4 bg-gray-800 rounded shadow text-gray-200 flex flex-col">
     <h3 class="font-semibold text-lg mb-2">Score Trends</h3>
-    <div v-if="playersData.length === 0" class="text-center text-sm text-gray-400">
-      No player data available.
+    <div class="flex-1 flex items-center justify-center">
+      <div v-if="playersData.length === 0" class="text-center text-gray-400">
+        No player data available.
+      </div>
+      <canvas
+        v-else
+        ref="chartCanvas"
+        class="w-full h-full"
+        role="img"
+        aria-label="Bar chart showing average player scores"
+      />
     </div>
-    <canvas
-      v-else
-      ref="chartCanvas"
-      class="w-full h-full"
-      role="img"
-      aria-label="Bar chart showing average player scores"
-    />
   </div>
 </template>

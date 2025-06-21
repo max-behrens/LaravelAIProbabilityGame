@@ -223,6 +223,9 @@ const chartOptions = ref({
       const totalScore = dataPoint.totalScore ?? 0;
       return `${val.toFixed(2)} / ${totalScore}`;
     },
+    style: {
+      fontSize: '16px',
+    },
   },
   grid: {
     padding: { right: 0, left: 30, top: 0, bottom: 0 }
@@ -230,10 +233,10 @@ const chartOptions = ref({
   legend: { show: false },
   colors: ['#33a6cc'],
   xaxis: {
-    labels: { style: { colors: '#a8a8a8' } },
+    labels: { style: { colors: '#e5e7eb' } },
   },
   yaxis: {
-    labels: { offsetX: 10, style: { colors: '#a8a8a8' } },
+    labels: { offsetX: 10, style: { colors: '#e5e7eb' } },
   },
 });
 
@@ -365,9 +368,9 @@ onMounted(() => {
 
     <div class="py-12">
       <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-        <!-- Flash Messages -->
-        <div v-if="errorMessage" class="mb-4 p-4 bg-red-100 text-red-700 rounded">{{ errorMessage }}</div>
-        <div v-if="successMessage" class="mb-4 p-4 bg-green-100 text-green-700 rounded">{{ successMessage }}</div>
+      <!-- Flash Messages -->
+      <div v-if="errorMessage" class="mb-4 p-4 bg-red-900 text-red-200 rounded border border-red-700">{{ errorMessage }}</div>
+      <div v-if="successMessage" class="mb-4 p-4 bg-green-900 text-green-200 rounded border border-green-700">{{ successMessage }}</div>
 
         <div class="flex flex-wrap gap-6 justify-center items-start">
           <!-- Question Input -->
@@ -381,16 +384,17 @@ onMounted(() => {
             <div class="flex flex-col sm:flex-row gap-4 justify-center">
               <input
                 v-model="answers[currentQuestionIndex]"
-                class="px-4 py-2 rounded text-black w-full sm:w-2/3"
+                class="px-4 py-2 rounded w-full sm:w-2/3 text-gray-200 placeholder-gray-400 !text-gray-200"
                 placeholder="Your answer"
               />
-<button
-  :disabled="submitting"
-  @click="nextOrSubmit"
-  class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
->
-  {{ isLastQuestion ? (submitting ? 'Submitting...' : 'Submit') : 'Next' }}
-</button>
+
+            <button
+              :disabled="submitting"
+              @click="nextOrSubmit"
+              class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+            >
+              {{ isLastQuestion ? (submitting ? 'Submitting...' : 'Submit') : 'Next' }}
+            </button>
 
             </div>
           </div>
@@ -485,13 +489,19 @@ onMounted(() => {
             <div class="basis-1/2 h-80 p-4 bg-gray-800 rounded shadow text-gray-200 flex flex-col justify-center items-center">
               <h3 class="font-semibold text-lg mb-2 self-start">Score Heatmap</h3>
               <div class="w-full h-full">
+                <!-- Only render chart if there's data -->
                 <VueApexCharts
+                  v-if="getQuestionAveragesByUser().length > 0"
                   type="heatmap"
                   width="100%"
                   height="100%"
                   :options="chartOptions"
                   :series="getQuestionAveragesByUser()"
                 />
+                <!-- Show message when no data -->
+                <div v-else class="flex items-center justify-center h-full text-gray-400">
+                  No score data available yet
+                </div>
               </div>
             </div>
 
