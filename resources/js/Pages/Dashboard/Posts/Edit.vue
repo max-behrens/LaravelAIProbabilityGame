@@ -134,9 +134,7 @@ onMounted(() => {
 
 </script>
 
-
 <template>
-
     <Head title="Post Edit" />
 
     <BreezeAuthenticatedLayout>
@@ -146,28 +144,29 @@ onMounted(() => {
             </h2>
         </template>
 
-        <div class="py-12">
+        <div class="py-12 bg-gray-900">  <!-- Dark background -->
             <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
-                <div class="overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-5 border-b border-gray-200">
-                        <input type="hidden" v-model="form.id">
+                <div class="overflow-hidden shadow-sm sm:rounded-lg bg-gray-800 border border-gray-700">  <!-- Dark card -->
+                    <div class="p-5 border-b border-gray-700">
+                        <input type="hidden" v-model="form.id" />
 
                         <input type="checkbox" id="my-error-modal" class="modal-toggle" v-model="form.hasErrors" />
                         <div class="modal">
-                            <div class="modal-box relative">
+                            <div class="modal-box relative bg-gray-800 text-white"> <!-- Dark modal -->
                                 <label for="my-error-modal"
-                                    class="btn btn-sm btn-circle absolute right-2 top-2">✕</label>
+                                    class="btn btn-sm btn-circle absolute right-2 top-2 bg-gray-700 hover:bg-gray-600 text-white">✕</label>
                                 <h3 class="text-lg font-bold">Error Message!</h3>
                                 <p class="py-4">Something went wrong!</p>
                             </div>
                         </div>
 
-                        <form @submit.prevent="submit">
-                            <div class="avatar">
-                                <div class="w-44 rounded">
-                                    <img :src="temp_image" />
+                        <form @submit.prevent="submit" class="text-white">
+                            <div class="avatar mb-6">
+                                <div class="w-44 rounded overflow-hidden border border-gray-600">
+                                    <img :src="temp_image" alt="Featured Image" />
                                 </div>
                             </div>
+
                             <div class="mb-6">
                                 <div>
                                     <progress class="progress progress-success w-44" v-if="form.progress"
@@ -179,59 +178,64 @@ onMounted(() => {
                                     class="btn btn-outline btn-primary btn-sm w-44">Choose Image</button>
                                 <input ref="featured_image" style="display:none" type="file" @change="fileChange" />
                             </div>
+
                             <div class="mb-6">
                                 <label for="Title"
-                                    class="block mb-2 text-sm font-medium text-gray-900 dark:text-gray-300">Title</label>
+                                    class="block mb-2 text-sm font-medium text-white">Title</label>
                                 <input type="text" v-model="form.title"
-                                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                                    class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
                                     placeholder="" />
-                                <div v-if="form.errors.title" class="text-sm text-red-600">
+                                <div v-if="form.errors.title" class="text-sm text-red-500">
                                     {{ form.errors.title }}
                                 </div>
                             </div>
+
                             <div class="mb-6">
                                 <label for="Slug"
-                                    class="block mb-2 text-sm font-medium text-gray-900 dark:text-gray-300">Slug</label>
+                                    class="block mb-2 text-sm font-medium text-white">Slug</label>
                                 <input type="text" v-model="form.slug"
-                                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                                    class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
                                     placeholder="" />
-                                <div v-if="form.errors.slug" class="text-sm text-red-600">
+                                <div v-if="form.errors.slug" class="text-sm text-red-500">
                                     {{ form.errors.slug }}
                                 </div>
                             </div>
+
                             <div class="mb-6">
                                 <label for="slug"
-                                    class="block mb-2 text-sm font-medium text-gray-900 dark:text-gray-300">Content</label>
-                                <textarea type="text" v-model="form.content"
-                                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 h-60"></textarea>
+                                    class="block mb-2 text-sm font-medium text-white">Content</label>
+                                <textarea v-model="form.content"
+                                    class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 h-60 resize-none"></textarea>
 
-                                <div v-if="form.errors.content" class="text-sm text-red-600">
+                                <div v-if="form.errors.content" class="text-sm text-red-500">
                                     {{ form.errors.content }}
                                 </div>
                             </div>
+
                             <div class="mb-6">
                                 <div class="flex">
                                     <div class="flex items-center mr-4">
                                         <input id="inline-radio" type="radio" value="0" v-model="form.is_active"
-                                            class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                                            class="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 focus:ring-blue-500 focus:ring-2" />
                                         <label for="inline-radio"
                                             class="ml-2 text-sm font-medium text-white">Not Published</label>
                                     </div>
                                     <div class="flex items-center mr-4">
                                         <input id="inline-2-radio" type="radio" value="1" v-model="form.is_active"
-                                            class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                                            class="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 focus:ring-blue-500 focus:ring-2" />
                                         <label for="inline-2-radio"
                                             class="ml-2 text-sm font-medium text-white">Published</label>
                                     </div>
                                 </div>
 
-                                <div v-if="form.errors.is_active" class="text-sm text-red-600">
+                                <div v-if="form.errors.is_active" class="text-sm text-red-500">
                                     {{ form.errors.is_active }}
                                 </div>
                             </div>
+
                             <button type="submit"
-                                class="text-white bg-blue-700  focus:outline-none  font-medium rounded-lg text-sm px-5 py-2.5 "
-                                :disabled="form.processing" :class="{ 'opacity-25': form.processing }">
+                                class="text-white bg-blue-700 hover:bg-blue-800 focus:outline-none font-medium rounded-lg text-sm px-5 py-2.5 disabled:opacity-50"
+                                :disabled="form.processing">
                                 Submit
                             </button>
                         </form>

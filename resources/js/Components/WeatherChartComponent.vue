@@ -51,22 +51,38 @@ const renderChart = () => {
             maintainAspectRatio: false,
             scales: {
                 x: {
-                    // Add unit to x-axis label (optional)
                     title: {
                         display: true,
-                        text: 'Forecast Days' // This is the label for the x-axis
+                        text: 'Forecast Days'
+                    },
+                    ticks: {
+                        color: '#D1D5DB' // Light gray for x-axis labels in dark mode
+                    },
+                    grid: {
+                        color: '#374151' // Dark grid lines
                     }
                 },
                 y: {
-                    // Add unit to y-axis label
                     title: {
                         display: true,
-                        text: 'Rate of Change per Day' // This is the generic label for the y-axis, but you can customize this
+                        text: 'Rate of Change per Day',
+                        color: '#D1D5DB' // Light gray for y-axis title
                     },
                     ticks: {
+                        color: '#D1D5DB', // Light gray for y-axis ticks
                         callback: function(value) {
-                            return value + ' units'; // Replace with the appropriate unit for your data (e.g., °C, %, hPa)
+                            return value + ' units';
                         }
+                    },
+                    grid: {
+                        color: '#374151' // Dark grid lines
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: {
+                        color: '#D1D5DB' // Legend text in light gray
                     }
                 }
             }
@@ -81,7 +97,7 @@ onMounted(renderChart);
 </script>
 
 <template>
-    <div class="w-full h-96 bg-gray-200 p-4 shadow-md rounded-lg">
+    <div class="w-full h-96 bg-gray-900 p-6 shadow-lg rounded-lg border border-gray-700">
         <canvas ref="chartCanvas"></canvas>
     </div>
 </template>

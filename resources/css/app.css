@@ -2,7 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-
 /* Add global styles below */
 input {
     background-color: rgba(103, 172, 166, 0.473) !important; /* Change input background globally */
@@ -30,12 +29,10 @@ main {
     aspect-ratio: auto !important;
 }
 
-
 .checkbox {
     background-color: #578b87 !important;
     border-color: #3d625f !important;
 }
-
 
 /* Ensures that table columns fit the available width */
 .table {
@@ -56,21 +53,25 @@ main {
     white-space: nowrap; /* Prevent text from wrapping */
 }
 
+/* Remove or comment out the following overrides to avoid green tint */
 
 /* Override the table header */
+/*
 .table thead tr,
 .table thead th {
     background-color: rgba(58, 94, 91, 0.432) !important;
     color: white !important;
 }
+*/
+
 /* Body styles - more specific selectors */
+/*
 .table tbody tr,
 .table tbody td,
 .table.table-zebra tbody tr,
 .table.table-zebra tbody tr:nth-child(even) {
     background-color: rgba(186, 235, 232, 0.636) !important;
     color: black !important;
-
 }
 
 .table tbody tr,
@@ -80,6 +81,7 @@ main {
     background-color: rgba(144, 184, 181, 0.636) !important;
     color: black !important;
 }
+*/
 
 .btn-warning {
     background-color: rgba(255, 255, 255, 0.541) !important;
@@ -91,12 +93,9 @@ main {
     border-color: white !important;
 }
 
-
 /* .py-12 {
     background-color: rgba(171, 221, 213, 0.342) !important;
 } */
-
-
 
 /* Make the sticky position only apply on larger screens */
 .table th:first-child {
