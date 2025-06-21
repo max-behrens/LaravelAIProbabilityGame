@@ -12,12 +12,18 @@ class GameScore extends Model
 
     protected $table = 'game_scores';
 
+    protected $casts = [
+        'answer_json' => 'array',
+    ];
+
+
     // Define the fillable fields that can be mass-assigned
     protected $fillable = [
         'game_id',
         'player_id',
         'score',
         'session_id',
+        'answer_json',
     ];
 
     /**

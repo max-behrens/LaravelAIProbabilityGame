@@ -3,26 +3,33 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
+use App\Models\GameType;
+use App\Models\GameQuestion;
 
 class GameQuestionSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
-    public function run()
-    {    
-        DB::table('game_questions')->updateOrInsert(
-            ['id' => 1],
-            [
-                'game_type_id' => 1,
-                'question' => 'What is 10 + 10?',
-                'answer' => 20,
-                'score_awarded' => 5,
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
-            ]
-        );
+    public function run(): void
+    {
+        $gameTypes = [
+            1 => 'number',
+            2 => 'history',
+            3 => 'geography',
+        ];
+
+        foreach ($gameTypes as $id => $slug) {
+            GameType::updateOrInsert(['id' => $id], [
+                'name' => ucfirst($slug) . ' Game',
+            ]);
+        }
+
+        $difficulties = ['easy', 'medium', 'hard'];
+
+        foreach ($gameTypes as $id => $slug) {
+            foreach ($difficulties as $difficulty) {
+                GameQuestion::factory()
+                    ->forGameTypeAndDifficulty($slug, $difficulty)
+                    ->create(['game_type_id' => $id]);
+            }
+        }
     }
 }

@@ -33,6 +33,7 @@
         "@fortawesome/vue-fontawesome": "^3.0.8",
         "@vitejs/plugin-react": "^4.3.4",
         "@vitejs/plugin-vue": "^5.2.1",
+        "apexcharts": "^4.7.0",
         "chart.js": "^4.4.8",
         "daisyui": "^2.24.0",
         "laravel-echo": "^2.0.2",
@@ -44,6 +45,7 @@
         "vite": "^6.2.0",
         "vue-debounce": "^4.0.0",
         "vue-router": "^4.5.0",
+        "vue3-apexcharts": "^1.8.0",
         "ziggy-js": "^2.5.1",
         "zone.js": "^0.15.0"
     }

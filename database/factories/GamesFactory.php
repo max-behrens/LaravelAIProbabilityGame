@@ -4,6 +4,8 @@ namespace Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
 use App\Models\GameType;
+use App\Models\Games;
+use App\Models\User; 
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Games>
@@ -18,9 +20,23 @@ class GamesFactory extends Factory
     public function definition()
     {
         return [
-            'title' => 'Game',
             'game_type_id' => GameType::inRandomOrder()->first()->id ?? GameType::factory(),
             'max_players' => 2, // Or any default number
         ];
     }
+
+    public function configure()
+    {
+        return $this->afterCreating(function (Games $game) {
+            // Remove existing users (if any)
+            $game->users()->detach();
+
+            $maxPlayers = $game->max_players ?? 1;
+            $users = User::inRandomOrder()->take($maxPlayers)->get();
+
+            $game->users()->attach($users->pluck('id')->toArray());
+        });
+    }
+
+
 }

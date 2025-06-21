@@ -10,7 +10,7 @@ input {
 }
 
 main {
-    transform: scale(0.68); /* Shrinks everything */
+    transform: scale(0.75); /* Shrinks everything */
     transform-origin: top center; /* Ensures scaling happens from the top */
     width: 100vw; /* Ensures the body spans the full width */
     height: auto; /* Allows content to dictate height */
@@ -19,11 +19,11 @@ main {
 }
 
 .nav-header {
-    transform: scale(0.68);
+    transform: scale(0.75);
 }
 
 .header-title {
-    transform: scale(0.68);
+    transform: scale(0.75);
 }
 
 .postLogo {

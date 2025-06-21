@@ -13,13 +13,11 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('games_user', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->nullable()->constrained('users');
-            $table->foreignId('game_id')->nullable()->constrained('games');
-            $table->timestamps();
+        Schema::table('games', function (Blueprint $table) {
+            $table->string('status')->default('waiting'); // waiting, started, completed
         });
     }
+
 
     /**
      * Reverse the migrations.
@@ -28,6 +26,8 @@ return new class extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('games_user');
+        Schema::table('games', function (Blueprint $table) {
+            //
+        });
     }
 };

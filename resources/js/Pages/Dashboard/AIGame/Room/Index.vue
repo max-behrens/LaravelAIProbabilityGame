@@ -1,201 +1,404 @@
 <script setup>
-import { ref, defineProps, computed, watchEffect, onMounted } from 'vue';
+import { ref, defineProps, computed, onMounted } from 'vue';
 import BreezeAuthenticatedLayout from '@/Layouts/Authenticated.vue';
 import { Head, Link } from '@inertiajs/inertia-vue3';
 import { useGames } from '@/Composables/useGames';
 import DynamicPagination from '@/Components/DynamicPagination.vue';
 import GameGraphComponent from '@/Components/GameGraphComponent.vue';
+import VueApexCharts from "vue3-apexcharts";
 import axios from 'axios';
 
+// Props
 const props = defineProps({
-  gameId: String,
-  userId: String,
-  gameQuestion: String,
-  gameTitle: String,
-  gameType: String,
+  gameId: { type: Number, required: true },
+  game: Object,
+  gameType: Object,
+  gameQuestions: Array,
+  auth: Object, 
 });
 
-// Set up composables and state
-const { games: liveGames, fetchGames, fetchGameScores, gameScores, scoresMetadata } = useGames();
-
-console.log('gameScores:', gameScores.value);
-
-console.log('fetchGameScores:', fetchGameScores);
-
-
-
-const gameGraphRef = ref(null);
-
-const playerCount = ref("1");
-const playAgainstAI = ref(false);
-const userInGame = ref(false);
+// Reactive state
+const currentGame = ref({ users: [] });
+const gameScores = ref([]);
+const allGameScores = ref([]);
+const questionTotals = ref({});
 const errorMessage = ref('');
 const successMessage = ref('');
-
-const currentQuestion = ref(null);
-const isGameStarted = ref(false);
-const userAnswer = ref('');
-const currentGame = ref(null);
-
-// Score pagination
+const playerCount = ref(1);
+const playAgainstAI = ref(false);
+const userInGame = ref(false);
 const scoresCurrentPage = ref(1);
-const scoresPerPage = ref(10);
-const scoresTotalPages = computed(() => scoresMetadata.value?.lastPage || 1);
+const scoresTotalPages = ref(1);
+const submitting = ref(false);
+const currentQuestionIndex = ref(0);
+const answers = ref([]);
+const isGameStarted = ref(false);
+const gameGraphRef = ref(null);
+const getCurrentUserId = () => props.auth?.user?.id ?? null;
 
-// Initialize with props and then update with live data
-onMounted(() => {
-  fetchGames(); // Get latest data from API
-  fetchGameScores(props.gameId, scoresCurrentPage.value); // Get scores with pagination
+// Computed: detect if current question is the last one
+const isLastQuestion = computed(() => {
+  return currentQuestionIndex.value === props.gameQuestions.length - 1;
 });
 
-// Watch for game updates
-watchEffect(() => {
-  if (liveGames.value && liveGames.value.length > 0) {
-    updateGameState(liveGames.value);
-    
-    // Find current game in the list
-    currentGame.value = liveGames.value.find(game => game.id.toString() === props.gameId);
+// Format date helper
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  return new Date(dateString).toLocaleString();
+};
+
+// Fetch current game details including users
+const fetchCurrentGame = async () => {
+  try {
+    const response = await axios.get(`/api/games/${props.gameId}`);
+    currentGame.value = response.data;
+  } catch (error) {
+    errorMessage.value = 'Failed to load game details.';
+    console.error(error);
   }
-});
+};
 
-// Update local game state from the list of games
-const updateGameState = (gamesList) => {
-  if (!Array.isArray(gamesList)) return;
-  
-  gamesList.forEach(game => {
-    // Check if current user is in this game
-    if (game.users && game.id.toString() === props.gameId) {
-      userInGame.value = game.users.some(u => u.id === parseInt(props.userId));
+// Fetch the players currently in the game (updated from backend)
+const fetchPlayers = async () => {
+  try {
+    const response = await axios.get(`/api/games/${props.gameId}/players`);
+    currentGame.value.users = response.data;
+
+    const currentUserId = getCurrentUserId();
+    if (currentUserId) {
+      userInGame.value = response.data.some(player => player.id === currentUserId);
+    } else {
+      userInGame.value = false;
     }
+  } catch (error) {
+    errorMessage.value = 'Failed to load players.';
+    console.error(error);
+  }
+};
+
+
+// Fetch paginated game scores
+const fetchGameScores = async (page = 1) => {
+  try {
+    const response = await axios.get(`/api/games/${props.gameId}/scores?page=${page}`);
+    gameScores.value = response.data.data;
+    scoresTotalPages.value = response.data.last_page;
+    scoresCurrentPage.value = response.data.current_page;
+  } catch (error) {
+    errorMessage.value = 'Failed to load player scores.';
+    console.error(error);
+  }
+};
+
+// Fetch all game scores for heatmap
+const fetchAllGameScores = async () => {
+  try {
+    const response = await axios.get(`/games/${props.gameId}/all-scores`);
+    allGameScores.value = response.data;
+    calculateQuestionTotals();
+  } catch (error) {
+    console.error('Error fetching all game scores:', error);
+  }
+};
+
+// Calculate question totals
+const calculateQuestionTotals = () => {
+  const totals = {};
+  allGameScores.value.forEach(score => {
+    let answers = score.answer_json;
+    if (!answers) return;
+    if (typeof answers === 'string') {
+      try {
+        answers = JSON.parse(answers);
+      } catch {
+        return;
+      }
+    }
+
+    Object.values(answers).forEach(answer => {
+      const qNum = answer?.question_number;
+      const s = answer?.score_awarded ?? 0;
+      if (!qNum) return;
+      const label = `Q${qNum}`;
+      totals[label] = (totals[label] || 0) + s;
+    });
+  });
+
+  questionTotals.value = totals;
+};
+
+// Heatmap series data
+const getQuestionAveragesByUser = () => {
+  const grouped = {};
+  const maxScoresByQuestion = {};
+  props.gameQuestions?.forEach(question => {
+    const questionNumber = question.question_number || question.id;
+    maxScoresByQuestion[`Q${questionNumber}`] = question.score_awarded || 0;
+  });
+
+  allGameScores.value.forEach(score => {
+    const playerName = score.user?.name || 'Anonymous';
+    if (!grouped[playerName]) grouped[playerName] = {};
+
+    let answers = score.answer_json;
+    if (!answers) return;
+    if (typeof answers === 'string') {
+      try {
+        answers = JSON.parse(answers);
+      } catch {
+        return;
+      }
+    }
+
+    Object.entries(answers).forEach(([_, answer]) => {
+      const questionNumber = answer?.question_number;
+      const scoreValue = answer?.score_awarded ?? 0;
+      if (!questionNumber) return;
+
+      const label = `Q${questionNumber}`;
+      if (!grouped[playerName][label]) {
+        grouped[playerName][label] = { totalPlayerScore: 0, count: 0 };
+      }
+
+      grouped[playerName][label].totalPlayerScore += scoreValue;
+      grouped[playerName][label].count++;
+    });
+  });
+
+  return Object.entries(grouped).map(([playerName, questions]) => {
+    return {
+      name: playerName,
+      data: Object.entries(questions)
+        .sort(([a], [b]) => parseInt(a.replace('Q', '')) - parseInt(b.replace('Q', '')))
+        .map(([label, { totalPlayerScore, count }]) => ({
+          x: label,
+          y: count > 0 ? totalPlayerScore / count : 0,
+          totalScore: maxScoresByQuestion[label] || 0,
+          playerTotalScore: totalPlayerScore,
+        })),
+    };
   });
 };
 
-// Handle score pagination
+// Chart Options
+const chartOptions = ref({
+  chart: {
+    type: 'heatmap',
+    height: 350,
+    foreColor: '#ccc',
+    toolbar: { show: false },
+  },
+  tooltip: {
+    custom: function({ series, seriesIndex, dataPointIndex, w }) {
+      const player = w.globals.seriesNames[seriesIndex];
+      const question = w.globals.labels[dataPointIndex];
+      const averageScore = series[seriesIndex][dataPointIndex];
+      const dataPoint = w.globals.initialSeries[seriesIndex].data[dataPointIndex];
+      return `<div style="padding:8px; background-color:#1e1e1e; color:#cccccc; border-radius:4px;">
+                <strong>${player}</strong><br/>
+                <strong>${question}</strong><br/>
+                Average: <strong>${averageScore.toFixed(2)}</strong><br/>
+                Max Possible: <strong>${dataPoint.totalScore}</strong><br/>
+                Player Total Earned: <strong>${dataPoint.playerTotalScore}</strong>
+              </div>`;
+    }
+  },
+  plotOptions: {
+    heatmap: {
+      colorScale: {
+        ranges: [
+          { from: 0, to: 10, color: '#0d3b66' },
+          { from: 11, to: 20, color: '#144d79' },
+          { from: 21, to: 30, color: '#1b5e8c' },
+          { from: 31, to: 40, color: '#22719f' },
+          { from: 41, to: 50, color: '#2973b2' },
+        ]
+      }
+    }
+  },
+  dataLabels: {
+    enabled: true,
+    formatter: function (val, opts) {
+      const dataPoint = opts.w.config.series[opts.seriesIndex].data[opts.dataPointIndex];
+      const totalScore = dataPoint.totalScore ?? 0;
+      return `${val.toFixed(2)} / ${totalScore}`;
+    },
+  },
+  grid: {
+    padding: { right: 0, left: 30, top: 0, bottom: 0 }
+  },
+  legend: { show: false },
+  colors: ['#33a6cc'],
+  xaxis: {
+    labels: { style: { colors: '#a8a8a8' } },
+  },
+  yaxis: {
+    labels: { offsetX: 10, style: { colors: '#a8a8a8' } },
+  },
+});
+
+// Pagination handler
 const changeScoresPage = (page) => {
-  if (page >= 1 && page <= scoresTotalPages.value) {
-    scoresCurrentPage.value = page;
-    fetchGameScores(props.gameId, page); // Fetch scores for the new page
-  }
+  if (page < 1 || page > scoresTotalPages.value) return;
+  fetchGameScores(page);
 };
 
-// Functions for managing game participation
-const joinGame = async () => {
-  errorMessage.value = '';
-  successMessage.value = '';
-  try {
-    await axios.get('/sanctum/csrf-cookie');
-    const response = await axios.post(`/dashboard/games/${props.gameId}/join`);
-    if (response.data.success) {
-      successMessage.value = 'Successfully joined the game!';
-      await fetchGames();
-    }
-  } catch (err) {
-    errorMessage.value = err.response?.data?.message || 'Error joining game';
-    console.error('Error joining game:', err);
-  }
-};
-
-const leaveGame = async () => {
-  errorMessage.value = '';
-  successMessage.value = '';
-  try {
-    await axios.get('/sanctum/csrf-cookie');
-    const response = await axios.post(`/dashboard/games/${props.gameId}/leave`);
-    if (response.data.success) {
-      successMessage.value = 'Successfully left the game!';
-      await fetchGames();
-    }
-  } catch (err) {
-    errorMessage.value = err.response?.data?.message || 'Error leaving game';
-    console.error('Error leaving game:', err);
-  }
-};
-
-const startGame = async () => {
-  currentQuestion.value = props.gameQuestion.question;
+// Game control stubs
+const startGame = () => {
   isGameStarted.value = true;
+  successMessage.value = 'Game started!';
 };
 
-const submitAnswer = async (answer) => {
+// Join the game — call backend and refresh player list
+const joinGame = async () => {
   try {
-    console.log('gameId:', props.gameId);
-    const response = await axios.post('/submit-answer', {
-      gameId: props.gameId,
-      answer,
-    });
+    submitting.value = true;
 
-    if (response.data.success) {
-      currentQuestion.value = null;
-      isGameStarted.value = false;
-      successMessage.value = response.data.message;
+    // Optimistically mark user as in game immediately
+    userInGame.value = true;
 
-      // Refresh scores with current pagination
-      await fetchGameScores(props.gameId, scoresCurrentPage.value);
-      await gameGraphRef.value?.fetchPlayerAverages?.();
-    }
+    await axios.post(`/games/${props.gameId}/join`);
+    successMessage.value = 'You joined the game!';
+
+    // Refresh player list to sync backend state
+    await fetchPlayers();
+
   } catch (error) {
-    console.error('Error submitting answer:', error);
-    errorMessage.value = 'Failed to submit answer.';
+    // Revert if error occurs
+    userInGame.value = false;
+    errorMessage.value = error.response?.data?.message || 'Failed to join the game.';
+    console.error(error);
+  } finally {
+    submitting.value = false;
   }
 };
 
-const submit = () => {
-  submitAnswer(userAnswer.value);
-  userAnswer.value = '';
+
+// Leave the game — call backend and refresh player list
+const leaveGame = async () => {
+  try {
+    submitting.value = true;
+
+    // Optimistically mark user as not in game immediately
+    userInGame.value = false;
+
+    await axios.post(`/games/${props.gameId}/leave`);
+    successMessage.value = 'You left the game.';
+
+    // Refresh player list to sync backend state
+    await fetchPlayers();
+
+  } catch (error) {
+    // Revert if error occurs
+    userInGame.value = true;
+    errorMessage.value = error.response?.data?.message || 'Failed to leave the game.';
+    console.error(error);
+  } finally {
+    submitting.value = false;
+  }
 };
 
-const formatDate = (dateString) => {
-  if (!dateString) return '';
-  
-  const date = new Date(dateString);
-  
-  // Use Intl.DateTimeFormat for localized date formatting
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric', 
-    month: 'short', 
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  }).format(date);
+
+// Navigation / submission for answers
+const nextOrSubmit = async () => {
+  axios.defaults.withCredentials = true;
+  if (!isLastQuestion.value) {
+    currentQuestionIndex.value++;
+  } else {
+    submitting.value = true;
+
+    try {
+      // Use the API route for consistency
+      await axios.post(`/games/${props.gameId}/submit-answer`, {
+          answers: answers.value,
+      });
+      
+      successMessage.value = 'Answers submitted successfully!';
+      
+      // Refresh all data to show the new submission immediately
+      await Promise.all([
+        fetchGameScores(1), // Reset to first page to see latest scores
+        fetchAllGameScores(), // Refresh heatmap data
+        fetchCurrentGame() // Refresh game details if needed
+      ]);
+      
+      // Refresh the GameGraphComponent
+      if (gameGraphRef.value && typeof gameGraphRef.value.refreshChart === 'function') {
+        await gameGraphRef.value.refreshChart();
+      }
+      
+      // Reset game state for next round
+      currentQuestionIndex.value = 0;
+      answers.value = [];
+      isGameStarted.value = false;
+      
+    } catch (error) {
+      errorMessage.value = error.response?.data?.message || 'Failed to submit answers.';
+      console.error('Submission error:', error);
+    } finally {
+      submitting.value = false;
+    }
+  }
 };
+
+// Lifecycle: fetch data
+onMounted(() => {
+  fetchCurrentGame();
+  fetchPlayers();
+  fetchGameScores();
+  fetchAllGameScores();
+});
 </script>
+
+
+
 
 <template>
   <Head title="AI Game Room" />
 
   <BreezeAuthenticatedLayout>
     <template #header>
-      <h2 class="font-semibold text-md text-white leading-tight"> {{ props.gameTitle }} {{ props.gameId }}: {{ props.gameType.name }} </h2>
+      <h2 class="font-semibold text-md text-white leading-tight">
+        Lobby {{ props.gameId }}: {{ props.gameType.name }}
+      </h2>
     </template>
 
     <div class="py-12">
       <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-
         <!-- Flash Messages -->
-        <div v-if="errorMessage" class="mb-4 p-4 bg-red-100 text-red-700 rounded">
-          {{ errorMessage }}
-        </div>
-        <div v-if="successMessage" class="mb-4 p-4 bg-green-100 text-green-700 rounded">
-          {{ successMessage }}
-        </div>
+        <div v-if="errorMessage" class="mb-4 p-4 bg-red-100 text-red-700 rounded">{{ errorMessage }}</div>
+        <div v-if="successMessage" class="mb-4 p-4 bg-green-100 text-green-700 rounded">{{ successMessage }}</div>
 
         <div class="flex flex-wrap gap-6 justify-center items-start">
+          <!-- Question Input -->
+          <div v-if="isGameStarted" class="basis-full mb-6">
+            <div class="text-center mb-2 text-gray-400 text-sm font-medium">
+              Question {{ currentQuestionIndex + 1 }} / {{ props.gameQuestions.length }}
+            </div>
+            <div class="text-center mb-4 text-gray-200 text-xl font-semibold">
+              {{ props.gameQuestions[currentQuestionIndex]?.question }}
+            </div>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+              <input
+                v-model="answers[currentQuestionIndex]"
+                class="px-4 py-2 rounded text-black w-full sm:w-2/3"
+                placeholder="Your answer"
+              />
+<button
+  :disabled="submitting"
+  @click="nextOrSubmit"
+  class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+>
+  {{ isLastQuestion ? (submitting ? 'Submitting...' : 'Submit') : 'Next' }}
+</button>
 
-          <!-- Question Area -->
-          <div v-if="isGameStarted" class="basis-full text-center mb-6">
-            <p class="text-white mb-4">{{ currentQuestion }}</p>
-            <input v-model="userAnswer" @keyup.enter="submit" class="px-4 py-2 rounded text-black" placeholder="Your Answer" />
-            <button @click="submit" class="ml-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-              Submit Answer
-            </button>
+            </div>
           </div>
 
-          <!-- Controls -->
+          <!-- Game Controls -->
           <div class="basis-full flex flex-wrap gap-4 justify-center p-4 bg-gray-800 rounded shadow">
-            <div class="flex items-center gap-2">
-              <label for="players" class="font-medium text-white">Number of Players:</label>
+            <div class="flex items-center gap-2 text-white">
+              <label for="players">Number of Players:</label>
               <select id="players" v-model="playerCount" class="border rounded px-2 py-1 bg-gray-700 text-white">
                 <option value="1">1 Player</option>
                 <option value="2">2 Players</option>
@@ -203,7 +406,7 @@ const formatDate = (dateString) => {
             </div>
 
             <div class="flex items-center text-white">
-              <input type="checkbox" v-model="playAgainstAI" class="mr-2">
+              <input type="checkbox" v-model="playAgainstAI" class="mr-2" />
               <span>Play against AI</span>
             </div>
 
@@ -211,52 +414,43 @@ const formatDate = (dateString) => {
               <button @click="startGame" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
                 Start Game
               </button>
-
-              <Link :href="route('ai-game')" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition">
+              <Link :href="route('ai-game')" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded">
                 Exit Game
               </Link>
-
               <button
                 @click="joinGame"
-                :disabled="userInGame"
-                class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                :disabled="userInGame  || submitting"
+                class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
               >
                 Join Game
               </button>
-
               <button
                 @click="leaveGame"
-                :disabled="!userInGame"
-                class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                :disabled="!userInGame  || submitting"
+                class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50"
               >
                 Leave Game
               </button>
             </div>
           </div>
 
-          <!-- Players In Game -->
-          <div class="basis-[20rem] flex-grow p-4 bg-gray-800 rounded shadow overflow-y-auto">
-            <h3 class="font-semibold text-lg mb-2 text-white">Players In Game</h3>
-            <ul class="list-disc pl-5 text-white">
-              <li v-for="user in currentGame?.users ?? []" :key="user.id">
-                {{ user.name }}
-              </li>
-            </ul>
-            <div v-if="(currentGame?.users?.length ?? 0) === 0" class="text-gray-400 mt-2">
-              Waiting for players to join...
+          <!-- Players and Scores Row -->
+          <div class="flex flex-wrap gap-6 w-full">
+            <!-- Players -->
+            <div class="min-w-[300px] basis-1/4 p-4 bg-gray-800 rounded shadow text-gray-200">
+              <h3 class="font-semibold text-lg mb-2">Players In Game</h3>
+              <ul class="list-disc pl-5">
+                <li v-for="user in currentGame?.users ?? []" :key="user.id">{{ user.name }}</li>
+              </ul>
+              <div v-if="(currentGame?.users?.length ?? 0) === 0" class="text-gray-400 mt-2">
+                Waiting for players to join...
+              </div>
             </div>
-          </div>
 
-          <!-- Game Graph -->
-          <div class="basis-[20rem] flex-grow p-4 bg-gray-800 rounded shadow">
-            <GameGraphComponent ref="gameGraphRef" :gameId="gameId" />
-          </div>
-
-          <!-- Player Scores Table -->
-          <div class="w-full">
-            <div class="basis-[20rem] flex-grow p-4 bg-gray-800 rounded shadow">
-              <h3 class="font-semibold text-lg mb-2 text-white">Player Scores</h3>
-              <table class="w-full text-left border-collapse text-white">
+            <!-- Player Scores -->
+            <div class="flex-1 min-w-[300px] p-4 bg-gray-800 rounded shadow text-gray-200">
+              <h3 class="font-semibold text-lg mb-2">Player Scores</h3>
+              <table class="w-full text-left border-collapse">
                 <thead>
                   <tr class="bg-gray-700">
                     <th class="p-2 border-b">Player</th>
@@ -267,18 +461,16 @@ const formatDate = (dateString) => {
                 </thead>
                 <tbody>
                   <tr v-for="score in gameScores" :key="score.id">
-                    <td class="p-2 border-b break-words">{{ score.user?.name }}</td>
-                    <td class="p-2 border-b break-words">{{ score.session_id }}</td>
-                    <td class="p-2 border-b break-words">{{ score.score }}</td>
-                    <td class="p-2 border-b break-words">{{ formatDate(score.created_at) }}</td>
+                    <td class="p-2 border-b">{{ score.user?.name }}</td>
+                    <td class="p-2 border-b">{{ score.session_id }}</td>
+                    <td class="p-2 border-b">{{ score.score }}</td>
+                    <td class="p-2 border-b">{{ formatDate(score.created_at) }}</td>
                   </tr>
                   <tr v-if="gameScores.length === 0">
                     <td colspan="4" class="p-2 text-center text-gray-400">No scores available</td>
                   </tr>
                 </tbody>
               </table>
-              
-              <!-- Add Pagination for Scores -->
               <DynamicPagination
                 :currentPage="scoresCurrentPage"
                 :totalPages="scoresTotalPages"
@@ -286,6 +478,33 @@ const formatDate = (dateString) => {
               />
             </div>
           </div>
+
+          <!-- Charts Row -->
+<div class="flex gap-6 w-full mt-6 flex-nowrap overflow-x-auto">
+  <!-- Score Heatmap -->
+  <div class="basis-1/2 h-80 p-4 bg-gray-800 rounded shadow text-gray-200 flex flex-col justify-center items-center">
+    <h3 class="font-semibold text-lg mb-2 self-start">Score Heatmap</h3>
+    <div class="w-full h-full">
+      <VueApexCharts
+        type="heatmap"
+        width="100%"
+        height="100%"
+        :options="chartOptions"
+        :series="getQuestionAveragesByUser()"
+      />
+    </div>
+  </div>
+
+  <!-- Score Trends -->
+  <div class="basis-1/2">
+    <GameGraphComponent 
+      ref="gameGraphRef" 
+      :gameId="gameId" 
+    />
+  </div>
+</div>
+
+
         </div>
       </div>
     </div>

@@ -86,6 +86,18 @@ class GamesController extends Controller
         return response()->json($gameScores);
     }
 
+    public function show($gameId)
+    {
+        $game = Games::with('users')->find($gameId);
+
+        if (!$game) {
+            return response()->json(['message' => 'Game not found'], 404);
+        }
+
+        return response()->json($game);
+    }
+
+
     public function showRoom($gameId, $userId)
     {
         // Fetch the game details and user info
@@ -93,16 +105,18 @@ class GamesController extends Controller
         $gameType = $this->gamesService->getGameType($gameDetails);
         $userDetails = User::findOrFail($userId);
 
-        $gameQuestion = $this->gamesService->getGameQuestion($gameDetails);
+        $gameQuestions = $this->gamesService->getGameQuestions($gameDetails);
 
-        // Return using Inertia
+        Log::info('Game Questions:', ['gameQuestions' => $gameQuestions]);
+
         return Inertia::render('Dashboard/AIGame/Room/Index', [
             'gameId' => $gameId,
             'userId' => $userId,
             'gameTitle' => $gameDetails->title,
             'userDetails' => $userDetails,
-            'gameQuestion' => $gameQuestion,
+            'gameQuestions' => $gameQuestions, // plural now
             'gameType' => $gameType,
+            'auth' => ['user' => auth()->user()],
         ]);
     }
 
@@ -112,10 +126,8 @@ class GamesController extends Controller
      * @param  Request  $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function getPlayerAverages(Request $request)
+    public function getPlayerAverages(int $gameId)
     {
-        $gameId = $request->query('gameId');
-
         $players = $this->gamesService->playerAverages($gameId);
 
         return response()->json($players);
@@ -124,12 +136,12 @@ class GamesController extends Controller
     public function submitAnswer(Request $request)
     {
         $request->validate([
-            'gameId' => 'required|exists:games,id',
-            'answer' => 'required|string',
+            'answers' => 'required|array',        // Expect an array
+            'answers.*' => 'required|string',     // Each answer must be a string
         ]);
 
-        // Call GamesService to handle the score submission
-        $sessionId = $this->gamesService->submitAnswers($request->gameId, $request->answer);
+        // Call GamesService with the answers array
+        $sessionId = $this->gamesService->submitAnswers($request->gameId, $request->answers);
 
         return response()->json([
             'success' => true,
@@ -137,5 +149,80 @@ class GamesController extends Controller
             'session_id' => $sessionId,
         ]);
     }
+
+    public function start(Games $game)
+    {
+        $game->start(); // The method you already added in the model
+        return response()->json(['success' => true, 'status' => $game->status]);
+    }
+
+    public function getAllScores($gameId)
+    {
+        $allScores = $this->gamesService->getAllGameScores($gameId);
+        
+        return response()->json($allScores);
+    }
+
+    
+    public function getQuestionAverages($gameId)
+    {
+        try {
+            // Get all scores for this game with user data, ordered by creation time
+            $scores = GameScore::where('game_id', $gameId)
+                ->with('user')
+                ->orderBy('created_at', 'asc')
+                ->get();
+
+            return response()->json($scores);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to fetch question averages'], 500);
+        }
+    }
+
+    // Alternative method if you want to return processed trend data
+    public function getScoreTrends($gameId)
+    {
+        try {
+            $scores = GameScore::where('game_id', $gameId)
+                ->with('user')
+                ->orderBy('created_at', 'asc')
+                ->get();
+
+            // Group by user and create trend data
+            $trends = [];
+            foreach ($scores as $score) {
+                $userName = $score->user->name ?? 'Anonymous';
+                
+                if (!isset($trends[$userName])) {
+                    $trends[$userName] = [];
+                }
+                
+                $trends[$userName][] = [
+                    'x' => $score->created_at->timestamp * 1000, // Convert to JS timestamp
+                    'y' => $score->score
+                ];
+            }
+
+            // Convert to chart series format
+            $series = [];
+            foreach ($trends as $userName => $data) {
+                $series[] = [
+                    'name' => $userName,
+                    'data' => $data
+                ];
+            }
+
+            return response()->json($series);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to fetch score trends'], 500);
+        }
+    }
+
+    public function getPlayers($gameId)
+    {
+        $game = Games::with('users')->findOrFail($gameId);
+        return response()->json($game->users);
+    }
+
 
 }

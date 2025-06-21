@@ -5,7 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\Games;
 
-class GamesTableSeeder extends Seeder
+class GameTableSeeder extends Seeder
 {
     public function run()
     {

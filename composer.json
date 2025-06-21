@@ -8,6 +8,7 @@
         "php": "^8.0.2",
         "bref/bref": "^2.3",
         "bref/laravel-bridge": "^2.5",
+        "doctrine/dbal": "^4.2",
         "fakerphp/faker": "^1.24",
         "guzzlehttp/guzzle": "^7.2",
         "inertiajs/inertia-laravel": "^0.5.4",

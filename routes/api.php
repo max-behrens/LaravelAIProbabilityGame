@@ -36,11 +36,21 @@ Route::get('/chart-data', function () {
     ]);
 });
 
-Route::get('/player-averages', [GamesController::class, 'getPlayerAverages']);
+Route::get('/games/{gameId}/player-averages', [GamesController::class, 'getPlayerAverages']);
 
 Route::post('/submit-answer', [GamesController::class, 'submitAnswer']);
 
+Route::post('/games/{game}/start', [GamesController::class, 'start'])->name('games.start');
+
 Route::get('/games/{gameId}/scores', [GamesController::class, 'getScores']);
+
+Route::get('/games/{gameId}/question-averages', [GamesController::class, 'getQuestionAverages']);
+
+Route::get('/games/{gameId}', [GamesController::class, 'show']);
+
+Route::get('/games/{gameId}/players', [GamesController::class, 'getPlayers']);
+
+
 
 
 

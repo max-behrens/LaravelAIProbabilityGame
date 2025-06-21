@@ -29,9 +29,22 @@ Route::get('/', IndexController::class)->name('index');
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
-    Route::post('/submit-answer', [GamesController::class, 'submitAnswer']);
+    Route::post('/games/{gameId}/submit-answer', [GamesController::class, 'submitAnswer']);
 
     Route::get('/games/{gameId}/scores', [GamesController::class, 'getScores']);
+
+    Route::get('/games/{gameId}/all-scores', [GamesController::class, 'getAllScores']);
+
+    Route::get('/games/{gameId}/question-averages', [GamesController::class, 'getQuestionAverages']);
+
+    Route::get('/games/{gameId}/player-averages', [GamesController::class, 'getPlayerAverages']);
+
+    Route::get('/games/{gameId}/players', [GamesController::class, 'getPlayers']);
+
+
+            Route::post('/games/{game}/join', [GamesController::class, 'join']);
+        Route::post('/games/{game}/leave', [GamesController::class, 'leave']);
+        Route::post('/games/{game}/start', [GamesController::class, 'start'])->name('games.start');
 
 
     
@@ -56,8 +69,8 @@ Route::prefix('dashboard')
 
 
         Route::get('/games', [GamesController::class, 'index']);
-        Route::post('/games/{game}/join', [GamesController::class, 'join']);
-        Route::post('/games/{game}/leave', [GamesController::class, 'leave']);
+
+
 
         Route::get('/aigame', function () {
             // Get games with users relationship and players count
