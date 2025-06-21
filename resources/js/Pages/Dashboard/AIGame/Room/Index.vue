@@ -5,7 +5,7 @@ import { Head, Link } from '@inertiajs/inertia-vue3';
 import { useGames } from '@/Composables/useGames';
 import DynamicPagination from '@/Components/DynamicPagination.vue';
 import GameGraphComponent from '@/Components/GameGraphComponent.vue';
-import VueApexCharts from "vue3-apexcharts";
+import GameHeatmapComponent from '@/Components/GameHeatmapComponent.vue';
 import axios from 'axios';
 
 // Props
@@ -20,8 +20,6 @@ const props = defineProps({
 // Reactive state
 const currentGame = ref({ users: [] });
 const gameScores = ref([]);
-const allGameScores = ref([]);
-const questionTotals = ref({});
 const errorMessage = ref('');
 const successMessage = ref('');
 const playerCount = ref(1);
@@ -34,6 +32,7 @@ const currentQuestionIndex = ref(0);
 const answers = ref([]);
 const isGameStarted = ref(false);
 const gameGraphRef = ref(null);
+const gameHeatmapRef = ref(null);
 const playersCount = computed(() => currentGame.value.users.length);
 const maxPlayers = computed(() => props.game?.max_players || 0);
 
@@ -46,9 +45,6 @@ const maxPlayersReached = computed(() => {
 
   return props.game.max_players && currentGame.value.users.length >= props.game.max_players;
 });
-
-
-
 
 // Computed: detect if current question is the last one
 const isLastQuestion = computed(() => {
@@ -90,7 +86,6 @@ const fetchPlayers = async () => {
   }
 };
 
-
 // Fetch paginated game scores
 const fetchGameScores = async (page = 1) => {
   try {
@@ -103,230 +98,6 @@ const fetchGameScores = async (page = 1) => {
     console.error(error);
   }
 };
-
-// Fetch all game scores for heatmap
-const fetchAllGameScores = async () => {
-  try {
-    const response = await axios.get(`/games/${props.gameId}/all-scores`);
-    allGameScores.value = response.data;
-    calculateQuestionTotals();
-  } catch (error) {
-    console.error('Error fetching all game scores:', error);
-  }
-};
-
-// Calculate question totals
-const calculateQuestionTotals = () => {
-  const totals = {};
-  allGameScores.value.forEach(score => {
-    let answers = score.answer_json;
-    if (!answers) return;
-    if (typeof answers === 'string') {
-      try {
-        answers = JSON.parse(answers);
-      } catch {
-        return;
-      }
-    }
-
-    Object.values(answers).forEach(answer => {
-      const qNum = answer?.question_number;
-      const s = answer?.score_awarded ?? 0;
-      if (!qNum) return;
-      const label = `Q${qNum}`;
-      totals[label] = (totals[label] || 0) + s;
-    });
-  });
-
-  questionTotals.value = totals;
-};
-
-// Heatmap series data
-const getQuestionAveragesByUser = () => {
-  const grouped = {};
-  const maxScoresByQuestion = {};
-  const userAttempts = {}; // Track attempts per user, not per question
-  const questionCorrectCounts = {}; // Track correct answers per user per question
-
-  // Build max scores from props.gameQuestions first
-  props.gameQuestions?.forEach(question => {
-    const questionNumber = question.question_number || question.id;
-    const label = `Q${questionNumber}`;
-    maxScoresByQuestion[label] = question.score_awarded || 0;
-  });
-
-  allGameScores.value.forEach(score => {
-    const playerName = score.user?.name || 'Anonymous';
-    if (!grouped[playerName]) {
-      grouped[playerName] = {};
-      userAttempts[playerName] = 0;
-      questionCorrectCounts[playerName] = {};
-    }
-
-    // Increment user attempts (each score record = one game submission)
-    userAttempts[playerName]++;
-
-    let answers = score.answer_json;
-    if (!answers) return;
-
-    if (typeof answers === 'string') {
-      try {
-        answers = JSON.parse(answers);
-      } catch {
-        return;
-      }
-    }
-
-    Object.entries(answers).forEach(([_, answer]) => {
-      const questionNumber = answer?.question_number;
-      const scoreValue = answer?.score_awarded ?? 0;
-      const isCorrect = answer?.is_correct ?? false;
-
-      if (!questionNumber) return;
-
-      const label = `Q${questionNumber}`;
-
-      // Fallback: if we don't have max score from props, use the score_awarded from the answer
-      if (!maxScoresByQuestion[label] && answer?.score_awarded) {
-        maxScoresByQuestion[label] = answer.score_awarded;
-      }
-
-      // Track correct answers per user per question
-      if (!questionCorrectCounts[playerName][label]) {
-        questionCorrectCounts[playerName][label] = 0;
-      }
-      if (isCorrect) {
-        questionCorrectCounts[playerName][label]++;
-      }
-
-      if (!grouped[playerName][label]) {
-        grouped[playerName][label] = { totalPlayerScore: 0, count: 0 };
-      }
-
-      grouped[playerName][label].totalPlayerScore += scoreValue;
-      grouped[playerName][label].count++;
-    });
-  });
-
-  // Build series
-  return Object.entries(grouped).map(([playerName, questions]) => {
-    const playerAttempts = userAttempts[playerName] || 0;
-    
-    return {
-      name: playerName,
-      data: Object.entries(questions)
-        .sort(([a], [b]) => parseInt(a.replace('Q', '')) - parseInt(b.replace('Q', '')))
-        .map(([label, { totalPlayerScore, count }]) => {
-          const correctCount = questionCorrectCounts[playerName][label] || 0;
-          const successRate = playerAttempts > 0 ? (correctCount / playerAttempts) * 100 : 0;
-          
-          return {
-            x: label,
-            y: successRate, // Use success rate for coloring instead of average score
-            avgScore: count > 0 ? totalPlayerScore / count : 0, // Keep average for tooltip
-            totalScore: maxScoresByQuestion[label] || 0,
-            playerTotalScore: totalPlayerScore,
-            attempts: playerAttempts, // Now correctly shows user's total game attempts
-            successRate: successRate, // Success rate for this specific question
-          };
-        }),
-    };
-  });
-};
-
-
-// Chart Options
-// Updated chartOptions with click interactions disabled
-const chartOptions = ref({
-  chart: {
-    type: 'heatmap',
-    height: 350,
-    foreColor: '#ccc',
-    toolbar: {
-      show: false
-    },
-  },
-  states: {
-    normal: {
-      filter: {
-        type: 'none', // normal state no filter
-      }
-    },
-    hover: {
-      filter: {
-        type: 'none',
-      }
-    },
-    active: {
-      filter: {
-        type: 'none' // disable any active state color change on click
-      }
-    }
-  },
-  tooltip: {
-    custom({ series, seriesIndex, dataPointIndex, w }) {
-      const player = w.globals.seriesNames[seriesIndex];
-      const question = w.globals.labels[dataPointIndex];
-      const successRate = series[seriesIndex][dataPointIndex];
-      const dataPoint = w.globals.initialSeries[seriesIndex].data[dataPointIndex];
-      const attempts = dataPoint?.attempts ?? 1;
-      const avgScore = dataPoint?.avgScore ?? 0;
-
-      return `<div style="padding:8px; background-color:#1e1e1e; color:#cccccc; border-radius:4px;">
-        <strong>${player}</strong><br/>
-        <strong>${question}</strong><br/>
-        Average Score: <strong>${avgScore.toFixed(2)}</strong><br/>
-        No. Attempts: <strong>${attempts}</strong><br/>
-        Success Rate: <strong>${successRate.toFixed(0)}%</strong><br/>
-      </div>`;
-    }
-  },
-  plotOptions: {
-    heatmap: {
-      enableShades: true,
-      distributed: false,
-      colorScale: {
-        ranges: [
-          // Much darker base color for lowest range for better text readability
-          { from: 0, to: 20, color: '#1a346e' }, // Even darker blue
-          { from: 21, to: 40, color: '#3b82f6' },
-          { from: 41, to: 60, color: '#60a5fa' },
-          { from: 61, to: 80, color: '#1e40af' },
-          { from: 81, to: 100, color: '#1e3a8a' },
-        ]
-      }
-    }
-  },
-  dataLabels: {
-    enabled: true,
-    formatter(_, opts) {
-      const dataPoint = opts.w.config.series[opts.seriesIndex].data[opts.dataPointIndex];
-      const avgScore = dataPoint.avgScore ?? 0;
-      const totalScore = dataPoint.totalScore ?? 0;
-      
-      const formattedAvgScore = (avgScore % 1 === 0) 
-        ? avgScore.toString() 
-        : avgScore.toFixed(2);
-      
-      return `${formattedAvgScore} / ${totalScore}`;
-    },
-    style: {
-      fontSize: '16px',
-    },
-  },
-  grid: {
-    padding: { right: 20, left: 30, top: 0, bottom: 0 }
-  },
-  legend: { show: false },
-  colors: ['#33a6cc'],
-  xaxis: {
-    labels: { style: { colors: '#e5e7eb' } },
-  },
-  yaxis: {
-    labels: { offsetX: 10, style: { colors: '#e5e7eb' } },
-  },
-});
-
 
 // Pagination handler
 const changeScoresPage = (page) => {
@@ -364,7 +135,6 @@ const joinGame = async () => {
   }
 };
 
-
 // Leave the game — call backend and refresh player list
 const leaveGame = async () => {
   try {
@@ -389,7 +159,6 @@ const leaveGame = async () => {
   }
 };
 
-
 // Navigation / submission for answers
 const nextOrSubmit = async () => {
   axios.defaults.withCredentials = true;
@@ -409,14 +178,20 @@ const nextOrSubmit = async () => {
       // Refresh all data to show the new submission immediately
       await Promise.all([
         fetchGameScores(1), // Reset to first page to see latest scores
-        fetchAllGameScores(), // Refresh heatmap data
-        fetchCurrentGame() // Refresh game details if needed
       ]);
       
       // Refresh the GameGraphComponent
       if (gameGraphRef.value && typeof gameGraphRef.value.refreshChart === 'function') {
         await gameGraphRef.value.refreshChart();
       }
+      
+      // Refresh the GameHeatmapComponent
+      if (gameHeatmapRef.value && typeof gameHeatmapRef.value.refreshHeatmap === 'function') {
+        await gameHeatmapRef.value.refreshHeatmap();
+      }
+      
+      // Refresh game details if needed
+      await fetchCurrentGame();
       
       // Reset game state for next round
       currentQuestionIndex.value = 0;
@@ -437,12 +212,8 @@ onMounted(() => {
   fetchCurrentGame();
   fetchPlayers();
   fetchGameScores();
-  fetchAllGameScores();
 });
 </script>
-
-
-
 
 <template>
   <Head title="AI Game Room" />
@@ -553,7 +324,6 @@ onMounted(() => {
               </div>
             </div>
 
-
             <!-- Player Scores -->
             <div class="flex-1 min-w-[300px] p-4 bg-gray-800 rounded shadow text-gray-200">
               <h3 class="font-semibold text-lg mb-2">Player Scores</h3>
@@ -589,24 +359,11 @@ onMounted(() => {
           <!-- Charts Row -->
           <div class="flex flex-col lg:flex-row gap-6 w-full mt-6">
             <!-- Score Heatmap -->
-            <div class="basis-1/2 h-80 p-4 bg-gray-800 rounded shadow text-gray-200 flex flex-col justify-center items-center">
-              <h3 class="font-semibold text-lg mb-2 self-start">Score Heatmap</h3>
-              <div class="w-full h-full">
-                <!-- Only render chart if there's data -->
-                <VueApexCharts
-                  v-if="getQuestionAveragesByUser().length > 0"
-                  type="heatmap"
-                  width="100%"
-                  height="100%"
-                  :options="chartOptions"
-                  :series="getQuestionAveragesByUser()"
-                />
-                <!-- Show message when no data -->
-                <div v-else class="flex items-center justify-center h-full text-gray-400">
-                  No score data available yet
-                </div>
-              </div>
-            </div>
+            <GameHeatmapComponent 
+              ref="gameHeatmapRef" 
+              :gameId="gameId" 
+              :gameQuestions="gameQuestions" 
+            />
 
             <!-- Score Trends -->
             <div class="basis-1/2">
@@ -616,7 +373,6 @@ onMounted(() => {
               />
             </div>
           </div>
-
 
         </div>
       </div>
