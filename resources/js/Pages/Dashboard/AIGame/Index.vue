@@ -80,18 +80,19 @@ const joinGame = async (gameId) => {
 
   try {
     await axios.get('/sanctum/csrf-cookie');
-    const response = await axios.post(`/dashboard/games/${gameId}/join`);
-    
+
+    const response = await axios.post(`/games/${gameId}/join`);
+
     if (response.data.success) {
       // Update local state
       userInGames.value[gameId] = true;
       playersCount.value[gameId] = (playersCount.value[gameId] || 0) + 1;
-      
-      // Refresh games data
+
+      // Refresh games
       await fetchGames();
-      
+
       successMessage.value = 'Successfully joined the game!';
-      
+
       // Navigate to game room
       window.location.href = `/dashboard/room/${gameId}/${props.user.id}`;
     }
@@ -101,22 +102,24 @@ const joinGame = async (gameId) => {
   }
 };
 
+
 const leaveGame = async (gameId) => {
   errorMessage.value = '';
   successMessage.value = '';
 
   try {
     await axios.get('/sanctum/csrf-cookie');
-    const response = await axios.post(`/dashboard/games/${gameId}/leave`);
-    
+
+    const response = await axios.post(`/games/${gameId}/leave`);
+
     if (response.data.success) {
       // Update local state
       userInGames.value[gameId] = false;
       playersCount.value[gameId] = Math.max(0, (playersCount.value[gameId] || 1) - 1);
-      
-      // Refresh games data
+
+      // Refresh games
       await fetchGames();
-      
+
       successMessage.value = 'Successfully left the game!';
     }
   } catch (err) {
@@ -124,6 +127,7 @@ const leaveGame = async (gameId) => {
     console.error('Error leaving game:', err);
   }
 };
+
 
 const enterGame = (gameId) => {
   window.location.href = `/dashboard/room/${gameId}/${props.user.id}`;
@@ -140,11 +144,11 @@ const enterGame = (gameId) => {
 
     <div class="py-12">
       <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-        <div v-if="errorMessage" class="mb-4 p-4 bg-red-100 text-red-700 rounded">
+        <div v-if="errorMessage" class="mb-4 p-4 bg-red-900 text-red-200 rounded border border-red-700">
           {{ errorMessage }}
         </div>
 
-        <div v-if="successMessage" class="mb-4 p-4 bg-green-100 text-green-700 rounded">
+        <div v-if="successMessage" class="mb-4 p-4 bg-green-900 text-green-200 rounded border border-green-700">
           {{ successMessage }}
         </div>
 
@@ -159,8 +163,9 @@ const enterGame = (gameId) => {
             </p>
 
             <div class="flex justify-between text-center gap-12">
+
               <Link
-                class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                class="bg-green-900 hover:bg-green-800 text-green-200 font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
                 :href="route('room', { game: game.id, user: props.user.id })"
               >
                 Enter Game
