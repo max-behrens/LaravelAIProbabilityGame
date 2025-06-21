@@ -480,29 +480,29 @@ onMounted(() => {
           </div>
 
           <!-- Charts Row -->
-<div class="flex gap-6 w-full mt-6 flex-nowrap overflow-x-auto">
-  <!-- Score Heatmap -->
-  <div class="basis-1/2 h-80 p-4 bg-gray-800 rounded shadow text-gray-200 flex flex-col justify-center items-center">
-    <h3 class="font-semibold text-lg mb-2 self-start">Score Heatmap</h3>
-    <div class="w-full h-full">
-      <VueApexCharts
-        type="heatmap"
-        width="100%"
-        height="100%"
-        :options="chartOptions"
-        :series="getQuestionAveragesByUser()"
-      />
-    </div>
-  </div>
+          <div class="flex flex-col lg:flex-row gap-6 w-full mt-6">
+            <!-- Score Heatmap -->
+            <div class="basis-1/2 h-80 p-4 bg-gray-800 rounded shadow text-gray-200 flex flex-col justify-center items-center">
+              <h3 class="font-semibold text-lg mb-2 self-start">Score Heatmap</h3>
+              <div class="w-full h-full">
+                <VueApexCharts
+                  type="heatmap"
+                  width="100%"
+                  height="100%"
+                  :options="chartOptions"
+                  :series="getQuestionAveragesByUser()"
+                />
+              </div>
+            </div>
 
-  <!-- Score Trends -->
-  <div class="basis-1/2">
-    <GameGraphComponent 
-      ref="gameGraphRef" 
-      :gameId="gameId" 
-    />
-  </div>
-</div>
+            <!-- Score Trends -->
+            <div class="basis-1/2">
+              <GameGraphComponent 
+                ref="gameGraphRef" 
+                :gameId="gameId" 
+              />
+            </div>
+          </div>
 
 
         </div>
