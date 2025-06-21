@@ -54,6 +54,11 @@ const drawChart = () => {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      layout: {
+        padding: {
+          bottom: 20
+        }
+      },
       scales: {
         y: {
           beginAtZero: true,
@@ -64,7 +69,7 @@ const drawChart = () => {
           beginAtZero: true,
           min: 0,
           grace: '10%',
-          ticks: { stepSize: 1, color: '#e5e7eb' }, // gray-200
+          ticks: { stepSize: 1, color: '#e5e7eb', padding: 25 }, // gray-200
           grid: { color: 'rgba(255,255,255,0.1)' }
         },
         x: {
