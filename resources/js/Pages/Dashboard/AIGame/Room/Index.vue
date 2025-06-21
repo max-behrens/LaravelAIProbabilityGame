@@ -315,7 +315,7 @@ const chartOptions = ref({
     },
   },
   grid: {
-    padding: { right: 0, left: 30, top: 0, bottom: 0 }
+    padding: { right: 20, left: 30, top: 0, bottom: 0 }
   },
   legend: { show: false },
   colors: ['#33a6cc'],
