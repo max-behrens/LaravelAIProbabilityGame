@@ -76,51 +76,66 @@ class GamesService
 
 
     public function submitAnswers($gameId, array $answers)
-{
-    $game = Games::findOrFail($gameId);
-    $gameQuestions = $game->gameType->gameQuestions()->get();
-    $currentUser = auth()->user();
-    $sessionId = Str::uuid()->toString();
+    {
+        $game = Games::findOrFail($gameId);
+        $gameQuestions = $game->gameType->gameQuestions()->get();
+        $currentUser = auth()->user();
+        $sessionId = Str::uuid()->toString();
 
-    $answerJson = [];
-    $totalScore = 0;
+        $answerJson = [];
+        $totalScore = 0;
 
-    foreach ($gameQuestions as $index => $question) {
-        $submittedAnswer = $answers[$index] ?? null;
-        $isCorrect = $submittedAnswer !== null && strtolower(trim($submittedAnswer)) === strtolower(trim($question->answer));
-        $scoreAwarded = $isCorrect ? ($question->score_awarded ?? 0) : 0;
+        foreach ($gameQuestions as $index => $question) {
+            $submittedAnswer = $answers[$index] ?? null;
+            $isCorrect = $submittedAnswer !== null && strtolower(trim($submittedAnswer)) === strtolower(trim($question->answer));
+            $scoreAwarded = $isCorrect ? ($question->score_awarded ?? 0) : 0;
 
-        $answerJson[$question->id] = [
-            'question_number' => $index + 1,
-            'question' => $question->question,
-            'submitted' => $submittedAnswer,
-            'correct_answer' => $question->answer,
-            'is_correct' => $isCorrect,
-            'score_awarded' => $scoreAwarded
-        ];
+            $answerJson[$question->id] = [
+                'question_number' => $index + 1,
+                'question' => $question->question,
+                'submitted' => $submittedAnswer,
+                'correct_answer' => $question->answer,
+                'is_correct' => $isCorrect,
+                'score_awarded' => $scoreAwarded
+            ];
 
-        $totalScore += $scoreAwarded;
+            $totalScore += $scoreAwarded;
+        }
+
+        // Now create ONE GameScore entry per user/game/session
+        GameScore::create([
+            'game_id' => $game->id,
+            'player_id' => $currentUser->id,
+            'answer' => null, // optional legacy field
+            'answer_json' => json_encode($answerJson),
+            'session_id' => $sessionId,
+            'score' => $totalScore,
+        ]);
+
+        Log::info('Submitted answers for user', [
+            'user_id' => $currentUser->id,
+            'session_id' => $sessionId,
+            'total_score' => $totalScore,
+            'answers_count' => count($answers)
+        ]);
+
+        return $sessionId;
     }
 
-    // Now create ONE GameScore entry per user/game/session
-    GameScore::create([
-        'game_id' => $game->id,
-        'player_id' => $currentUser->id,
-        'answer' => null, // optional legacy field
-        'answer_json' => json_encode($answerJson),
-        'session_id' => $sessionId,
-        'score' => $totalScore,
-    ]);
+    // For the Score Trends graph tooltip.
+    public function totalScore($gameId)
+    {
+        $game = Games::findOrFail($gameId);
+        $gameQuestions = $game->gameType->gameQuestions()->get();
 
-    Log::info('Submitted answers for user', [
-        'user_id' => $currentUser->id,
-        'session_id' => $sessionId,
-        'total_score' => $totalScore,
-        'answers_count' => count($answers)
-    ]);
+        $totalScore = 0;
 
-    return $sessionId;
-}
+        foreach ($gameQuestions as $index => $question) {
+            $totalScore += $question->score_awarded;
+        }
+
+        return $totalScore;
+    }
 
 
     // Add this method to your GamesService class

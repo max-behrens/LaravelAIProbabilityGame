@@ -124,12 +124,17 @@ class GamesController extends Controller
      * @param  Request  $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function getPlayerAverages(int $gameId)
+    public function getScoreTrendStats(int $gameId)
     {
         $players = $this->gamesService->playerAverages($gameId);
+        $totalGameScore = $this->gamesService->totalScore($gameId);
 
-        return response()->json($players);
+        return response()->json([
+            'players' => $players,
+            'totalScore' => $totalGameScore,
+        ]);
     }
+
 
     public function submitAnswer(Request $request)
     {

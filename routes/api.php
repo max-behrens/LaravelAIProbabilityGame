@@ -36,7 +36,7 @@ Route::get('/chart-data', function () {
     ]);
 });
 
-Route::get('/games/{gameId}/player-averages', [GamesController::class, 'getPlayerAverages']);
+Route::get('/games/{gameId}/score-trends', [GamesController::class, 'getScoreTrendStats']);
 
 Route::post('/submit-answer', [GamesController::class, 'submitAnswer']);
 

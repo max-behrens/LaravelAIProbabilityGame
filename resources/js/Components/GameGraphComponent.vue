@@ -16,12 +16,14 @@ const chartCanvas = ref(null);
 let chartInstance = null;
 
 const playersData = ref([]);
+const totalGameScore = ref(null);
 
 // Fetch player averages
-const fetchPlayerAverages = async () => {
+const fetchScoreTrendStats = async () => {
   try {
-const response = await axios.get(`/api/games/${props.gameId}/player-averages`);
-    playersData.value = response.data;
+    const response = await axios.get(`/api/games/${props.gameId}/score-trends`);
+    playersData.value = response.data.players;
+    totalGameScore.value = response.data.totalScore;
   } catch (error) {
     console.error('Error fetching player averages:', error);
   }
@@ -54,11 +56,7 @@ const drawChart = () => {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      layout: {
-        padding: {
-          bottom: 20
-        }
-      },
+
       scales: {
         y: {
           beginAtZero: true,
@@ -69,17 +67,34 @@ const drawChart = () => {
           beginAtZero: true,
           min: 0,
           grace: '10%',
-          ticks: { stepSize: 1, color: '#e5e7eb', padding: 25 }, // gray-200
+          ticks: { stepSize: 1, color: '#e5e7eb', padding: 5 }, // gray-200
           grid: { color: 'rgba(255,255,255,0.1)' }
         },
         x: {
-          ticks: { color: '#e5e7eb', padding: 25, }, // gray-200
+          ticks: { color: '#e5e7eb', padding: 5, }, // gray-200
           grid: { color: 'rgba(255,255,255,0.1)' }
         }
       },
       plugins: {
         legend: {
-          labels: { color: '#e5e7eb' } // gray-200
+          labels: { color: '#e5e7eb' }
+        },
+        tooltip: {
+          callbacks: {
+            label: function (context) {
+              const player = playersData.value[context.dataIndex];
+              const avg = player.average_score !== undefined && player.average_score !== null
+                ? Number(player.average_score).toFixed(2)
+                : 'N/A';
+              const total = player.total_score ?? 'N/A';
+
+              return [
+                `Average Score: ${avg}`,
+                '',
+                `Max Game Score: ${totalGameScore.value ?? 'N/A'}`
+              ];
+            }
+          }
         }
       }
     },
@@ -90,21 +105,21 @@ const drawChart = () => {
 watch(
   () => props.gameId,
   async () => {
-    await fetchPlayerAverages();
+    await fetchScoreTrendStats();
     drawChart();
   }
 );
 
 // Initial chart render
 onMounted(async () => {
-  await fetchPlayerAverages();
+  await fetchScoreTrendStats();
   drawChart();
 });
 
 // Expose method to refresh chart externally
 defineExpose({
   refreshChart: async () => {
-    await fetchPlayerAverages();
+    await fetchScoreTrendStats();
     drawChart();
   },
 });

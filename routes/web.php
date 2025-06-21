@@ -37,7 +37,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/games/{gameId}/question-averages', [GamesController::class, 'getQuestionAverages']);
 
-    Route::get('/games/{gameId}/player-averages', [GamesController::class, 'getPlayerAverages']);
+    Route::get('/games/{gameId}/score-trends', [GamesController::class, 'getScoreTrendStats']);
 
     Route::get('/games/{gameId}/players', [GamesController::class, 'getPlayers']);
 
