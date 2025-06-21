@@ -34,7 +34,21 @@ const currentQuestionIndex = ref(0);
 const answers = ref([]);
 const isGameStarted = ref(false);
 const gameGraphRef = ref(null);
+const playersCount = computed(() => currentGame.value.users.length);
+const maxPlayers = computed(() => props.game?.max_players || 0);
+
 const getCurrentUserId = () => props.auth?.user?.id ?? null;
+
+const maxPlayersReached = computed(() => {
+  console.log('props.game:', props.game);
+  console.log('maxPlayers:', props.game.max_players);
+  console.log('currentGame users count:', currentGame.value.users.length);
+
+  return props.game.max_players && currentGame.value.users.length >= props.game.max_players;
+});
+
+
+
 
 // Computed: detect if current question is the last one
 const isLastQuestion = computed(() => {
@@ -415,7 +429,11 @@ onMounted(() => {
             </div>
 
             <div class="flex flex-wrap gap-4 justify-center mt-4 w-full">
-              <button @click="startGame" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+              <button 
+                @click="startGame" 
+                :disabled="!userInGame"
+                class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 Start Game
               </button>
               <Link :href="route('ai-game')" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded">
@@ -423,7 +441,7 @@ onMounted(() => {
               </Link>
               <button
                 @click="joinGame"
-                :disabled="userInGame  || submitting"
+                :disabled="userInGame || submitting || maxPlayersReached"
                 class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
               >
                 Join Game
@@ -441,15 +459,26 @@ onMounted(() => {
           <!-- Players and Scores Row -->
           <div class="flex flex-wrap gap-6 w-full">
             <!-- Players -->
-            <div class="min-w-[300px] basis-1/4 p-4 bg-gray-800 rounded shadow text-gray-200">
-              <h3 class="font-semibold text-lg mb-2">Players In Game</h3>
-              <ul class="list-disc pl-5">
-                <li v-for="user in currentGame?.users ?? []" :key="user.id">{{ user.name }}</li>
-              </ul>
-              <div v-if="(currentGame?.users?.length ?? 0) === 0" class="text-gray-400 mt-2">
-                Waiting for players to join...
-              </div>
-            </div>
+<div class="min-w-[300px] basis-1/4 p-4 bg-gray-800 rounded shadow text-gray-200">
+  <h3 class="font-semibold text-lg mb-2">Players In Game</h3>
+
+  <div class="mb-2 text-gray-300 font-semibold">
+    Players: {{ playersCount }} / {{ maxPlayers }}
+  </div>
+
+  <div v-if="maxPlayersReached" class="mb-2 p-2 bg-red-700 bg-red-800 text-red-100 rounded text-center font-bold">
+    Max Players Reached
+  </div>
+  
+  <ul class="list-disc pl-5">
+    <li v-for="user in currentGame?.users ?? []" :key="user.id">{{ user.name }}</li>
+  </ul>
+  
+  <div v-if="(currentGame?.users?.length ?? 0) === 0" class="text-gray-400 mt-2">
+    Waiting for players to join...
+  </div>
+</div>
+
 
             <!-- Player Scores -->
             <div class="flex-1 min-w-[300px] p-4 bg-gray-800 rounded shadow text-gray-200">

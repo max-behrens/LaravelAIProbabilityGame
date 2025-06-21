@@ -106,13 +106,11 @@ class GamesController extends Controller
         $userDetails = User::findOrFail($userId);
 
         $gameQuestions = $this->gamesService->getGameQuestions($gameDetails);
-
-        Log::info('Game Questions:', ['gameQuestions' => $gameQuestions]);
-
         return Inertia::render('Dashboard/AIGame/Room/Index', [
             'gameId' => $gameId,
             'userId' => $userId,
-            'gameTitle' => $gameDetails->title,
+            'game' => $gameDetails,
+            'maxPlayers' => $gameDetails->max_players,
             'userDetails' => $userDetails,
             'gameQuestions' => $gameQuestions, // plural now
             'gameType' => $gameType,
