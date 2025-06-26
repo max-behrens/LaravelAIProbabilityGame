@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Models\Games;
 use App\Models\User;
+use App\Events\PlayerReady;
+use Illuminate\Support\Facades\Cache;
 use App\Events\GameStatusUpdated;
 use App\Services\Dashboard\GamesService;
 use Inertia\Inertia;
@@ -56,6 +58,12 @@ class GamesController extends Controller
         $game->users()->attach($user->id);
         event(new GameStatusUpdated($game));
 
+        $this->triggerGameUpdate($gameId, 'player.joined', [
+            'userId' => auth()->id(),
+            'userName' => auth()->user()->name,
+            'timestamp' => now()->toISOString()
+        ]);
+
         return response()->json(['success' => true]);
     }
 
@@ -70,6 +78,12 @@ class GamesController extends Controller
 
         $game->users()->detach($user->id);
         event(new GameStatusUpdated($game));
+
+        $this->triggerGameUpdate($gameId, 'player.left', [
+            'userId' => auth()->id(),
+            'userName' => auth()->user()->name,
+            'timestamp' => now()->toISOString()
+        ]);
 
         return response()->json(['success' => true]);
     }
@@ -156,6 +170,13 @@ class GamesController extends Controller
     public function start(Games $game)
     {
         $game->start(); // The method you already added in the model
+
+        $this->triggerGameUpdate($game->id, 'game.started', [
+            'userId' => auth()->id(),
+            'userName' => auth()->user()->name,
+            'timestamp' => now()->toISOString()
+        ]);
+
         return response()->json(['success' => true, 'status' => $game->status]);
     }
 
@@ -226,6 +247,96 @@ class GamesController extends Controller
         $game = Games::with('users')->findOrFail($gameId);
         return response()->json($game->users);
     }
+
+
+    /**
+     * MULTIPLAYER
+     */
+
+
+    private function triggerGameUpdate($gameId, $eventType, $data = [])
+    {
+        try {
+            $pusher = new \Pusher\Pusher(
+                config('broadcasting.connections.pusher.key'),
+                config('broadcasting.connections.pusher.secret'),
+                config('broadcasting.connections.pusher.app_id'),
+                [
+                    'cluster' => config('broadcasting.connections.pusher.options.cluster'),
+                    'encrypted' => true,
+                ]
+            );
+
+            $pusher->trigger("game.{$gameId}", $eventType, $data);
+            
+            \Log::info('Pusher event triggered successfully', [
+                'channel' => "game.{$gameId}",
+                'event' => $eventType,
+                'data' => $data
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Pusher trigger error: ' . $e->getMessage(), [
+                'channel' => "game.{$gameId}",
+                'event' => $eventType,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    public function playerReady(Request $request, Games $game)
+    {
+
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+        $userId = $request->user()->id;
+        $userName = $request->user()->name;
+        $requiredCount = (int) $request->requiredCount;
+
+        // Track ready players in cache (or use DB if preferred)
+        $cacheKey = "game:{$game->id}:readyPlayers";
+        $readyPlayers = Cache::get($cacheKey, []);
+
+        // Add the player if not already marked ready
+        if (!in_array($userId, $readyPlayers)) {
+            $readyPlayers[] = $userId;
+            Cache::put($cacheKey, $readyPlayers, now()->addMinutes(30));
+        }
+
+        $readyCount = count($readyPlayers);
+
+        // Broadcast to others
+        broadcast(new PlayerReady($game->id, $userId, $userName, $readyCount, $requiredCount))->toOthers();
+
+        // Check if all players are ready
+        if (count($readyPlayers) >= $requiredCount) {
+            $game->status = 'in_progress'; // update DB game status
+            $game->save();
+
+            return response()->json(['status' => 'started']);
+        }
+
+        return response()->json(['status' => 'waiting']);
+    }
+
+    public function broadcast(Request $request, $gameId)
+    {
+        $event = $request->input('event');
+        $data = $request->input('data');
+        
+        // Validate the event and data
+        if (!$event || !$data) {
+            return response()->json(['error' => 'Event and data are required'], 400);
+        }
+        
+        // Trigger the Pusher event
+        $this->triggerGameUpdate($gameId, $event, $data);
+        
+        return response()->json(['success' => true]);
+    }
+
 
 
 }

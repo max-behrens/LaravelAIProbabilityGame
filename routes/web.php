@@ -29,18 +29,17 @@ Route::get('/', IndexController::class)->name('index');
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
-    Route::post('/games/{gameId}/submit-answer', [GamesController::class, 'submitAnswer']);
+            Route::post('/games/{gameId}/submit-answer', [GamesController::class, 'submitAnswer']);
 
-    Route::get('/games/{gameId}/scores', [GamesController::class, 'getScores']);
+            Route::get('/games/{gameId}/scores', [GamesController::class, 'getScores']);
 
-    Route::get('/games/{gameId}/all-scores', [GamesController::class, 'getAllScores']);
+            Route::get('/games/{gameId}/all-scores', [GamesController::class, 'getAllScores']);
 
-    Route::get('/games/{gameId}/question-averages', [GamesController::class, 'getQuestionAverages']);
+            Route::get('/games/{gameId}/question-averages', [GamesController::class, 'getQuestionAverages']);
 
-    Route::get('/games/{gameId}/score-trends', [GamesController::class, 'getScoreTrendStats']);
+            Route::get('/games/{gameId}/score-trends', [GamesController::class, 'getScoreTrendStats']);
 
-    Route::get('/games/{gameId}/players', [GamesController::class, 'getPlayers']);
-
+            Route::get('/games/{gameId}/players', [GamesController::class, 'getPlayers']);
 
             Route::post('/games/{game}/join', [GamesController::class, 'join']);
         Route::post('/games/{game}/leave', [GamesController::class, 'leave']);
@@ -52,6 +51,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return Response::file(public_path('favicon.ico'));
     });
 });
+
+
+Route::post('/games/{game}/player-ready', [GamesController::class, 'playerReady'])->middleware('auth');
+
 
 
 Route::prefix('dashboard')

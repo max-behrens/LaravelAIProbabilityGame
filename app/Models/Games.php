@@ -15,6 +15,7 @@ class Games extends Model
     protected $fillable = [
         'user_id',
         'game_type_id',
+        'status',
         // no need for 'title'
     ];
 

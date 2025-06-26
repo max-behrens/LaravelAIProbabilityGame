@@ -27,6 +27,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 Route::middleware('auth:sanctum')->post('/dashboard/posts/save-chat', [PostController::class, 'saveChat']);
 
 
+
 Route::post('/ask-openai', [DashboardAIController::class, 'askOpenAI']);
 
 Route::get('/chart-data', function () {
@@ -38,9 +39,9 @@ Route::get('/chart-data', function () {
 
 Route::get('/games/{gameId}/score-trends', [GamesController::class, 'getScoreTrendStats']);
 
-Route::post('/submit-answer', [GamesController::class, 'submitAnswer']);
+Route::get('/games/{gameId}/all-scores', [GamesController::class, 'getAllScores']);
 
-Route::post('/games/{game}/start', [GamesController::class, 'start'])->name('games.start');
+Route::post('/submit-answer', [GamesController::class, 'submitAnswer']);
 
 Route::get('/games/{gameId}/scores', [GamesController::class, 'getScores']);
 
@@ -50,6 +51,7 @@ Route::get('/games/{gameId}', [GamesController::class, 'show']);
 
 Route::get('/games/{gameId}/players', [GamesController::class, 'getPlayers']);
 
+Route::post('/games/{gameId}/broadcast', [GamesController::class, 'broadcast']);
 
 
 

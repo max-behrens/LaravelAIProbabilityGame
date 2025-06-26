@@ -3,10 +3,22 @@ import { ref, defineProps, computed, onMounted } from 'vue';
 import BreezeAuthenticatedLayout from '@/Layouts/Authenticated.vue';
 import { Head, Link } from '@inertiajs/inertia-vue3';
 import { useGames } from '@/Composables/useGames';
+import { usePlayerInteractions } from '@/Composables/usePlayerInteractions'; // Import the new composable
 import DynamicPagination from '@/Components/DynamicPagination.vue';
 import GameGraphComponent from '@/Components/GameGraphComponent.vue';
 import GameHeatmapComponent from '@/Components/GameHeatmapComponent.vue';
+import Echo from 'laravel-echo';
+import Pusher from 'pusher-js';
 import axios from 'axios';
+
+window.Pusher = Pusher;
+
+const echo = new Echo({
+  broadcaster: 'pusher',
+  key: 'c493e35de663a696d88e',
+  cluster: 'mt1', // replace with your actual cluster
+  forceTLS: true, // optional but recommended
+});
 
 // Props
 const props = defineProps({
@@ -17,14 +29,35 @@ const props = defineProps({
   auth: Object, 
 });
 
+
+// Use the player interactions composable
+const {
+  players,
+  flashMessages,
+  gameState,
+  isInGame,
+  fetchPlayers,
+  broadcastJoin,
+  broadcastLeave,
+  changePlayerCount,
+  answerQuestion,
+  submitAnswers,
+  addFlashMessage,
+  removeFlashMessage,
+  clearFlashMessages
+} = usePlayerInteractions(props.gameId, props.auth);
+
+// Debug logging
+console.log('Game ID:', props.gameId);
+console.log('Auth user:', props.auth?.user);
+console.log('Pusher key being used: c493e35de663a696d88e');
+
 // Reactive state
 const currentGame = ref({ users: [] });
 const gameScores = ref([]);
 const errorMessage = ref('');
-const successMessage = ref('');
 const playerCount = ref(1);
 const playAgainstAI = ref(false);
-const userInGame = ref(false);
 const scoresCurrentPage = ref(1);
 const scoresTotalPages = ref(1);
 const submitting = ref(false);
@@ -33,23 +66,22 @@ const answers = ref([]);
 const isGameStarted = ref(false);
 const gameGraphRef = ref(null);
 const gameHeatmapRef = ref(null);
-const playersCount = computed(() => currentGame.value.users.length);
+
+// Computed properties
+const playersCount = computed(() => players.value.length);
 const maxPlayers = computed(() => props.game?.max_players || 0);
 
-const getCurrentUserId = () => props.auth?.user?.id ?? null;
-
 const maxPlayersReached = computed(() => {
-  console.log('props.game:', props.game);
-  console.log('maxPlayers:', props.game.max_players);
-  console.log('currentGame users count:', currentGame.value.users.length);
-
-  return props.game.max_players && currentGame.value.users.length >= props.game.max_players;
+  return props.game.max_players && players.value.length >= props.game.max_players;
 });
 
-// Computed: detect if current question is the last one
 const isLastQuestion = computed(() => {
   return currentQuestionIndex.value === props.gameQuestions.length - 1;
 });
+
+// Watch for game state changes
+const isWaitingForOthers = computed(() => gameState.value.waitingForOthers);
+const isGameInProgress = computed(() => gameState.value.gameInProgress);
 
 // Format date helper
 const formatDate = (dateString) => {
@@ -57,31 +89,13 @@ const formatDate = (dateString) => {
   return new Date(dateString).toLocaleString();
 };
 
-// Fetch current game details including users
+// Fetch current game details
 const fetchCurrentGame = async () => {
   try {
     const response = await axios.get(`/api/games/${props.gameId}`);
     currentGame.value = response.data;
   } catch (error) {
     errorMessage.value = 'Failed to load game details.';
-    console.error(error);
-  }
-};
-
-// Fetch the players currently in the game (updated from backend)
-const fetchPlayers = async () => {
-  try {
-    const response = await axios.get(`/api/games/${props.gameId}/players`);
-    currentGame.value.users = response.data;
-
-    const currentUserId = getCurrentUserId();
-    if (currentUserId) {
-      userInGame.value = response.data.some(player => player.id === currentUserId);
-    } else {
-      userInGame.value = false;
-    }
-  } catch (error) {
-    errorMessage.value = 'Failed to load players.';
     console.error(error);
   }
 };
@@ -105,29 +119,35 @@ const changeScoresPage = (page) => {
   fetchGameScores(page);
 };
 
-// Game control stubs
-const startGame = () => {
-  isGameStarted.value = true;
-  successMessage.value = 'Game started!';
+// Updated game control functions
+const startGame = async () => {
+  try {
+    const response = await axios.post(`/games/${props.gameId}/player-ready`, {
+      userId: props.auth.user.id,
+      userName: props.auth.user.name,
+      requiredCount: playerCount.value,
+    });
+
+    if (response.data.status === 'waiting') {
+      addFlashMessage('Waiting for other players to be ready...', 'success');
+    } else if (response.data.status === 'started') {
+      isGameStarted.value = true;
+      addFlashMessage('Game started!', 'success');
+    }
+  } catch (error) {
+    errorMessage.value = error.response?.data?.message || 'Failed to signal readiness.';
+    console.error(error);
+  }
 };
 
-// Join the game — call backend and refresh player list
+// Join the game with real-time updates
 const joinGame = async () => {
   try {
     submitting.value = true;
-
-    // Optimistically mark user as in game immediately
-    userInGame.value = true;
-
     await axios.post(`/games/${props.gameId}/join`);
-    successMessage.value = 'You joined the game!';
-
-    // Refresh player list to sync backend state
-    await fetchPlayers();
-
+    await fetchPlayers(); // This will be updated via Pusher anyway
+    addFlashMessage('You joined the game!', 'success');
   } catch (error) {
-    // Revert if error occurs
-    userInGame.value = false;
     errorMessage.value = error.response?.data?.message || 'Failed to join the game.';
     console.error(error);
   } finally {
@@ -135,23 +155,14 @@ const joinGame = async () => {
   }
 };
 
-// Leave the game — call backend and refresh player list
+// Leave the game with real-time updates
 const leaveGame = async () => {
   try {
     submitting.value = true;
-
-    // Optimistically mark user as not in game immediately
-    userInGame.value = false;
-
     await axios.post(`/games/${props.gameId}/leave`);
-    successMessage.value = 'You left the game.';
-
-    // Refresh player list to sync backend state
-    await fetchPlayers();
-
+    await fetchPlayers(); // This will be updated via Pusher anyway
+    addFlashMessage('You left the game!', 'success');
   } catch (error) {
-    // Revert if error occurs
-    userInGame.value = true;
     errorMessage.value = error.response?.data?.message || 'Failed to leave the game.';
     console.error(error);
   } finally {
@@ -159,44 +170,51 @@ const leaveGame = async () => {
   }
 };
 
+// Handle player count changes
+const onPlayerCountChange = async (newCount) => {
+  playerCount.value = newCount;
+  if (isInGame.value) {
+    await changePlayerCount(newCount);
+  }
+};
+
 // Navigation / submission for answers
 const nextOrSubmit = async () => {
-  axios.defaults.withCredentials = true;
   if (!isLastQuestion.value) {
+    // Answer the current question and broadcast
+    await answerQuestion(currentQuestionIndex.value, answers.value[currentQuestionIndex.value]);
     currentQuestionIndex.value++;
   } else {
     submitting.value = true;
 
     try {
-      // Use the API route for consistency
-      await axios.post(`/games/${props.gameId}/submit-answer`, {
-          answers: answers.value,
-      });
+      const result = await submitAnswers(answers.value, playerCount.value);
       
-      successMessage.value = 'Answers submitted successfully!';
-      
-      // Refresh all data to show the new submission immediately
-      await Promise.all([
-        fetchGameScores(1), // Reset to first page to see latest scores
-      ]);
-      
-      // Refresh the GameGraphComponent
-      if (gameGraphRef.value && typeof gameGraphRef.value.refreshChart === 'function') {
-        await gameGraphRef.value.refreshChart();
+      if (result.submitted) {
+        addFlashMessage('Answers submitted successfully!', 'success');
+        
+        // Refresh all data
+        await Promise.all([
+          fetchGameScores(1),
+          fetchCurrentGame()
+        ]);
+        
+        // Refresh charts
+        if (gameGraphRef.value?.refreshChart) {
+          await gameGraphRef.value.refreshChart();
+        }
+        if (gameHeatmapRef.value?.refreshHeatmap) {
+          await gameHeatmapRef.value.refreshHeatmap();
+        }
+        
+        // Reset game state
+        currentQuestionIndex.value = 0;
+        answers.value = [];
+        isGameStarted.value = false;
+        
+      } else if (result.waitingForOthers) {
+          addFlashMessage('Answers submitted! Waiting for other players to submit...', 'success');
       }
-      
-      // Refresh the GameHeatmapComponent
-      if (gameHeatmapRef.value && typeof gameHeatmapRef.value.refreshHeatmap === 'function') {
-        await gameHeatmapRef.value.refreshHeatmap();
-      }
-      
-      // Refresh game details if needed
-      await fetchCurrentGame();
-      
-      // Reset game state for next round
-      currentQuestionIndex.value = 0;
-      answers.value = [];
-      isGameStarted.value = false;
       
     } catch (error) {
       errorMessage.value = error.response?.data?.message || 'Failed to submit answers.';
@@ -210,8 +228,16 @@ const nextOrSubmit = async () => {
 // Lifecycle: fetch data
 onMounted(() => {
   fetchCurrentGame();
-  fetchPlayers();
   fetchGameScores();
+    echo.channel(`game.${props.gameId}`)
+      .listen('.player.ready', (data) => {
+        console.log('Player ready:', data.userName);
+        fetchPlayers();
+        if (data.requiredCount && players.value.length >= data.requiredCount) {
+          isGameStarted.value = true;
+          addFlashMessage('Game started!', 'success');
+        }
+      });
 });
 </script>
 
@@ -225,15 +251,47 @@ onMounted(() => {
       </h2>
     </template>
 
-    <div class="py-12">
+    <div class="py-4">
       <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-      <!-- Flash Messages -->
-      <div v-if="errorMessage" class="mb-4 p-4 bg-red-900 text-red-200 rounded border border-red-700">{{ errorMessage }}</div>
-      <div v-if="successMessage" class="mb-4 p-4 bg-green-900 text-green-200 rounded border border-green-700">{{ successMessage }}</div>
+
+        <!-- Back Button -->
+        <div class="mb-4">
+          <Link
+            :href="route('ai-game')"
+            class="inline-block bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium py-1 px-2 rounded"
+          >
+            ← Back to AI Game Lobby
+          </Link>
+        </div>
+        
+        <!-- Flash Messages from Player Interactions -->
+        <div v-for="flash in flashMessages" :key="flash.id" class="mb-2">
+          <div 
+            :class="{
+              'bg-red-900 text-red-200 border-red-700': flash.type === 'error',
+              'bg-green-900 text-green-200 border-green-700': flash.type === 'success',
+              'bg-blue-900 text-blue-200 border-blue-700': flash.type === 'info',
+              'bg-yellow-900 text-yellow-200 border-yellow-700': flash.type === 'warning'
+            }"
+            class="p-3 rounded border relative"
+          >
+            {{ flash.message }}
+            <button 
+              @click="removeFlashMessage(flash.id)"
+              class="absolute top-1 right-2 text-xl font-bold opacity-70 hover:opacity-100"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        <!-- Original Flash Messages -->
+        <div v-if="errorMessage" class="mb-4 p-4 bg-red-900 text-red-200 rounded border border-red-700">{{ errorMessage }}</div>
+
 
         <div class="flex flex-wrap gap-6 justify-center items-start">
           <!-- Question Input -->
-          <div v-if="isGameStarted" class="basis-full mb-6">
+          <div v-if="isGameStarted && !isWaitingForOthers" class="basis-full mb-6">
             <div class="text-center mb-2 text-gray-400 text-sm font-medium">
               Question {{ currentQuestionIndex + 1 }} / {{ props.gameQuestions.length }}
             </div>
@@ -247,14 +305,21 @@ onMounted(() => {
                 placeholder="Your answer"
               />
 
-            <button
-              :disabled="submitting"
-              @click="nextOrSubmit"
-              class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
-            >
-              {{ isLastQuestion ? (submitting ? 'Submitting...' : 'Submit') : 'Next' }}
-            </button>
+              <button
+                :disabled="submitting || isWaitingForOthers"
+                @click="nextOrSubmit"
+                class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+              >
+                {{ isLastQuestion ? (submitting ? 'Submitting...' : 'Submit') : 'Next' }}
+              </button>
+            </div>
+          </div>
 
+          <!-- Waiting Message -->
+          <div v-if="isWaitingForOthers" class="basis-full mb-6 text-center">
+            <div class="p-4 bg-yellow-900 text-yellow-200 rounded border border-yellow-700">
+              <p class="text-lg font-semibold">Waiting for other players...</p>
+              <p class="text-sm mt-2">Please wait while other players complete their actions.</p>
             </div>
           </div>
 
@@ -262,38 +327,46 @@ onMounted(() => {
           <div class="basis-full flex flex-wrap gap-4 justify-center p-4 bg-gray-800 rounded shadow">
             <div class="flex items-center gap-2 text-white">
               <label for="players">Number of Players:</label>
-              <select id="players" v-model="playerCount" class="border rounded px-2 py-1 bg-gray-700 text-white">
+              <select 
+                id="players" 
+                :value="playerCount" 
+                @change="onPlayerCountChange($event.target.value)"
+                :disabled="isGameInProgress || isWaitingForOthers"
+                class="border rounded px-2 py-1 bg-gray-700 text-white disabled:opacity-50"
+              >
                 <option value="1">1 Player</option>
                 <option value="2">2 Players</option>
               </select>
             </div>
 
             <div class="flex items-center text-white">
-              <input type="checkbox" v-model="playAgainstAI" class="mr-2" />
+              <input 
+                type="checkbox" 
+                v-model="playAgainstAI" 
+                :disabled="isGameInProgress || isWaitingForOthers"
+                class="mr-2" 
+              />
               <span>Play against AI</span>
             </div>
 
             <div class="flex flex-wrap gap-4 justify-center mt-4 w-full">
               <button 
                 @click="startGame" 
-                :disabled="!userInGame"
-                class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                :disabled="!isInGame || isGameInProgress || isWaitingForOthers"
+                class="bg-green-900 hover:bg-green-800 text-green-200 font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Start Game
+                {{ isWaitingForOthers ? 'Waiting...' : 'Start Game' }}
               </button>
-              <Link :href="route('ai-game')" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded">
-                Exit Game
-              </Link>
               <button
                 @click="joinGame"
-                :disabled="userInGame || submitting || maxPlayersReached"
+                :disabled="isInGame || submitting || maxPlayersReached || isGameInProgress"
                 class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
               >
                 Join Game
               </button>
               <button
                 @click="leaveGame"
-                :disabled="!userInGame  || submitting"
+                :disabled="!isInGame || submitting || isGameInProgress"
                 class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50"
               >
                 Leave Game
@@ -315,11 +388,12 @@ onMounted(() => {
                 Max Players Reached
               </div>
               
+              <!-- Use players from the composable instead of currentGame.users -->
               <ul class="list-disc pl-5">
-                <li v-for="user in currentGame?.users ?? []" :key="user.id">{{ user.name }}</li>
+                <li v-for="user in players" :key="user.id">{{ user.name }}</li>
               </ul>
               
-              <div v-if="(currentGame?.users?.length ?? 0) === 0" class="text-gray-400 mt-2">
+              <div v-if="players.length === 0" class="text-gray-400 mt-2">
                 Waiting for players to join...
               </div>
             </div>
@@ -357,7 +431,7 @@ onMounted(() => {
           </div>
 
           <!-- Charts Row -->
-          <div class="flex flex-col lg:flex-row gap-6 w-full mt-6">
+          <div class="flex flex-col lg:flex-row gap-6 w-full">
             <!-- Score Heatmap -->
             <GameHeatmapComponent 
               ref="gameHeatmapRef" 
