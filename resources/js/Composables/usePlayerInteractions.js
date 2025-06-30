@@ -21,6 +21,13 @@ export function usePlayerInteractions(gameId, auth) {
   let gameChannel = null;
   let pusherConnected = false;
   
+  // Add callback refs for external updates
+  const callbacks = ref({
+    onScoresUpdate: null,
+    onGameUpdate: null,
+    onChartsUpdate: null
+  });
+  
   const currentUserId = computed(() => auth?.user?.id ?? null);
   const currentUserName = computed(() => auth?.user?.name ?? 'Unknown');
   const isInGame = computed(() => 
@@ -75,6 +82,34 @@ export function usePlayerInteractions(gameId, auth) {
   const clearFlashMessages = () => {
     flashMessages.value = [];
     console.log('All flash messages cleared');
+  };
+
+  // Register callbacks for external components
+  const registerCallbacks = (newCallbacks) => {
+    callbacks.value = { ...callbacks.value, ...newCallbacks };
+    console.log('Callbacks registered:', Object.keys(newCallbacks));
+  };
+
+  // Trigger external updates
+  const triggerScoresUpdate = async () => {
+    if (callbacks.value.onScoresUpdate) {
+      console.log('🔄 Triggering scores update...');
+      await callbacks.value.onScoresUpdate();
+    }
+  };
+
+  const triggerGameUpdate = async () => {
+    if (callbacks.value.onGameUpdate) {
+      console.log('🔄 Triggering game update...');
+      await callbacks.value.onGameUpdate();
+    }
+  };
+
+  const triggerChartsUpdate = async () => {
+    if (callbacks.value.onChartsUpdate) {
+      console.log('🔄 Triggering charts update...');
+      await callbacks.value.onChartsUpdate();
+    }
   };
 
   // Fetch current players - Fixed API route
@@ -156,7 +191,7 @@ export function usePlayerInteractions(gameId, auth) {
       
       if (playerCount === 1) {
         // Single player - submit immediately
-        await axios.post(`/api/games/${gameId}/submit-answer`, { answers });
+        await axios.post(`/games/${gameId}/submit-answer`, { answers });
 
         // Broadcast completion
         await axios.post(`/api/games/${gameId}/broadcast`, {
@@ -169,6 +204,14 @@ export function usePlayerInteractions(gameId, auth) {
         });
         
         addFlashMessage('Answers submitted successfully!', 'success');
+        
+        // Trigger updates immediately for single player
+        await Promise.all([
+          triggerScoresUpdate(),
+          triggerGameUpdate(),
+          triggerChartsUpdate()
+        ]);
+        
         resetGameState();
         return { submitted: true, waitingForOthers: false };
         
@@ -188,7 +231,7 @@ export function usePlayerInteractions(gameId, auth) {
         // Check if all players have submitted
         if (gameState.value.playersSubmitted.size >= playerCount) {
           // All players submitted - save scores
-          await axios.post(`/api/games/${gameId}/submit-answer`, { answers });
+          await axios.post(`/games/${gameId}/submit-answer`, { answers });
           
           // Broadcast game completion
           await axios.post(`/api/games/${gameId}/broadcast`, {
@@ -200,6 +243,14 @@ export function usePlayerInteractions(gameId, auth) {
           });
           
           addFlashMessage('All players submitted! Game completed!', 'success');
+          
+          // Trigger updates immediately for multiplayer completion
+          await Promise.all([
+            triggerScoresUpdate(),
+            triggerGameUpdate(),
+            triggerChartsUpdate()
+          ]);
+          
           resetGameState();
           return { submitted: true, waitingForOthers: false };
           
@@ -362,20 +413,37 @@ export function usePlayerInteractions(gameId, auth) {
       }
     });
 
-    // Single player game completed
-    gameChannel.bind('game.completed.single', (data) => {
+    // Single player game completed - THIS IS THE KEY ADDITION
+    gameChannel.bind('game.completed.single', async (data) => {
       console.log('🔔 Received game.completed.single event:', data);
       if (data.userId !== currentUserId.value) {
         addFlashMessage(`${data.userName} completed their game!`, 'success');
         gameState.value.gameInProgress = false;
+        
+        // TRIGGER LIVE UPDATES FOR OTHER PLAYERS
+        console.log('🔄 Triggering live updates for single player completion...');
+        await Promise.all([
+          triggerScoresUpdate(),
+          triggerGameUpdate(),
+          triggerChartsUpdate()
+        ]);
       }
     });
 
-    // Multiplayer game completed
-    gameChannel.bind('game.completed.multiplayer', (data) => {
+    // Multiplayer game completed - THIS IS THE KEY ADDITION
+    gameChannel.bind('game.completed.multiplayer', async (data) => {
       console.log('🔔 Received game.completed.multiplayer event:', data);
       if (!gameState.value.playersSubmitted.has(currentUserId.value)) {
         addFlashMessage(`Game completed with all ${data.playerCount} players!`, 'success');
+        
+        // TRIGGER LIVE UPDATES FOR ALL PLAYERS
+        console.log('🔄 Triggering live updates for multiplayer completion...');
+        await Promise.all([
+          triggerScoresUpdate(),
+          triggerGameUpdate(),
+          triggerChartsUpdate()
+        ]);
+        
         resetGameState();
       }
     });
@@ -430,6 +498,7 @@ export function usePlayerInteractions(gameId, auth) {
     addFlashMessage,
     removeFlashMessage,
     clearFlashMessages,
+    registerCallbacks,
     
     // Cleanup
     cleanup

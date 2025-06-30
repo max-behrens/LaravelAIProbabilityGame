@@ -29,7 +29,8 @@ Route::get('/', IndexController::class)->name('index');
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
-            Route::post('/games/{gameId}/submit-answer', [GamesController::class, 'submitAnswer']);
+        Route::post('/games/{gameId}/submit-answer', [GamesController::class, 'submitAnswer'])->name('games.submit-answer');
+
 
             Route::get('/games/{gameId}/scores', [GamesController::class, 'getScores']);
 
@@ -51,6 +52,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return Response::file(public_path('favicon.ico'));
     });
 });
+
 
 
 Route::post('/games/{game}/player-ready', [GamesController::class, 'playerReady'])->middleware('auth');

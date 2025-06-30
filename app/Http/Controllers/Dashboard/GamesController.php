@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Models\Games;
 use App\Models\User;
+use App\Models\GameScore;
 use App\Events\PlayerReady;
 use Illuminate\Support\Facades\Cache;
 use App\Events\GameStatusUpdated;
@@ -16,18 +17,19 @@ use Illuminate\Support\Facades\Log;
 class GamesController extends Controller
 {
     protected $gamesService;
-    
+
     public function __construct(GamesService $gamesService)
     {
         $this->gamesService = $gamesService;
     }
+
     public function index()
     {
+        Log::info('Fetching paginated games list...');
         $games = Games::with(['users', 'gameType'])
             ->withCount('users as players_count')
             ->paginate(10);
-    
-        // Map games to include game_type_name
+
         $games->getCollection()->transform(function ($game) {
             return [
                 'id' => $game->id,
@@ -38,20 +40,24 @@ class GamesController extends Controller
                 'game_type_name' => $game->gameType?->name ?? null,
             ];
         });
-    
+
+        Log::info('Games fetched successfully');
         return $games;
     }
 
     public function join($gameId)
     {
+        Log::info("User attempting to join game", ['gameId' => $gameId, 'userId' => auth()->id()]);
         $game = Games::findOrFail($gameId);
         $user = auth()->user();
 
         if ($game->users()->where('user_id', $user->id)->exists()) {
+            Log::warning('User already joined game');
             return response()->json(['message' => 'Already joined'], 400);
         }
 
         if ($game->users()->count() >= $game->max_players) {
+            Log::warning('Game is full');
             return response()->json(['message' => 'Game is full'], 400);
         }
 
@@ -64,15 +70,18 @@ class GamesController extends Controller
             'timestamp' => now()->toISOString()
         ]);
 
+        Log::info('User joined game successfully');
         return response()->json(['success' => true]);
     }
 
     public function leave($gameId)
     {
+        Log::info("User attempting to leave game", ['gameId' => $gameId, 'userId' => auth()->id()]);
         $game = Games::findOrFail($gameId);
         $user = auth()->user();
 
         if (!$game->users()->where('user_id', $user->id)->exists()) {
+            Log::warning('User not in game');
             return response()->json(['message' => 'You are not in this game'], 400);
         }
 
@@ -85,61 +94,58 @@ class GamesController extends Controller
             'timestamp' => now()->toISOString()
         ]);
 
+        Log::info('User left game successfully');
         return response()->json(['success' => true]);
     }
 
     public function getScores(Request $request)
     {
         $gameId = $request->gameId;
-        $page = $request->query('page', 1); // Get page number from request
-        
+        $page = $request->query('page', 1);
+
+        Log::info('Fetching game scores', ['gameId' => $gameId, 'page' => $page]);
         $gameScores = $this->gamesService->getGameScores($gameId, $page);
-    
-        Log::info('Game Scores:', ['gameScores' => $gameScores]);
-    
+        Log::info('Game scores retrieved', ['scores' => $gameScores]);
+
         return response()->json($gameScores);
     }
 
     public function show($gameId)
     {
+        Log::info('Fetching game details', ['gameId' => $gameId]);
         $game = Games::with('users')->find($gameId);
 
         if (!$game) {
+            Log::warning('Game not found');
             return response()->json(['message' => 'Game not found'], 404);
         }
 
         return response()->json($game);
     }
 
-
     public function showRoom($gameId, $userId)
     {
-        // Fetch the game details and user info
+        Log::info('Loading game room', ['gameId' => $gameId, 'userId' => $userId]);
         $gameDetails = Games::findOrFail($gameId);
         $gameType = $this->gamesService->getGameType($gameDetails);
         $userDetails = User::findOrFail($userId);
-
         $gameQuestions = $this->gamesService->getGameQuestions($gameDetails);
+
         return Inertia::render('Dashboard/AIGame/Room/Index', [
             'gameId' => $gameId,
             'userId' => $userId,
             'game' => $gameDetails,
             'maxPlayers' => $gameDetails->max_players,
             'userDetails' => $userDetails,
-            'gameQuestions' => $gameQuestions, // plural now
+            'gameQuestions' => $gameQuestions,
             'gameType' => $gameType,
             'auth' => ['user' => auth()->user()],
         ]);
     }
 
-        /**
-     * Get the average scores for players in a specific game.
-     *
-     * @param  Request  $request
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function getScoreTrendStats(int $gameId)
     {
+        Log::info('Fetching score trend stats', ['gameId' => $gameId]);
         $players = $this->gamesService->playerAverages($gameId);
         $totalGameScore = $this->gamesService->totalScore($gameId);
 
@@ -149,17 +155,30 @@ class GamesController extends Controller
         ]);
     }
 
-
-    public function submitAnswer(Request $request)
+    public function submitAnswer(Request $request, $gameId)
     {
+        Log::info('Submitting answers', ['gameId' => $gameId, 'userId' => $request->user()?->id]);
+
         $request->validate([
-            'answers' => 'required|array',        // Expect an array
-            'answers.*' => 'required|string',     // Each answer must be a string
+            'answers' => 'required|array',
+            'answers.*' => 'nullable|string', // Changed from 'required|string' to 'nullable|string'
         ]);
 
-        // Call GamesService with the answers array
-        $sessionId = $this->gamesService->submitAnswers($request->gameId, $request->answers);
+        $user = $request->user();
+        if (!$user) {
+            Log::warning('Unauthorized answer submission');
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
 
+        $sessionId = $this->gamesService->submitAnswers($gameId, $user->id, $request->answers);
+
+        $this->triggerGameUpdate($gameId, 'game.answers_submitted', [
+            'userId' => $user->id,
+            'userName' => $user->name,
+            'timestamp' => now()->toISOString(),
+        ]);
+
+        Log::info('Answers submitted successfully', ['sessionId' => $sessionId]);
         return response()->json([
             'success' => true,
             'message' => 'Game completed successfully!',
@@ -169,7 +188,8 @@ class GamesController extends Controller
 
     public function start(Games $game)
     {
-        $game->start(); // The method you already added in the model
+        Log::info('Starting game', ['gameId' => $game->id, 'userId' => auth()->id()]);
+        $game->start();
 
         $this->triggerGameUpdate($game->id, 'game.started', [
             'userId' => auth()->id(),
@@ -182,16 +202,15 @@ class GamesController extends Controller
 
     public function getAllScores($gameId)
     {
+        Log::info('Fetching all game scores', ['gameId' => $gameId]);
         $allScores = $this->gamesService->getAllGameScores($gameId);
-        
         return response()->json($allScores);
     }
 
-    
     public function getQuestionAverages($gameId)
     {
         try {
-            // Get all scores for this game with user data, ordered by creation time
+            Log::info('Fetching question averages', ['gameId' => $gameId]);
             $scores = GameScore::where('game_id', $gameId)
                 ->with('user')
                 ->orderBy('created_at', 'asc')
@@ -199,35 +218,29 @@ class GamesController extends Controller
 
             return response()->json($scores);
         } catch (\Exception $e) {
+            Log::error('Failed to fetch question averages', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Failed to fetch question averages'], 500);
         }
     }
 
-    // Alternative method if you want to return processed trend data
     public function getScoreTrends($gameId)
     {
         try {
+            Log::info('Fetching score trends', ['gameId' => $gameId]);
             $scores = GameScore::where('game_id', $gameId)
                 ->with('user')
                 ->orderBy('created_at', 'asc')
                 ->get();
 
-            // Group by user and create trend data
             $trends = [];
             foreach ($scores as $score) {
                 $userName = $score->user->name ?? 'Anonymous';
-                
-                if (!isset($trends[$userName])) {
-                    $trends[$userName] = [];
-                }
-                
                 $trends[$userName][] = [
-                    'x' => $score->created_at->timestamp * 1000, // Convert to JS timestamp
+                    'x' => $score->created_at->timestamp * 1000,
                     'y' => $score->score
                 ];
             }
 
-            // Convert to chart series format
             $series = [];
             foreach ($trends as $userName => $data) {
                 $series[] = [
@@ -238,21 +251,17 @@ class GamesController extends Controller
 
             return response()->json($series);
         } catch (\Exception $e) {
+            Log::error('Failed to fetch score trends', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Failed to fetch score trends'], 500);
         }
     }
 
     public function getPlayers($gameId)
     {
+        Log::info('Fetching players for game', ['gameId' => $gameId]);
         $game = Games::with('users')->findOrFail($gameId);
         return response()->json($game->users);
     }
-
-
-    /**
-     * MULTIPLAYER
-     */
-
 
     private function triggerGameUpdate($gameId, $eventType, $data = [])
     {
@@ -268,15 +277,15 @@ class GamesController extends Controller
             );
 
             $pusher->trigger("game.{$gameId}", $eventType, $data);
-            
-            \Log::info('Pusher event triggered successfully', [
+
+            Log::info('Pusher event triggered successfully', [
                 'channel' => "game.{$gameId}",
                 'event' => $eventType,
                 'data' => $data
             ]);
-            
+
         } catch (\Exception $e) {
-            \Log::error('Pusher trigger error: ' . $e->getMessage(), [
+            Log::error('Pusher trigger error', [
                 'channel' => "game.{$gameId}",
                 'event' => $eventType,
                 'error' => $e->getMessage()
@@ -286,35 +295,37 @@ class GamesController extends Controller
 
     public function playerReady(Request $request, Games $game)
     {
-
         $user = $request->user();
         if (!$user) {
+            Log::warning('Unauthorized ready status');
             return response()->json(['error' => 'Unauthorized'], 401);
         }
-        $userId = $request->user()->id;
-        $userName = $request->user()->name;
+
+        $userId = $user->id;
+        $userName = $user->name;
         $requiredCount = (int) $request->requiredCount;
 
-        // Track ready players in cache (or use DB if preferred)
         $cacheKey = "game:{$game->id}:readyPlayers";
         $readyPlayers = Cache::get($cacheKey, []);
 
-        // Add the player if not already marked ready
         if (!in_array($userId, $readyPlayers)) {
             $readyPlayers[] = $userId;
             Cache::put($cacheKey, $readyPlayers, now()->addMinutes(30));
         }
 
         $readyCount = count($readyPlayers);
+        Log::info('Player marked ready', [
+            'gameId' => $game->id,
+            'userId' => $userId,
+            'readyCount' => $readyCount,
+            'requiredCount' => $requiredCount
+        ]);
 
-        // Broadcast to others
         broadcast(new PlayerReady($game->id, $userId, $userName, $readyCount, $requiredCount))->toOthers();
 
-        // Check if all players are ready
-        if (count($readyPlayers) >= $requiredCount) {
-            $game->status = 'in_progress'; // update DB game status
+        if ($readyCount >= $requiredCount) {
+            $game->status = 'in_progress';
             $game->save();
-
             return response()->json(['status' => 'started']);
         }
 
@@ -325,18 +336,15 @@ class GamesController extends Controller
     {
         $event = $request->input('event');
         $data = $request->input('data');
-        
-        // Validate the event and data
+
         if (!$event || !$data) {
+            Log::warning('Broadcast event or data missing');
             return response()->json(['error' => 'Event and data are required'], 400);
         }
-        
-        // Trigger the Pusher event
+
+        Log::info('Broadcasting custom event', ['gameId' => $gameId, 'event' => $event]);
         $this->triggerGameUpdate($gameId, $event, $data);
-        
+
         return response()->json(['success' => true]);
     }
-
-
-
 }

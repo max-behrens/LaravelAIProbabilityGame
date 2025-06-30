@@ -41,7 +41,7 @@ Route::get('/games/{gameId}/score-trends', [GamesController::class, 'getScoreTre
 
 Route::get('/games/{gameId}/all-scores', [GamesController::class, 'getAllScores']);
 
-Route::post('/submit-answer', [GamesController::class, 'submitAnswer']);
+Route::middleware('auth:sanctum')->post('/games/{gameId}/submit-answer', [GamesController::class, 'submitAnswer']);
 
 Route::get('/games/{gameId}/scores', [GamesController::class, 'getScores']);
 

@@ -44,7 +44,8 @@ const {
   submitAnswers,
   addFlashMessage,
   removeFlashMessage,
-  clearFlashMessages
+  clearFlashMessages,
+  registerCallbacks
 } = usePlayerInteractions(props.gameId, props.auth);
 
 // Debug logging
@@ -193,19 +194,19 @@ const nextOrSubmit = async () => {
       if (result.submitted) {
         addFlashMessage('Answers submitted successfully!', 'success');
         
-        // Refresh all data
-        await Promise.all([
-          fetchGameScores(1),
-          fetchCurrentGame()
-        ]);
+        // // Refresh all data
+        // await Promise.all([
+        //   fetchGameScores(1),
+        //   fetchCurrentGame()
+        // ]);
         
-        // Refresh charts
-        if (gameGraphRef.value?.refreshChart) {
-          await gameGraphRef.value.refreshChart();
-        }
-        if (gameHeatmapRef.value?.refreshHeatmap) {
-          await gameHeatmapRef.value.refreshHeatmap();
-        }
+        // // Refresh charts
+        // if (gameGraphRef.value?.refreshChart) {
+        //   await gameGraphRef.value.refreshChart();
+        // }
+        // if (gameHeatmapRef.value?.refreshHeatmap) {
+        //   await gameHeatmapRef.value.refreshHeatmap();
+        // }
         
         // Reset game state
         currentQuestionIndex.value = 0;
@@ -213,14 +214,14 @@ const nextOrSubmit = async () => {
         isGameStarted.value = false;
         
       } else if (result.waitingForOthers) {
-          addFlashMessage('Answers submitted! Waiting for other players to submit...', 'success');
+          addFlashMessage('Answers stored, now waiting for other players to submit...', 'success');
       }
       
     } catch (error) {
-      errorMessage.value = error.response?.data?.message || 'Failed to submit answers.';
-      console.error('Submission error:', error);
+        errorMessage.value = error.response?.data?.message || 'Failed to submit answers.';
+        console.error('Submission error:', error);
     } finally {
-      submitting.value = false;
+        submitting.value = false;
     }
   }
 };
@@ -229,6 +230,29 @@ const nextOrSubmit = async () => {
 onMounted(() => {
   fetchCurrentGame();
   fetchGameScores();
+
+    // REGISTER CALLBACKS FOR LIVE UPDATES
+    registerCallbacks({
+      onScoresUpdate: async () => {
+        console.log('🔄 Refreshing scores table...');
+        await fetchGameScores(1); // Reset to first page and refresh
+      },
+      onGameUpdate: async () => {
+        console.log('🔄 Refreshing game details...');
+        await fetchCurrentGame();
+      },
+      onChartsUpdate: async () => {
+        console.log('🔄 Refreshing charts...');
+        // Refresh charts
+        if (gameGraphRef.value?.refreshChart) {
+          await gameGraphRef.value.refreshChart();
+        }
+        if (gameHeatmapRef.value?.refreshHeatmap) {
+          await gameHeatmapRef.value.refreshHeatmap();
+        }
+      }
+    });
+
     echo.channel(`game.${props.gameId}`)
       .listen('.player.ready', (data) => {
         console.log('Player ready:', data.userName);
