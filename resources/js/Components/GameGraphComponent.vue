@@ -56,11 +56,10 @@ const drawChart = () => {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-
-      scales: {
-        y: {
-          beginAtZero: true,
-        },
+      layout: {
+        padding: {
+          bottom: 3
+        }
       },
       scales: {
         y: {
@@ -71,7 +70,7 @@ const drawChart = () => {
           grid: { color: 'rgba(255,255,255,0.1)' }
         },
         x: {
-          ticks: { color: '#e5e7eb', padding: 5, }, // gray-200
+          ticks: { color: '#e5e7eb', padding: 10, }, // gray-200
           grid: { color: 'rgba(255,255,255,0.1)' }
         }
       },
@@ -127,7 +126,7 @@ defineExpose({
 
 
 <template>
-  <div class="h-80 p-4 bg-gray-800 rounded shadow text-gray-200 flex flex-col">
+  <div class="p-4 bg-gray-800 rounded shadow text-gray-200 flex flex-col">
     <h3 class="font-semibold text-lg mb-2">Score Trends</h3>
     <div class="flex-1 flex items-center justify-center">
       <div v-if="playersData.length === 0" class="text-center text-gray-400">

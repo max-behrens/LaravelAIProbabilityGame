@@ -16,65 +16,65 @@ const showLogoutModal = ref(false);
     <div class="min-h-screen bg-gray-900">
       <nav class="bg-gray-800 border-b border-gray-700">
         <!-- Primary Navigation Menu -->
-        <div class="nav-header max-w-7xl mx-auto">
-          <div class="flex justify-between h-16">
+        <div class="nav-header max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="flex justify-between items-center h-16">
             <!-- Logo -->
-            <div class="shrink-0 flex items-center">
+            <div class="shrink-0 flex items-center w-48">
               <Link :href="route('dashboard')">
                 <BreezeApplicationLogo class="block h-7 w-auto text-white" />
               </Link>
             </div>
-            <!-- Navigation Links -->
-            <div class="hidden space-x-8 sm:-my-px sm:ml-5 sm:flex">
-              <BreezeNavLink
-                :href="route('dashboard')"
-                :active="route().current('dashboard')"
-                class="text-xs !text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
-              >
-                Dashboard
-              </BreezeNavLink>
-              <BreezeNavLink
-                :href="route('posts.index')"
-                :active="route().current('posts.index')"
-                class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
-              >
-                Posts
-              </BreezeNavLink>
-              <BreezeNavLink
-                :href="route('ai-game')"
-                :active="route().current('ai-game')"
-                class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
-              >
-                AI Game
-              </BreezeNavLink>
-              <BreezeNavLink
-                :href="route('weather.index')"
-                :active="route().current('weather.index')"
-                class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
-              >
-                Weather API
-              </BreezeNavLink>
-              <BreezeNavLink
-                :href="route('parse-xml')"
-                :active="route().current('parse-xml')"
-                class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
-              >
-                XML Parser
-              </BreezeNavLink>
-              <BreezeNavLink
-                :href="route('react.index')"
-                :active="route().current('react.index')"
-                class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300"
-              >
-                React Page
-              </BreezeNavLink>
+            
+            <!-- Navigation Links - Centered -->
+            <div class="hidden sm:flex absolute left-1/2 transform -translate-x-1/2">
+              <div class="flex space-x-8 h-16 items-center">
+                <BreezeNavLink
+                  :href="route('dashboard')"
+                  :active="route().current('dashboard')"
+                  class="text-xs !text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
+                >
+                  Dashboard
+                </BreezeNavLink>
+                <BreezeNavLink
+                  :href="route('posts.index')"
+                  :active="route().current('posts.index')"
+                  class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
+                >
+                  Posts
+                </BreezeNavLink>
+                <BreezeNavLink
+                  :href="route('ai-game')"
+                  :active="route().current('ai-game')"
+                  class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
+                >
+                  AI Game
+                </BreezeNavLink>
+                <BreezeNavLink
+                  :href="route('weather.index')"
+                  :active="route().current('weather.index')"
+                  class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
+                >
+                  Weather API
+                </BreezeNavLink>
+                <BreezeNavLink
+                  :href="route('parse-xml')"
+                  :active="route().current('parse-xml')"
+                  class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
+                >
+                  XML Parser
+                </BreezeNavLink>
+                <BreezeNavLink
+                  :href="route('react.index')"
+                  :active="route().current('react.index')"
+                  class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
+                >
+                  React Page
+                </BreezeNavLink>
+              </div>
             </div>
 
-            <div class="absolute -bottom-5 py-3 text-xs text-gray-600">
-              Max Behrens
-            </div>
-
-            <div class="hidden sm:flex sm:items-center sm:ml-6">
+            <!-- User Section - Fixed width to balance logo -->
+            <div class="hidden sm:flex sm:items-center w-48 justify-end">
               <!-- User Name button opens modal directly -->
               <button
                 @click="showLogoutModal = true"
@@ -192,7 +192,7 @@ const showLogoutModal = ref(false);
 
       <!-- Page Heading -->
       <header class="bg-gray-800 shadow" v-if="$slots.header">
-        <div class="header-title py-6 max-w-7xl mx-auto">
+          <div class="header-title py-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <slot name="header" />
         </div>
       </header>
@@ -201,6 +201,14 @@ const showLogoutModal = ref(false);
       <main>
         <slot />
       </main>
+
+      <!-- Footer -->
+      <footer class="bg-gray-800 border-t border-gray-700 text-gray-400 text-xs py-4">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          Max Behrens
+        </div>
+      </footer>
+
 
       <!-- Logout / Settings Modal -->
       <transition name="fade">

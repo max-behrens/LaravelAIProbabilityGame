@@ -8,8 +8,13 @@ input {
     color: black !important;
 }
 
+/* Override all font sizes globally */
+* {
+  font-size: 13px !important; /* Change 18px to your desired size */
+}
+
 main {
-    transform: scale(0.85); /* Shrinks everything */
+    /* transform: scale(0.85); */
     transform-origin: top center; /* Ensures scaling happens from the top */
     width: 100vw; /* Ensures the body spans the full width */
     height: auto; /* Allows content to dictate height */
@@ -17,13 +22,13 @@ main {
     margin: 0; /* Removes default margin */
 }
 
-.nav-header {
+/* .nav-header {
     transform: scale(0.85);
 }
 
 .header-title {
     transform: scale(0.85);
-}
+} */
 
 .postLogo {
     aspect-ratio: auto !important;

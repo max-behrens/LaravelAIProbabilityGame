@@ -153,6 +153,7 @@ const chartOptions = ref({
   chart: {
     type: 'heatmap',
     height: 350,
+    minHeight: 229,
     foreColor: '#ccc',
     toolbar: {
       show: false
@@ -261,9 +262,9 @@ defineExpose({
 </script>
 
 <template>
-  <div class="basis-1/2 h-80 p-4 bg-gray-800 rounded shadow text-gray-200 flex flex-col justify-center items-center">
+  <div class="p-4 h-full bg-gray-800 rounded shadow text-gray-200 flex flex-col">
     <h3 class="font-semibold text-lg mb-2 self-start">Score Heatmap</h3>
-    <div class="w-full h-full">
+    <div class="flex-1 min-h-0 w-full chart-container">
       <!-- Only render chart if there's data -->
       <VueApexCharts
         v-if="getQuestionAveragesByUser().length > 0"
@@ -280,3 +281,9 @@ defineExpose({
     </div>
   </div>
 </template>
+
+<style scoped>
+.chart-container :deep(.apexcharts-canvas) {
+  min-height: 229px !important;
+}
+</style>

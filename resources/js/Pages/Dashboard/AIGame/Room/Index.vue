@@ -1,6 +1,7 @@
 <script setup>
 import { ref, defineProps, computed, onMounted } from 'vue';
 import BreezeAuthenticatedLayout from '@/Layouts/Authenticated.vue';
+import GameAuthenticatedLayout from '@/Layouts/GameAuthenticated.vue';
 import { Head, Link } from '@inertiajs/inertia-vue3';
 import { useGames } from '@/Composables/useGames';
 import { usePlayerInteractions } from '@/Composables/usePlayerInteractions'; // Import the new composable
@@ -269,17 +270,16 @@ onMounted(() => {
   <Head title="AI Game Room" />
 
   <BreezeAuthenticatedLayout>
-    <template #header>
-      <h2 class="font-semibold text-md text-white leading-tight">
-        Lobby {{ props.gameId }}: {{ props.gameType.name }}
-      </h2>
-    </template>
+    <GameAuthenticatedLayout :currentGameId="props.gameId">
 
-    <div class="py-4">
-      <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+      <template #header>
+        <div class="flex items-center justify-between">
+          <!-- Title -->
+          <h2 class="font-semibold text-md text-white leading-tight">
+            Lobby {{ props.gameId }}: {{ props.gameType.name }}
+          </h2>
 
-        <!-- Back Button -->
-        <div class="mb-4">
+          <!-- Back Button -->
           <Link
             :href="route('ai-game')"
             class="inline-block bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium py-1 px-2 rounded"
@@ -287,193 +287,206 @@ onMounted(() => {
             ← Back to AI Game Lobby
           </Link>
         </div>
-        
-        <!-- Flash Messages from Player Interactions -->
-        <div v-for="flash in flashMessages" :key="flash.id" class="mb-2">
-          <div 
-            :class="{
-              'bg-red-900 text-red-200 border-red-700': flash.type === 'error',
-              'bg-green-900 text-green-200 border-green-700': flash.type === 'success',
-              'bg-blue-900 text-blue-200 border-blue-700': flash.type === 'info',
-              'bg-yellow-900 text-yellow-200 border-yellow-700': flash.type === 'warning'
-            }"
-            class="p-3 rounded border relative"
-          >
-            {{ flash.message }}
-            <button 
-              @click="removeFlashMessage(flash.id)"
-              class="absolute top-1 right-2 text-xl font-bold opacity-70 hover:opacity-100"
+      </template>
+
+      <div class="py-4">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+          
+          <!-- Flash Messages from Player Interactions -->
+          <div v-for="flash in flashMessages" :key="flash.id" class="mb-2">
+            <div 
+              :class="{
+                'bg-red-900 text-red-200 border-red-700': flash.type === 'error',
+                'bg-green-900 text-green-200 border-green-700': flash.type === 'success',
+                'bg-blue-900 text-blue-200 border-blue-700': flash.type === 'info',
+                'bg-yellow-900 text-yellow-200 border-yellow-700': flash.type === 'warning'
+              }"
+              class="p-3 rounded border relative"
             >
-              ×
-            </button>
-          </div>
-        </div>
-
-        <!-- Original Flash Messages -->
-        <div v-if="errorMessage" class="mb-4 p-4 bg-red-900 text-red-200 rounded border border-red-700">{{ errorMessage }}</div>
-
-
-        <div class="flex flex-wrap gap-6 justify-center items-start">
-          <!-- Question Input -->
-          <div v-if="isGameStarted && !isWaitingForOthers" class="basis-full mb-6">
-            <div class="text-center mb-2 text-gray-400 text-sm font-medium">
-              Question {{ currentQuestionIndex + 1 }} / {{ props.gameQuestions.length }}
-            </div>
-            <div class="text-center mb-4 text-gray-200 text-xl font-semibold">
-              {{ props.gameQuestions[currentQuestionIndex]?.question }}
-            </div>
-            <div class="flex flex-col sm:flex-row gap-4 justify-center">
-              <input
-                v-model="answers[currentQuestionIndex]"
-                class="px-4 py-2 rounded w-full sm:w-2/3 text-gray-200 placeholder-gray-400 !text-gray-200"
-                placeholder="Your answer"
-              />
-
-              <button
-                :disabled="submitting || isWaitingForOthers"
-                @click="nextOrSubmit"
-                class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
-              >
-                {{ isLastQuestion ? (submitting ? 'Submitting...' : 'Submit') : 'Next' }}
-              </button>
-            </div>
-          </div>
-
-          <!-- Waiting Message -->
-          <div v-if="isWaitingForOthers" class="basis-full mb-6 text-center">
-            <div class="p-4 bg-yellow-900 text-yellow-200 rounded border border-yellow-700">
-              <p class="text-lg font-semibold">Waiting for other players...</p>
-              <p class="text-sm mt-2">Please wait while other players complete their actions.</p>
-            </div>
-          </div>
-
-          <!-- Game Controls -->
-          <div class="basis-full flex flex-wrap gap-4 justify-center p-4 bg-gray-800 rounded shadow">
-            <div class="flex items-center gap-2 text-white">
-              <label for="players">Number of Players:</label>
-              <select 
-                id="players" 
-                :value="playerCount" 
-                @change="onPlayerCountChange($event.target.value)"
-                :disabled="isGameInProgress || isWaitingForOthers"
-                class="border rounded px-2 py-1 bg-gray-700 text-white disabled:opacity-50"
-              >
-                <option value="1">1 Player</option>
-                <option value="2">2 Players</option>
-              </select>
-            </div>
-
-            <div class="flex items-center text-white">
-              <input 
-                type="checkbox" 
-                v-model="playAgainstAI" 
-                :disabled="isGameInProgress || isWaitingForOthers"
-                class="mr-2" 
-              />
-              <span>Play against AI</span>
-            </div>
-
-            <div class="flex flex-wrap gap-4 justify-center mt-4 w-full">
+              {{ flash.message }}
               <button 
-                @click="startGame" 
-                :disabled="!isInGame || isGameInProgress || isWaitingForOthers"
-                class="bg-green-900 hover:bg-green-800 text-green-200 font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                @click="removeFlashMessage(flash.id)"
+                class="absolute top-1 right-2 text-xl font-bold opacity-70 hover:opacity-100"
               >
-                {{ isWaitingForOthers ? 'Waiting...' : 'Start Game' }}
-              </button>
-              <button
-                @click="joinGame"
-                :disabled="isInGame || submitting || maxPlayersReached || isGameInProgress"
-                class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-              >
-                Join Game
-              </button>
-              <button
-                @click="leaveGame"
-                :disabled="!isInGame || submitting || isGameInProgress"
-                class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50"
-              >
-                Leave Game
+                ×
               </button>
             </div>
           </div>
 
-          <!-- Players and Scores Row -->
-          <div class="flex flex-wrap gap-6 w-full">
-            <!-- Players -->
-            <div class="min-w-[300px] basis-1/4 p-4 bg-gray-800 rounded shadow text-gray-200">
-              <h3 class="font-semibold text-lg mb-2">Players In Game</h3>
+          <!-- Original Flash Messages -->
+          <div v-if="errorMessage" class="mb-4 p-4 bg-red-900 text-red-200 rounded border border-red-700">{{ errorMessage }}</div>
 
-              <div class="mb-2 text-gray-300 font-semibold">
-                Players: {{ playersCount }} / {{ maxPlayers }}
-              </div>
 
-              <div v-if="maxPlayersReached" class="mb-2 p-2 bg-red-700 bg-red-800 text-red-100 rounded text-center font-bold">
-                Max Players Reached
+          <div class="flex flex-wrap gap-6 justify-center items-start">
+            <!-- Question Input -->
+            <div v-if="isGameStarted && !isWaitingForOthers" class="basis-full mb-6">
+              <div class="text-center mb-2 text-gray-400 text-sm font-medium">
+                Question {{ currentQuestionIndex + 1 }} / {{ props.gameQuestions.length }}
               </div>
-              
-              <!-- Use players from the composable instead of currentGame.users -->
-              <ul class="list-disc pl-5">
-                <li v-for="user in players" :key="user.id">{{ user.name }}</li>
-              </ul>
-              
-              <div v-if="players.length === 0" class="text-gray-400 mt-2">
-                Waiting for players to join...
+              <div class="text-center mb-4 text-gray-200 text-xl font-semibold">
+                {{ props.gameQuestions[currentQuestionIndex]?.question }}
+              </div>
+              <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <input
+                  v-model="answers[currentQuestionIndex]"
+                  class="px-4 py-2 rounded w-full sm:w-2/3 text-gray-200 placeholder-gray-400 !text-gray-200"
+                  placeholder="Your answer"
+                />
+
+                <button
+                  :disabled="submitting || isWaitingForOthers"
+                  @click="nextOrSubmit"
+                  class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+                >
+                  {{ isLastQuestion ? (submitting ? 'Submitting...' : 'Submit') : 'Next' }}
+                </button>
               </div>
             </div>
 
-            <!-- Player Scores -->
-            <div class="flex-1 min-w-[300px] p-4 bg-gray-800 rounded shadow text-gray-200">
-              <h3 class="font-semibold text-lg mb-2">Player Scores</h3>
-              <table class="w-full text-left border-collapse">
-                <thead>
-                  <tr class="bg-gray-700">
-                    <th class="p-2 border-b">Player</th>
-                    <th class="p-2 border-b">Game Session</th>
-                    <th class="p-2 border-b">Score</th>
-                    <th class="p-2 border-b">Date Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="score in gameScores" :key="score.id">
-                    <td class="p-2 border-b">{{ score.user?.name }}</td>
-                    <td class="p-2 border-b">{{ score.session_id }}</td>
-                    <td class="p-2 border-b">{{ score.score }}</td>
-                    <td class="p-2 border-b">{{ formatDate(score.created_at) }}</td>
-                  </tr>
-                  <tr v-if="gameScores.length === 0">
-                    <td colspan="4" class="p-2 text-center text-gray-400">No scores available</td>
-                  </tr>
-                </tbody>
-              </table>
-              <DynamicPagination
-                :currentPage="scoresCurrentPage"
-                :totalPages="scoresTotalPages"
-                @change-page="changeScoresPage"
-              />
+            <!-- Waiting Message -->
+            <div v-if="isWaitingForOthers" class="basis-full mb-6 text-center">
+              <div class="p-4 bg-yellow-900 text-yellow-200 rounded border border-yellow-700">
+                <p class="text-lg font-semibold">Waiting for other players...</p>
+                <p class="text-sm mt-2">Please wait while other players complete their actions.</p>
+              </div>
             </div>
+
+            <!-- Game Controls -->
+            <div class="basis-full flex flex-wrap gap-4 justify-center p-4 bg-gray-800 rounded shadow">
+              <div class="flex items-center gap-2 text-white">
+                <label for="players">Number of Players:</label>
+                <select 
+                  id="players" 
+                  :value="playerCount" 
+                  @change="onPlayerCountChange($event.target.value)"
+                  :disabled="isGameInProgress || isWaitingForOthers"
+                  class="border rounded px-2 py-1 bg-gray-700 text-white disabled:opacity-50"
+                >
+                  <option value="1">1 Player</option>
+                  <option value="2">2 Players</option>
+                </select>
+              </div>
+
+              <div class="flex items-center text-white">
+                <input 
+                  type="checkbox" 
+                  v-model="playAgainstAI" 
+                  :disabled="isGameInProgress || isWaitingForOthers"
+                  class="mr-2" 
+                />
+                <span>Play against AI</span>
+              </div>
+
+              <div class="flex flex-wrap gap-4 justify-center mt-4 w-full">
+                <button 
+                  @click="startGame" 
+                  :disabled="!isInGame || isGameInProgress || isWaitingForOthers"
+                  class="bg-green-900 hover:bg-green-800 text-green-200 font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {{ isWaitingForOthers ? 'Waiting...' : 'Start Game' }}
+                </button>
+                <button
+                  @click="joinGame"
+                  :disabled="isInGame || submitting || maxPlayersReached || isGameInProgress"
+                  class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+                >
+                  Join Game
+                </button>
+                <button
+                  @click="leaveGame"
+                  :disabled="!isInGame || submitting || isGameInProgress"
+                  class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50"
+                >
+                  Leave Game
+                </button>
+              </div>
+            </div>
+
+            <!-- Players and Scores Row -->
+            <div class="flex flex-wrap gap-6 w-full">
+              <!-- Players -->
+              <div class="min-w-[300px] basis-1/4 p-4 bg-gray-800 rounded shadow text-gray-200">
+                <h3 class="font-semibold text-lg mb-2">Players In Game</h3>
+
+                <div class="mb-2 text-gray-300 font-semibold">
+                  Players: {{ playersCount }} / {{ maxPlayers }}
+                </div>
+
+                <div v-if="maxPlayersReached" class="mb-2 p-2 bg-red-700 bg-red-800 text-red-100 rounded text-center font-bold">
+                  Max Players Reached
+                </div>
+                
+                <!-- Use players from the composable instead of currentGame.users -->
+                <ul class="list-disc pl-5">
+                  <li v-for="user in players" :key="user.id">{{ user.name }}</li>
+                </ul>
+                
+                <div v-if="players.length === 0" class="text-gray-400 mt-2">
+                  Waiting for players to join...
+                </div>
+              </div>
+
+              <!-- Player Scores -->
+              <div class="flex-1 min-w-[300px] p-4 bg-gray-800 rounded shadow text-gray-200">
+                <h3 class="font-semibold text-lg mb-2">Player Scores</h3>
+                <table class="w-full text-left border-collapse">
+                  <thead>
+                    <tr class="bg-gray-700">
+                      <th class="p-2 border-b">Player</th>
+                      <th class="p-2 border-b">Game Session</th>
+                      <th class="p-2 border-b">Score</th>
+                      <th class="p-2 border-b">Date Created</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="score in gameScores" :key="score.id">
+                      <td class="p-2 border-b">{{ score.user?.name }}</td>
+                      <td class="p-2 border-b">{{ score.session_id }}</td>
+                      <td class="p-2 border-b">{{ score.score }}</td>
+                      <td class="p-2 border-b">{{ formatDate(score.created_at) }}</td>
+                    </tr>
+                    <tr v-if="gameScores.length === 0">
+                      <td colspan="4" class="p-2 text-center text-gray-400">No scores available</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <DynamicPagination
+                  :currentPage="scoresCurrentPage"
+                  :totalPages="scoresTotalPages"
+                  @change-page="changeScoresPage"
+                />
+              </div>
+            </div>
+
+<!-- Replace your current Charts Row section with this: -->
+
+<!-- Replace your current Charts Row section with this: -->
+
+<!-- Charts Row -->
+<div class="flex flex-col lg:flex-row gap-6 w-full">
+  <!-- Score Heatmap -->
+  <div class="w-full lg:w-1/2 lg:max-w-[50%] overflow-hidden">
+    <GameHeatmapComponent 
+      ref="gameHeatmapRef" 
+      :gameId="gameId" 
+      :gameQuestions="gameQuestions" 
+    />
+  </div>
+
+  <!-- Score Trends -->
+  <div class="w-full lg:w-1/2 lg:max-w-[50%] overflow-hidden">
+    <GameGraphComponent 
+      ref="gameGraphRef" 
+      :gameId="gameId" 
+    />
+  </div>
+</div>
+
+
           </div>
-
-          <!-- Charts Row -->
-          <div class="flex flex-col lg:flex-row gap-6 w-full">
-            <!-- Score Heatmap -->
-            <GameHeatmapComponent 
-              ref="gameHeatmapRef" 
-              :gameId="gameId" 
-              :gameQuestions="gameQuestions" 
-            />
-
-            <!-- Score Trends -->
-            <div class="basis-1/2">
-              <GameGraphComponent 
-                ref="gameGraphRef" 
-                :gameId="gameId" 
-              />
-            </div>
-          </div>
-
         </div>
       </div>
-    </div>
+    </GameAuthenticatedLayout>
   </BreezeAuthenticatedLayout>
+
 </template>
