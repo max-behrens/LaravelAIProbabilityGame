@@ -15,10 +15,10 @@ use Illuminate\Support\Facades\Log;
 class PostController extends Controller
 {
 
-    // public function __construct()
-    // {
-    //     $this->authorizeResource(Post::class, 'post');
-    // }
+    public function __construct()
+    {
+        $this->authorizeResource(Post::class, 'post');
+    }
 
     public function index(Request $request, PostService $service)
     {
@@ -50,11 +50,8 @@ class PostController extends Controller
         return Inertia::render('Dashboard/Posts/Index', $data);
     }
     
-
-
     public function create(Request $request, PostService $service)
     {
-
         $chatbotMessages = json_decode($request->query('chatbotMessages', '[]'), true);
 
         // Extract dialogue data
@@ -73,7 +70,6 @@ class PostController extends Controller
             'dialogueData' => $dialogueData,
         ]);
     }
-
 
     public function store(StorePostRequest $request, PostService $service)
     {
@@ -96,18 +92,10 @@ class PostController extends Controller
         // Return a response or redirect to another page
         return redirect()->route('posts.index')->with('message', 'Post Created Successfully');
     }
-    
-
-
-
 
     public function edit(Post $post)
     {
         $disk = config('filesystems.default');
-    
-        // $featuredImageUrl = $post->featured_image
-        //     ? Storage::disk($disk)->url($post->featured_image)
-        //     : null;
     
         return Inertia::render('Dashboard/Posts/Edit', [
             'post' => [
@@ -117,10 +105,8 @@ class PostController extends Controller
         ]);
     }
     
-
     public function update(Post $post, UpdatePostRequest $request, PostService $service)
     {
-
         Log::info('REQUEST UPDATE POST ', ['$request' => $request]);
 
         $post->update($request->safe()->toArray());
@@ -155,5 +141,4 @@ class PostController extends Controller
 
         return redirect()->route('posts.index')->with('message', sprintf('Post %s Successfully', $request->is_active ? 'Published' : 'Unpublished'));
     }
-
 }

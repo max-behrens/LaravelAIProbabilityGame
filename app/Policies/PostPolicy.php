@@ -19,16 +19,11 @@ class PostPolicy
      */
     public function viewAny(User $user)
     {
-        return $user->hasAnyPermission([
-            'create posts',
-            'edit posts',
-            'delete posts',
-            'publish posts',
-            'unpublish posts',
-        ])
-            ? Response::allow()
-            : Response::denyAsNotFound();
+        // Allow all authenticated users to view the posts index
+        // Individual actions will be controlled by other policy methods
+        return Response::allow();
     }
+
 
     /**
      * Determine whether the user can create models.
@@ -66,7 +61,7 @@ class PostPolicy
                 : Response::denyAsNotFound();
         }
 
-        // Regular users can only edit their own posts
+        // Readonly users can only edit their own posts
         return $user->hasPermissionTo('edit posts') && $user->id === $post->user_id
             ? Response::allow()
             : Response::denyAsNotFound();

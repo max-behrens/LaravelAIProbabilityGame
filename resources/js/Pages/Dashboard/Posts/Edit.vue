@@ -144,8 +144,8 @@ onMounted(() => {
             </h2>
         </template>
 
-        <div class="py-12 bg-gray-900">  <!-- Dark background -->
-                <div class="overflow-hidden shadow-sm sm:rounded-lg bg-gray-800 border border-gray-700">  <!-- Dark card -->
+        <div class="py-12 main-width mx-auto sm:px-6 lg:px-8">
+                <div class="overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-5 border-b border-gray-700">
                         <input type="hidden" v-model="form.id" />
 
@@ -161,7 +161,7 @@ onMounted(() => {
 
                         <form @submit.prevent="submit" class="text-white">
                             <div class="avatar mb-6">
-                                <div class="w-44 rounded overflow-hidden border border-gray-600">
+                                <div class="w-44">
                                     <img :src="temp_image" alt="Featured Image" />
                                 </div>
                             </div>

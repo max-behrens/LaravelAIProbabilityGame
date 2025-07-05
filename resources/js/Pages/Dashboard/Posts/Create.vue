@@ -110,7 +110,7 @@ function fileChange(event) {
             </h2>
         </template>
 
-        <div class="py-12">
+        <div class="py-12 main-width mx-auto sm:px-6 lg:px-8">
                 <div class="overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-5 border-b border-gray-200 dark:border-gray-700">
 
