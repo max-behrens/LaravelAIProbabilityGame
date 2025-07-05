@@ -60,7 +60,6 @@ function loadMorePosts() {
             </template>
         </div>
 
-        <div class="max-w-6xl mx-auto sm:px-6 lg:px-8">
             <div v-for="post in all_posts" :key="post.id" class="card lg:card-side bg-base-100 shadow-xl mb-6"
                 data-theme="coffee">
                 <figure style="max-width: 400px; max-height: 400px;"><img class="w-full"
@@ -90,6 +89,5 @@ function loadMorePosts() {
                     </div>
                 </div>
             </div>
-        </div>
     </div>
 </template>

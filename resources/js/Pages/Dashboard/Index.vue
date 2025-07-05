@@ -14,8 +14,8 @@ import ChartComponent from '@/Components/ChartComponent.vue';
             <h2 class="font-semibold text-md text-white leading-tight">Dashboard</h2>
         </template>
 
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <div class="py-12 main-width mx-auto sm:px-6 lg:px-8">
+            <div class="p-5">
 
                 <!-- Chart Component -->
                 <ChartComponent />

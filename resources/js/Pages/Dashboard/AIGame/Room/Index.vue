@@ -290,7 +290,7 @@ onMounted(() => {
       </template>
 
       <div class="py-4">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <div class="main-width mx-auto sm:px-6 lg:px-8">
           
           <!-- Flash Messages from Player Interactions -->
           <div v-for="flash in flashMessages" :key="flash.id" class="mb-2">
@@ -458,34 +458,30 @@ onMounted(() => {
               </div>
             </div>
 
-<!-- Replace your current Charts Row section with this: -->
+            <!-- Charts Row -->
+            <div class="flex flex-col lg:flex-row gap-6 w-full">
+              <!-- Score Heatmap -->
+              <div class="w-full lg:w-1/2 lg:max-w-[50%] overflow-hidden">
+                <GameHeatmapComponent 
+                  ref="gameHeatmapRef" 
+                  :gameId="gameId" 
+                  :gameQuestions="gameQuestions" 
+                />
+              </div>
 
-<!-- Replace your current Charts Row section with this: -->
-
-<!-- Charts Row -->
-<div class="flex flex-col lg:flex-row gap-6 w-full">
-  <!-- Score Heatmap -->
-  <div class="w-full lg:w-1/2 lg:max-w-[50%] overflow-hidden">
-    <GameHeatmapComponent 
-      ref="gameHeatmapRef" 
-      :gameId="gameId" 
-      :gameQuestions="gameQuestions" 
-    />
-  </div>
-
-  <!-- Score Trends -->
-  <div class="w-full lg:w-1/2 lg:max-w-[50%] overflow-hidden">
-    <GameGraphComponent 
-      ref="gameGraphRef" 
-      :gameId="gameId" 
-    />
-  </div>
-</div>
+              <!-- Score Trends -->
+              <div class="w-full lg:w-1/2 lg:max-w-[50%] overflow-hidden">
+                <GameGraphComponent 
+                  ref="gameGraphRef" 
+                  :gameId="gameId" 
+                />
+              </div>
+            </div>
 
 
           </div>
+          </div>
         </div>
-      </div>
     </GameAuthenticatedLayout>
   </BreezeAuthenticatedLayout>
 

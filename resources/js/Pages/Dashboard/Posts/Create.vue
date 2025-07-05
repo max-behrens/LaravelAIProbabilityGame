@@ -111,7 +111,6 @@ function fileChange(event) {
         </template>
 
         <div class="py-12">
-            <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
                 <div class="overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-5 border-b border-gray-200 dark:border-gray-700">
 
@@ -222,7 +221,6 @@ function fileChange(event) {
                             </button>
                         </form>
                     </div>
-                </div>
             </div>
         </div>
     </BreezeAuthenticatedLayout>

@@ -145,7 +145,7 @@ const enterGame = (gameId) => {
       </template>
 
       <div class="py-4">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <div class="main-width mx-auto sm:px-6 lg:px-8">
           <div v-if="errorMessage" class="mb-4 p-4 bg-red-900 text-red-200 rounded border border-red-700">
             {{ errorMessage }}
           </div>
@@ -164,7 +164,7 @@ const enterGame = (gameId) => {
                 Status: {{ userInGames[game.id] ? 'You have joined' : 'Not joined' }}
               </p>
 
-              <div class="flex justify-between text-center gap-12">
+              <div class="flex justify-between text-center gap-2 md:gap-6 lg:gap-12">
 
                 <Link
                   class="bg-green-900 hover:bg-green-800 text-green-200 font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"

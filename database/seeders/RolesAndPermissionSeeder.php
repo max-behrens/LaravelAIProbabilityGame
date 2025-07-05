@@ -46,8 +46,9 @@ class RolesAndPermissionSeeder extends Seeder
          }
  
          // Assign permissions to roles
-         $readonlyRole->givePermissionTo(Permission::all());
-         $testRole->givePermissionTo(['publish posts', 'unpublish posts']);
+         $readonlyRole->givePermissionTo([]); // No permissions for readonly
+         $testRole->givePermissionTo(['create posts', 'edit posts', 'delete posts', 'publish posts', 'unpublish posts']); // Test user gets all
+         $adminRole->givePermissionTo(Permission::all()); // Admin gets all permissions
  
          // Create users and assign roles
          $user = \App\Models\User::firstOrCreate(

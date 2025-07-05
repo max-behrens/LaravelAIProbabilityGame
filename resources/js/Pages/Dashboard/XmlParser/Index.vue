@@ -33,8 +33,7 @@ const getTimestamps = async () => {
         </template>
   
       <!-- Main content of the page -->
-      <div class="py-12">
-        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <div class="py-12 main-width mx-auto sm:px-6 lg:px-8">
 
             <div class="shadow-sm sm:rounded-lg">
                     <div class="p-8 border-b border-gray-200">
@@ -64,7 +63,6 @@ const getTimestamps = async () => {
                         </div>
                     </div>
             </div>
-        </div>
       </div>
     </BreezeAuthenticatedLayout>
   </template>

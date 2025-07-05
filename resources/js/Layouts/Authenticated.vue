@@ -12,11 +12,11 @@ const showLogoutModal = ref(false);
 </script>
 
 <template>
-  <div class="bg-gray-900 text-white">
-    <div class="min-h-screen bg-gray-900">
+  <div class="bg-gray-900 text-white min-h-screen flex flex-col">
+    <div class="bg-gray-900 flex-grow flex flex-col">
       <nav class="bg-gray-800 border-b border-gray-700">
         <!-- Primary Navigation Menu -->
-        <div class="nav-header max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="main-width mx-auto px-4 sm:px-6 lg:px-8">
           <div class="flex justify-between items-center h-16">
             <!-- Logo -->
             <div class="shrink-0 flex items-center w-48">
@@ -192,23 +192,22 @@ const showLogoutModal = ref(false);
 
       <!-- Page Heading -->
       <header class="bg-gray-800 shadow" v-if="$slots.header">
-          <div class="header-title py-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="main-width py-6 mx-auto px-4 sm:px-6 lg:px-8">
           <slot name="header" />
         </div>
       </header>
 
-      <!-- Page Content -->
-      <main>
+      <!-- Main content area - this will grow to fill available space -->
+      <main class="flex-grow">
         <slot />
       </main>
 
-      <!-- Footer -->
-      <footer class="bg-gray-800 border-t border-gray-700 text-gray-400 text-xs py-4">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <!-- Footer - will stick to bottom -->
+      <footer class="bg-gray-800 border-t border-gray-700 text-gray-400 text-xs py-4 mt-auto">
+        <div class="main-width mx-auto px-4 sm:px-6 lg:px-8 text-center">
           Max Behrens
         </div>
       </footer>
-
 
       <!-- Logout / Settings Modal -->
       <transition name="fade">

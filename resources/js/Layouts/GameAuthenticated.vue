@@ -90,7 +90,7 @@ const toggleNavigation = () => {
           class="flex-1 flex flex-col transition-all duration-300 ease-in-out"
         >
           <header class="bg-gray-800 shadow" v-if="$slots.header">
-            <div class="header-title py-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="header-title py-6 main-width mx-auto px-4 sm:px-6 lg:px-8">
               <slot name="header" />
             </div>
           </header>
@@ -98,9 +98,14 @@ const toggleNavigation = () => {
           <div class="flex-1 pt-4">
             <button
               @click="toggleNavigation"
-              class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:bg-gray-700 focus:text-white transition duration-150 ease-in-out ml-4 mb-4"
+              class="game-menu-width 
+                    inline-flex items-center justify-center p-2 
+                    rounded-md text-gray-400 hover:text-white 
+                    hover:bg-gray-700 focus:outline-none 
+                    focus:bg-gray-700 focus:text-white 
+                    transition duration-150 ease-in-out ml-4"
             >
-              <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
+              <svg class="h-6 w-6 mr-2" stroke="currentColor" fill="none" viewBox="0 0 24 24">
                 <path
                   :class="{ hidden: showingNavigation, 'inline-flex': !showingNavigation }"
                   stroke-linecap="round"
@@ -116,9 +121,10 @@ const toggleNavigation = () => {
                   d="M6 18L18 6M6 6l12 12"
                 />
               </svg>
+              Game Menu
             </button>
 
-            <div class="px-4 sm:px-6 lg:px-8 pb-4"> <slot />
+            <div> <slot />
             </div>
           </div>
         </div>

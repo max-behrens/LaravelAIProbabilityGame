@@ -22,6 +22,10 @@ const props = defineProps({
     }
 });
 
+onMounted(() => {
+    console.log('Create route URL:', route('posts.create'));
+});
+
 const form = useForm();
 
 const params = reactive({
@@ -133,8 +137,7 @@ const getPostImage = (post) => {
         <template #header>
             <h2 class="text-md font-semibold leading-tight text-white"> User Posts </h2>
         </template>
-        <div class="py-12 bg-gray-900 min-h-screen">
-            <div class="mx-auto max-w-9xl sm:px-6 lg:px-8">
+        <div class="py-12 main-width mx-auto sm:px-6 lg:px-8">
                 <div
                   v-if="$page.props.flash.message"
                   class="alert alert-success shadow-lg mb-5 bg-green-900 text-green-300 border border-green-700"
@@ -149,7 +152,6 @@ const getPostImage = (post) => {
                     </div>
                 </div>
 
-                <div class="shadow-lg sm:rounded-lg max-w-7xl mx-auto overflow-x-auto bg-gray-800 border border-gray-700">
                     <div class="p-5 border-b border-gray-700">
                         <div class="relative">
                             <div class="block md:block">
@@ -353,8 +355,6 @@ const getPostImage = (post) => {
                         </div>
                     </div>
                     <Pagination class="mt-6" :links="posts.links" />
-                </div>
-            </div>
         </div>
     </BreezeAuthenticatedLayout>
 </template>

@@ -11,7 +11,7 @@ import BreezeAuthenticatedLayout from "@/Layouts/Authenticated.vue";
         <template #header>
             <h2 class="text-md font-semibold leading-tight text-gray-800">React Page</h2>
         </template>
-        <div class="py-12">
+        <div class="py-12 main-width mx-auto sm:px-6 lg:px-8">
             <VueComponent />
             <ReactComponentWrapper componentName="ReactComponent" />
         </div>

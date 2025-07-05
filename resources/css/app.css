@@ -10,7 +10,7 @@ input {
 
 /* Override all font sizes globally */
 * {
-  font-size: 13px !important; /* Change 18px to your desired size */
+  font-size: 14px !important; /* Change 18px to your desired size */
 }
 
 main {
@@ -20,6 +20,15 @@ main {
     height: auto; /* Allows content to dictate height */
     overflow-x: hidden; /* Prevents horizontal scrolling */
     margin: 0; /* Removes default margin */
+}
+
+.main-width {
+    margin-left: 80px;
+    margin-right: 80px;
+}
+
+.game-menu-width {
+    margin-left: 100px;
 }
 
 /* .nav-header {

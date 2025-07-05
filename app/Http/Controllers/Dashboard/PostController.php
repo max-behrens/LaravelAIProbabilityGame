@@ -15,10 +15,10 @@ use Illuminate\Support\Facades\Log;
 class PostController extends Controller
 {
 
-    public function __construct()
-    {
-        $this->authorizeResource(Post::class, 'post');
-    }
+    // public function __construct()
+    // {
+    //     $this->authorizeResource(Post::class, 'post');
+    // }
 
     public function index(Request $request, PostService $service)
     {

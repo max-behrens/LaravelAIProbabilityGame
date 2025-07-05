@@ -7,7 +7,6 @@ use App\Models\User;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
-
 class PostPolicy
 {
     use HandlesAuthorization;
@@ -53,6 +52,21 @@ class PostPolicy
      */
     public function update(User $user, Post $post)
     {
+        // Admin can edit any post
+        if ($user->hasRole('adminUser')) {
+            return $user->hasPermissionTo('edit posts')
+                ? Response::allow()
+                : Response::denyAsNotFound();
+        }
+
+        // TestUser can edit any post
+        if ($user->hasRole('testUser')) {
+            return $user->hasPermissionTo('edit posts')
+                ? Response::allow()
+                : Response::denyAsNotFound();
+        }
+
+        // Regular users can only edit their own posts
         return $user->hasPermissionTo('edit posts') && $user->id === $post->user_id
             ? Response::allow()
             : Response::denyAsNotFound();
@@ -67,6 +81,21 @@ class PostPolicy
      */
     public function delete(User $user, Post $post)
     {
+        // Admin can delete any post
+        if ($user->hasRole('adminUser')) {
+            return $user->hasPermissionTo('delete posts')
+                ? Response::allow()
+                : Response::denyAsNotFound();
+        }
+
+        // TestUser can delete any post
+        if ($user->hasRole('testUser')) {
+            return $user->hasPermissionTo('delete posts')
+                ? Response::allow()
+                : Response::denyAsNotFound();
+        }
+
+        // Regular users can only delete their own posts
         return $user->hasPermissionTo('delete posts') && $user->id === $post->user_id
             ? Response::allow()
             : Response::denyAsNotFound();
@@ -81,13 +110,22 @@ class PostPolicy
      */
     public function publish(User $user, Post $post)
     {
-        if (!$user->hasRole('testUser')) {
-            return $user->hasPermissionTo('publish posts') && $user->id === $post->user_id
+        // Admin can publish any post
+        if ($user->hasRole('adminUser')) {
+            return $user->hasPermissionTo('publish posts')
                 ? Response::allow()
                 : Response::denyAsNotFound();
         }
 
-        return $user->hasPermissionTo('publish posts')
+        // TestUser can publish any post
+        if ($user->hasRole('testUser')) {
+            return $user->hasPermissionTo('publish posts')
+                ? Response::allow()
+                : Response::denyAsNotFound();
+        }
+
+        // Regular users can only publish their own posts
+        return $user->hasPermissionTo('publish posts') && $user->id === $post->user_id
             ? Response::allow()
             : Response::denyAsNotFound();
     }
@@ -101,13 +139,22 @@ class PostPolicy
      */
     public function unpublish(User $user, Post $post)
     {
-        if (!$user->hasRole('testUser')) {
-            return $user->hasPermissionTo('unpublish posts') && $user->id === $post->user_id
+        // Admin can unpublish any post
+        if ($user->hasRole('adminUser')) {
+            return $user->hasPermissionTo('unpublish posts')
                 ? Response::allow()
                 : Response::denyAsNotFound();
         }
 
-        return $user->hasPermissionTo('unpublish posts')
+        // TestUser can unpublish any post
+        if ($user->hasRole('testUser')) {
+            return $user->hasPermissionTo('unpublish posts')
+                ? Response::allow()
+                : Response::denyAsNotFound();
+        }
+
+        // Regular users can only unpublish their own posts
+        return $user->hasPermissionTo('unpublish posts') && $user->id === $post->user_id
             ? Response::allow()
             : Response::denyAsNotFound();
     }

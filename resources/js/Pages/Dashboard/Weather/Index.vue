@@ -325,8 +325,8 @@ function setCityInput(input) {
         <template #header>
             <h2 class="text-md font-semibold leading-tight text-gray-100"> Weather API </h2>
         </template>
-        <div class="py-12 bg-gray-900 min-h-screen">
-            <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
+        <div class="py-12 main-width mx-auto sm:px-6 lg:px-8">
+            <div class="p-5">
                 <div v-if="$page.props.flash.message" class="alert alert-success shadow-lg mb-5 bg-green-900 text-green-300">
                     <div class="flex items-center">
                         <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
@@ -548,7 +548,7 @@ function setCityInput(input) {
                         </div>
                     </div>
                 </div>
-            </div>
+                </div>
         </div>
     </BreezeAuthenticatedLayout>
 </template>

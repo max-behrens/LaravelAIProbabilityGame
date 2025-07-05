@@ -145,7 +145,6 @@ onMounted(() => {
         </template>
 
         <div class="py-12 bg-gray-900">  <!-- Dark background -->
-            <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
                 <div class="overflow-hidden shadow-sm sm:rounded-lg bg-gray-800 border border-gray-700">  <!-- Dark card -->
                     <div class="p-5 border-b border-gray-700">
                         <input type="hidden" v-model="form.id" />
@@ -241,7 +240,6 @@ onMounted(() => {
                         </form>
                     </div>
                 </div>
-            </div>
         </div>
     </BreezeAuthenticatedLayout>
 </template>
