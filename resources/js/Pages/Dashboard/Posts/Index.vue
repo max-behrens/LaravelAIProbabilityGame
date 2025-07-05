@@ -94,7 +94,8 @@ function searchPosts() {
 
 // Function to return the correct image URL for each post
 const getPostImage = (post) => {
-    const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    const isProduction = window.location.hostname !== 'localhost'
+                         && window.location.hostname !== '127.0.0.1';
 
     const bucket = import.meta.env.VITE_AWS_BUCKET;
     const appUrl = import.meta.env.VITE_APP_URL;

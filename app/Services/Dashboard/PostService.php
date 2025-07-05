@@ -180,8 +180,10 @@ class PostService
     
     public function removePreviousFeaturedImage(Post $post): void
     {
+        $isLocal = app()->environment('local');
+        $disk = $isLocal ? 'public' : config('filesystems.default');
+
         if ($post->featured_image) {
-            $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
             $path = "posts/{$post->id}/{$post->featured_image}";
             
             try {

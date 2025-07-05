@@ -29,8 +29,9 @@ class PostController extends Controller
         ]);
     
         $data = $service->datatable($request);
-        $disk = config('filesystems.default');
-    
+        $isLocal = app()->environment('local');
+        $disk = $isLocal ? 'public' : config('filesystems.default');
+            
         // Log featured image URLs before assigning them
         $data['posts']->getCollection()->transform(function ($post) use ($disk) {
             $imagePath = $post->featured_image
