@@ -8,6 +8,7 @@ use App\Http\Controllers\Dashboard\WeatherController;
 use App\Http\Controllers\Dashboard\DashboardAIController;
 use App\Http\Controllers\Dashboard\GamesController;
 use App\Http\Controllers\Dashboard\ParseXmlController;
+use App\Http\Controllers\Auth\ErrorController;
 use App\Http\Controllers\Front\PostController as FrontPostController;
 use App\Http\Controllers\Dashboard\PostController as DashboardPostController;
 use App\Models\Games;
@@ -24,6 +25,9 @@ use App\Models\Games;
 */
 
 Route::get('/', IndexController::class)->name('index');
+
+Route::get('/403', [ErrorController::class, 'unauthorized'])->name('errors.403');
+
 
 
 

@@ -15,10 +15,10 @@ use Illuminate\Support\Facades\Log;
 class PostController extends Controller
 {
 
-    public function __construct()
-    {
-        $this->authorizeResource(Post::class, 'post');
-    }
+    // public function __construct()
+    // {
+    //     $this->authorizeResource(Post::class, 'post');
+    // }
 
     public function index(Request $request, PostService $service)
     {
@@ -52,6 +52,11 @@ class PostController extends Controller
     
     public function create(Request $request, PostService $service)
     {
+        // Check authorization
+        if (!$request->user()->can('create', Post::class)) {
+            return redirect()->route('errors.403');
+        }
+
         $chatbotMessages = json_decode($request->query('chatbotMessages', '[]'), true);
 
         // Extract dialogue data
@@ -93,8 +98,13 @@ class PostController extends Controller
         return redirect()->route('posts.index')->with('message', 'Post Created Successfully');
     }
 
-    public function edit(Post $post)
+    public function edit(Post $post, Request $request)
     {
+        // Check authorization
+        if (!$request->user()->can('update', $post)) {
+            return redirect()->route('errors.403');
+        }
+
         $disk = config('filesystems.default');
     
         return Inertia::render('Dashboard/Posts/Edit', [
