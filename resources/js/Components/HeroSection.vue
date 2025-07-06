@@ -5,19 +5,19 @@ const currentSlide = ref(0);
 const slides = [
   {
     src: '/images/vecteezy_domesticated-black-donkeys-in-the-paddock-on-the-farm-pets_49542847.jpg',
-    alt: 'AI Object Detection',
-    title: 'AI Object Detection',
-    description: 'Advanced computer vision technology...',
-    button1: { text: 'View Detection Models', href: '/models' },
-    button2: { text: 'Try Object Detection Demo', href: '/demo' }
+    alt: 'Object Detection Game',
+    title: 'Object Detection Game',
+    description: 'Play against the AI to identify objects from a variety of images...',
+    button1: { text: 'View AI Models', href: '/models' },
+    button2: { text: 'Find a Game', href: '/demo' }
   },
   {
     src: '/images/person-with-futuristic-metaverse-avatar-mask.jpg',
-    alt: 'Futuristic Metaverse Avatar',
-    title: 'Metaverse Innovation',
-    description: 'Immersive virtual experiences powered by avatars...',
-    button1: { text: 'Explore Metaverse Avatars', href: '/avatars' },
-    button2: { text: 'Join Virtual Demo', href: '/metaverse-demo' }
+    alt: 'Game of Lies',
+    title: 'Game of Lies',
+    description: 'Determine whether your AI opponent will choose the correct or incorrect answer to each question you do...',
+    button1: { text: 'View AI Models', href: '/avatars' },
+    button2: { text: 'Find a Game', href: '/metaverse-demo' }
   }
 ];
 

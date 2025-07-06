@@ -169,7 +169,7 @@ onUnmounted(() => {
                             <div class="absolute -top-4 -left-4 w-full h-full bg-blue-600 rounded-lg -z-10"></div>
                             <img src="/images/7.jpg" alt="Interior Design" class="w-full h-96 object-cover rounded-lg shadow-lg">
                             <div class="absolute bottom-0 left-0 right-0 theme-bg-primary p-6 rounded-lg mx-4 mb-4 shadow-lg">
-                                <h3 class="text-2xl font-bold theme-text-primary mb-2">Simple but very cozy</h3>
+                                <h3 class="text-2xl font-bold theme-text-primary mb-2">User Game Stats</h3>
                                 <p class="theme-text-secondary">Sed rhoncus egestas felis, sit amet condimentum sem ultricies at malesuada, tortor sit amet.</p>
                             </div>
                         </div>
