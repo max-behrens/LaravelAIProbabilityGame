@@ -31,6 +31,19 @@ main {
     margin-left: 100px;
 }
 
+/* Smaller margins on screens less than 640px wide */
+@media (max-width: 639px) {
+    .main-width {
+        margin-left: 20px;
+        margin-right: 20px;
+    }
+
+    .game-menu-width {
+        margin-left: 20px;
+    }
+}
+
+
 /* .nav-header {
     transform: scale(0.85);
 }

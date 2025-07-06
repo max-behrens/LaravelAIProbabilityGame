@@ -153,7 +153,7 @@ const getPostImage = (post) => {
                     </div>
                 </div>
 
-                    <div class="p-5 border-b border-gray-700">
+                    <div class="border-b border-gray-700">
                         <div class="relative">
                             <div class="block md:block">
 

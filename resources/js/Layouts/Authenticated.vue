@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import BreezeApplicationLogo from '@/Components/ApplicationLogo.vue';
+import BreezeWebsiteLogo from '@/Components/WebsiteLogo.vue';
 import BreezeDropdown from '@/Components/Dropdown.vue';
 import BreezeDropdownLink from '@/Components/DropdownLink.vue';
 import BreezeNavLink from '@/Components/NavLink.vue';
@@ -53,6 +54,8 @@ onMounted(() => {
               <Link :href="route('dashboard')">
                 <BreezeApplicationLogo class="block h-7 w-auto text-white" />
               </Link>
+
+                <BreezeWebsiteLogo class="block h-7 w-auto text-white" />
             </div>
             
             <!-- Navigation Links - Centered -->
@@ -129,7 +132,7 @@ onMounted(() => {
             <div class="-mr-2 flex items-center sm:hidden">
               <button
                 @click="showingNavigationDropdown = !showingNavigationDropdown"
-                class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-700 focus:outline-none focus:bg-gray-700 focus:text-gray-500 transition duration-150 ease-in-out"
+                class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-700 focus:outline-none focus:bg-gray-700 focus:text-gray-500 transition duration-50 ease-in-out"
               >
                 <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
                   <path
@@ -307,7 +310,7 @@ onMounted(() => {
 <style>
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.25s ease;
+  transition: opacity 0.1s ease;
 }
 .fade-enter-from,
 .fade-leave-to {
