@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import BreezeApplicationLogo from '@/Components/ApplicationLogo.vue';
 import BreezeDropdown from '@/Components/Dropdown.vue';
 import BreezeDropdownLink from '@/Components/DropdownLink.vue';
@@ -9,6 +9,36 @@ import { Link } from '@inertiajs/inertia-vue3';
 
 const showingNavigationDropdown = ref(false);
 const showLogoutModal = ref(false);
+const isDark = ref(false);
+
+// Theme management
+const initializeTheme = () => {
+  // Check if user has a saved preference, otherwise use system preference
+  const savedTheme = localStorage.getItem('theme');
+  const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  
+  isDark.value = savedTheme ? savedTheme === 'dark' : systemPrefersDark;
+  applyTheme();
+};
+
+const applyTheme = () => {
+  if (isDark.value) {
+    document.documentElement.classList.add('dark');
+    localStorage.setItem('theme', 'dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+    localStorage.setItem('theme', 'light');
+  }
+};
+
+const toggleTheme = () => {
+  isDark.value = !isDark.value;
+  applyTheme();
+};
+
+onMounted(() => {
+  initializeTheme();
+});
 </script>
 
 <template>
@@ -31,7 +61,7 @@ const showLogoutModal = ref(false);
                 <BreezeNavLink
                   :href="route('dashboard')"
                   :active="route().current('dashboard')"
-                  class="text-xs !text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
+                  class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
                 >
                   Dashboard
                 </BreezeNavLink>
@@ -79,7 +109,7 @@ const showLogoutModal = ref(false);
               <button
                 @click="showLogoutModal = true"
                 type="button"
-                class="inline-flex items-center px-3 py-2 border border-transparent text-xs leading-4 font-medium rounded-md text-gray-400 bg-gray-800 hover:text-gray-300 focus:outline-none transition ease-in-out duration-150"
+                class="inline-flex items-center px-3 py-2 border border-transparent text-xs leading-4 font-medium rounded-md text-gray-400 bg-gray-800 hover:text-gray-300 focus:outline-none"
               >
                 {{ $page.props.auth.user.name }}
 
@@ -220,6 +250,35 @@ const showLogoutModal = ref(false);
             <h2 class="text-lg font-semibold mb-4">User Options</h2>
 
             <div class="flex flex-col space-y-4">
+              <!-- Theme Toggle Button -->
+              <button
+                type="button"
+                class="w-full px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 text-left flex items-center justify-between"
+                @click="toggleTheme"
+              >
+                <span>{{ isDark ? 'Light Mode' : 'Dark Mode' }}</span>
+                <svg 
+                  class="h-5 w-5" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                  v-if="isDark"
+                >
+                  <!-- Sun icon for light mode -->
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                </svg>
+                <svg 
+                  class="h-5 w-5" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                  v-else
+                >
+                  <!-- Moon icon for dark mode -->
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                </svg>
+              </button>
+
               <button
                 type="button"
                 class="w-full px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 text-left"
@@ -232,7 +291,7 @@ const showLogoutModal = ref(false);
                 :href="route('logout')"
                 method="post"
                 as="button"
-                class="w-full px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white"
+                class="w-full px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-black"
                 @click="showLogoutModal = false"
               >
                 Log Out

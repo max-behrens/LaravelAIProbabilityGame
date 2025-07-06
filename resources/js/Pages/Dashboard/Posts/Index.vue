@@ -218,13 +218,13 @@ const getPostImage = (post) => {
 
                                 <!-- Desktop view -->
                                 <div class="hidden md:block">
-                                    <table class="table table-compact w-full text-center border-collapse bg-gray-900 text-gray-300 border border-gray-700">
+                                    <table class="table-compact w-full text-center border-collapse bg-gray-900 text-gray-300 border border-gray-700">
                                         <thead
                                             class="text-xs uppercase bg-gray-700 text-gray-400 sticky top-0">
                                             <tr>
                                                 <th colspan="4" class="w-1/2 px-6 py-3 text-left">
                                                     <Link :href="route('posts.create')"
-                                                        class="bg-[#578b87] text-white px-4 py-3 rounded hover:bg-[#406865] transition">
+                                                        class="text-white bg-[#578b87] px-4 py-3 rounded hover:bg-[#406865] transition">
                                                         + Add Post
                                                     </Link>
                                                 </th>
@@ -236,37 +236,37 @@ const getPostImage = (post) => {
                                                 </th>
                                             </tr>
                                             <tr>
-                                                <th class="w-1/12 sticky top-0 bg-gray-700">Image</th>
-                                                <th class="w-1/12 sticky top-0 bg-gray-700" scope="col" @click="sort('id')">
+                                                <th class="text-white w-1/12 sticky top-0 bg-gray-700">Image</th>
+                                                <th class="text-white w-1/12 sticky top-0 bg-gray-700" scope="col" @click="sort('id')">
                                                     <span class="inline-flex px-6 py-3 w-full justify-center cursor-pointer select-none">
                                                         #
                                                         <SortArrowUp v-if="determineSortDirection('id', 'asc')" />
                                                         <SortArrowDown v-if="determineSortDirection('id', 'desc')" />
                                                     </span>
                                                 </th>
-                                                <th class="w-1/12 sticky top-0 bg-gray-700" scope="col" @click="sort('title')">
+                                                <th class="text-white w-1/12 sticky top-0 bg-gray-700" scope="col" @click="sort('title')">
                                                     <span class="inline-flex px-6 py-3 w-full justify-center cursor-pointer select-none">
                                                         Title
                                                         <SortArrowUp v-if="determineSortDirection('title', 'asc')" />
                                                         <SortArrowDown v-if="determineSortDirection('title', 'desc')" />
                                                     </span>
                                                 </th>
-                                                <th class="w-1/12 sticky top-0 bg-gray-700" scope="col" @click="sort('username')">
+                                                <th class="text-white w-1/12 sticky top-0 bg-gray-700" scope="col" @click="sort('username')">
                                                     <span class="inline-flex px-6 py-3 w-full justify-center cursor-pointer select-none">
                                                         Username
                                                         <SortArrowUp v-if="determineSortDirection('username', 'asc')" />
                                                         <SortArrowDown v-if="determineSortDirection('username', 'desc')" />
                                                     </span>
                                                 </th>
-                                                <th class="w-4/12 sticky top-0 bg-gray-700" scope="col" @click="sort('content')">
+                                                <th class="text-white w-4/12 sticky top-0 bg-gray-700" scope="col" @click="sort('content')">
                                                     <span class="inline-flex px-6 py-3 w-full justify-center items-center text-center cursor-pointer select-none">
                                                         Content
                                                         <SortArrowUp v-if="determineSortDirection('content', 'asc')" />
                                                         <SortArrowDown v-if="determineSortDirection('content', 'desc')" />
                                                     </span>
                                                 </th>
-                                                <th class="w-1/12 sticky top-0 bg-gray-700">Publish</th>
-                                                <th class="w-1/12 sticky top-0 bg-gray-700">Actions</th>
+                                                <th class="text-white w-1/12 sticky top-0 bg-gray-700">Publish</th>
+                                                <th class="text-white w-1/12 sticky top-0 bg-gray-700">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>

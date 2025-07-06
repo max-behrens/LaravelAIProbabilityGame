@@ -14,7 +14,7 @@
 
 <template>
         <!-- <img :src="laravel_image" /> -->
-  <font-awesome-icon :icon="['fab', 'laravel']" style="color: white;" />
+  <font-awesome-icon :icon="['fab', 'laravel']" class="text-white" />
 </template>
 
 

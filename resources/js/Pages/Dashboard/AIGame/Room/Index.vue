@@ -289,7 +289,7 @@ onMounted(() => {
         </div>
       </template>
 
-      <div class="py-4">
+      <div class="py-4 mb-6">
         <div class="main-width mx-auto sm:px-6 lg:px-8">
           
           <!-- Flash Messages from Player Interactions -->
@@ -405,7 +405,7 @@ onMounted(() => {
             <!-- Players and Scores Row -->
             <div class="flex flex-wrap gap-6 w-full">
               <!-- Players -->
-              <div class="min-w-[300px] basis-1/4 p-4 bg-gray-800 rounded shadow text-gray-200">
+              <div class="min-w-[300px] basis-1/4 p-4 bg-gray-800 rounded shadow">
                 <h3 class="font-semibold text-lg mb-2">Players In Game</h3>
 
                 <div class="mb-2 text-gray-300 font-semibold">
@@ -427,7 +427,7 @@ onMounted(() => {
               </div>
 
               <!-- Player Scores -->
-              <div class="flex-1 min-w-[300px] p-4 bg-gray-800 rounded shadow text-gray-200">
+              <div class="flex-1 min-w-[300px] p-4 bg-gray-800 rounded shadow">
                 <h3 class="font-semibold text-lg mb-2">Player Scores</h3>
                 <table class="w-full text-left border-collapse">
                   <thead>
@@ -440,10 +440,10 @@ onMounted(() => {
                   </thead>
                   <tbody>
                     <tr v-for="score in gameScores" :key="score.id">
-                      <td class="p-2 border-b">{{ score.user?.name }}</td>
-                      <td class="p-2 border-b">{{ score.session_id }}</td>
-                      <td class="p-2 border-b">{{ score.score }}</td>
-                      <td class="p-2 border-b">{{ formatDate(score.created_at) }}</td>
+                      <td class="p-2 border-b text-white">{{ score.user?.name }}</td>
+                      <td class="p-2 border-b text-white">{{ score.session_id }}</td>
+                      <td class="p-2 border-b text-white">{{ score.score }}</td>
+                      <td class="p-2 border-b text-white">{{ formatDate(score.created_at) }}</td>
                     </tr>
                     <tr v-if="gameScores.length === 0">
                       <td colspan="4" class="p-2 text-center text-gray-400">No scores available</td>

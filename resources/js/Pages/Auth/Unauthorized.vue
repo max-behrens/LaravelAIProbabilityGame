@@ -32,7 +32,7 @@ const goHome = () => {
       </p>
 
       <!-- Action Buttons -->
-      <div class="space-y-4">
+      <div class="space-y-4 mt-6">
         <button
           @click="goBack"
           class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 ease-in-out transform hover:scale-105"

@@ -4,7 +4,7 @@
     <button
       @click="changePage(1)"
       :disabled="currentPage === 1"
-      class="px-2 py-1 text-sm bg-gray-500 text-white rounded-l-md disabled:opacity-50"
+      class="px-2 py-1 text-sm bg-gray-500 text-gray-100 rounded-l-md disabled:opacity-50"
     >
       First
     </button>
@@ -13,7 +13,7 @@
     <button
       @click="changePage(currentPage - 1)"
       :disabled="currentPage === 1"
-      class="px-2 py-1 text-sm bg-gray-500 text-white disabled:opacity-50"
+      class="px-2 py-1 text-sm bg-gray-500 text-gray-100 disabled:opacity-50"
     >
       Prev
     </button>
@@ -24,7 +24,7 @@
       <button
         v-else
         @click="changePage(page)"
-        :class="{'bg-blue-600 text-white': page === currentPage, 'bg-gray-500 text-white': page !== currentPage}"
+        :class="{'bg-blue-600 ': page === currentPage, 'text-gray-100 bg-gray-500 ': page !== currentPage}"
         class="px-2 py-1 text-sm"
       >
         {{ page }}
@@ -35,7 +35,7 @@
     <button
       @click="changePage(currentPage + 1)"
       :disabled="currentPage === totalPages"
-      class="px-2 py-1 text-sm bg-gray-500 text-white disabled:opacity-50"
+      class="px-2 py-1 text-sm bg-gray-500 text-gray-100 disabled:opacity-50"
     >
       Next
     </button>
@@ -44,7 +44,7 @@
     <button
       @click="changePage(totalPages)"
       :disabled="currentPage === totalPages"
-      class="px-2 py-1 text-sm bg-gray-500 text-white rounded-r-md disabled:opacity-50"
+      class="px-2 py-1 text-sm bg-gray-500 text-gray-100 rounded-r-md disabled:opacity-50"
     >
       Last
     </button>

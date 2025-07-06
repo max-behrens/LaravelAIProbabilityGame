@@ -233,10 +233,10 @@ const chartOptions = ref({
   legend: { show: false },
   colors: ['#33a6cc'],
   xaxis: {
-    labels: { style: { colors: '#e5e7eb' } },
+    labels: { style: { colors: '#758096' } },
   },
   yaxis: {
-    labels: { offsetX: 10, style: { colors: '#e5e7eb' } },
+    labels: { offsetX: 10, style: { colors: '#758096' } },
   },
 });
 
@@ -262,7 +262,7 @@ defineExpose({
 </script>
 
 <template>
-  <div class="p-4 h-full bg-gray-800 rounded shadow text-gray-200 flex flex-col">
+  <div class="p-4 h-full bg-gray-800 rounded shadow flex flex-col">
     <h3 class="font-semibold text-lg mb-2 self-start">Score Heatmap</h3>
     <div class="flex-1 min-h-0 w-full chart-container">
       <!-- Only render chart if there's data -->

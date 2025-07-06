@@ -1,5 +1,6 @@
 import './bootstrap';
 import '../css/app.css';
+import '../css/theme.css';
 
 import { vue3Debounce } from 'vue-debounce';
 import { createApp, h } from 'vue';

@@ -330,14 +330,14 @@ function setCityInput(input) {
 
             <div class="z-50 fixed right-10 mr-30">
                 <!-- Chatbot Toggle Button -->
-                <button @click="toggleChatbot" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg">
+                <button @click="toggleChatbot" type="button" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg">
                     💬 Chat with AI
                 </button>
 
                 <!-- Chatbot Window -->
                 <div v-if="isChatbotOpen" class="border border-gray-700 shadow-lg rounded-lg p-4 w-full max-w-md mt-2 bg-gray-800">
                     <div class="flex justify-between items-center border-b border-gray-600 pb-2">
-                        <h4 class="text-lg font-semibold text-gray-100">Chatbot</h4>
+                        <h4 class="text-lg font-semibold">Chatbot</h4>
                         <button @click="toggleChatbot" class="text-red-500">✖</button>
                     </div>
                     
@@ -345,7 +345,7 @@ function setCityInput(input) {
                     <div class="chatbot-messages h-60 overflow-y-auto p-2 bg-gray-900 rounded">
                         <div v-for="(message, index) in chatbotMessages" :key="index" class="mb-2">
                             <div :class="message.isUser ? 'text-right' : 'text-left'">
-                                <span :class="message.isUser ? 'bg-blue-700 text-white' : 'bg-gray-700 text-gray-200'" class="inline-block px-3 py-2 rounded">
+                                <span :class="message.isUser ? 'bg-blue-700' : 'bg-gray-700 text-gray-200'" class="inline-block px-3 py-2 rounded">
                                     {{ message.text }}
                                 </span>
                             </div>
@@ -355,7 +355,7 @@ function setCityInput(input) {
                     <!-- Chat Input Field -->
                     <div class="mt-2 flex">
                         <input v-model="chatbotInput" type="text" class="border border-gray-600 px-2 py-1 flex-1 rounded-l bg-gray-700 !text-white placeholder-gray-300" placeholder="Type a message..." />
-                        <button @click="sendMessage" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-r">Send</button>
+                        <button @click="sendMessage" class="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-r">Send</button>
                     </div>
                 </div>
             </div>
@@ -383,7 +383,7 @@ function setCityInput(input) {
                                 
                                 <!-- Weather Search Input -->
                                 <div class="weather-search">
-                                    <input id="weather-search-input" type="text" v-debounce:300="setCityInput" class="input w-full max-w-xs placeholder-gray-400 text-gray-200 bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter City..."/>
+                                    <input id="weather-search-input" type="text" v-debounce:300="setCityInput" class="input w-full max-w-xs placeholder-gray-200 bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter City..."/>
 
                                     <!-- Spinner shown while loading -->
                                     <div v-if="loading" class="flex items-center mt-2">
@@ -394,7 +394,7 @@ function setCityInput(input) {
                                         </svg>
                                     </div>
                                     
-                                    <button @click="fetchWeather" class="fetch-button mt-4 btn btn-accent block max-w-xs bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"><strong>Get Weather</strong></button>
+                                    <button @click="fetchWeather" class="fetch-button mt-4 btn-accent block max-w-xs bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"><strong>Get Weather</strong></button>
                                 </div>
                                 
 

@@ -1,0 +1,78 @@
+:root {
+  /* Light theme (default) */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f3f4f6;
+  --bg-tertiary: #8ba1d1;
+  --text-primary: #474e5d;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --border-primary: #d1d5db;
+  --border-secondary: #e5e7eb;
+  --hover-bg: #f9fafb;
+  --accent-color: #578b87;
+  --accent-hover: #406865;
+  --error-color: #ef4444;
+  --success-color: #10b981;
+}
+
+.dark {
+  /* Dark theme */
+  --bg-primary: #111827;
+  --bg-secondary: #1f2937;
+  --bg-tertiary: #374151;
+  --text-primary: #f9fafb;
+  --text-secondary: #d1d5db;
+  --text-tertiary: #9ca3af;
+  --border-primary: #4b5563;
+  --border-secondary: #374151;
+  --hover-bg: #374151;
+  --accent-color: #578b87;
+  --accent-hover: #406865;
+  --error-color: #ef4444;
+  --success-color: #10b981;
+}
+
+/* Global theme classes that override Tailwind */
+.theme-bg-primary { background-color: var(--bg-primary) !important; }
+.theme-bg-secondary { background-color: var(--bg-secondary) !important; }
+.theme-bg-tertiary { background-color: var(--bg-tertiary) !important; }
+.theme-text-primary { color: var(--text-primary) !important; }
+.theme-text-secondary { color: var(--text-secondary) !important; }
+.theme-text-tertiary { color: var(--text-tertiary) !important; }
+.theme-border-primary { border-color: var(--border-primary) !important; }
+.theme-border-secondary { border-color: var(--border-secondary) !important; }
+.theme-hover-bg:hover { background-color: var(--hover-bg) !important; }
+
+/* Automatic theme mapping for common Tailwind classes */
+.bg-gray-900 { background-color: var(--bg-primary) !important; }
+.bg-gray-800 { background-color: var(--bg-secondary) !important; }
+.bg-gray-700 { background-color: var(--bg-tertiary) !important; }
+.text-white { color: var(--text-primary) !important; }
+.text-gray-300 { color: var(--text-secondary) !important; }
+.text-gray-400 { color: var(--text-tertiary) !important; }
+.border-gray-700 { border-color: var(--border-primary) !important; }
+.border-gray-600 { border-color: var(--border-secondary) !important; }
+
+/* Hover states */
+.hover\:bg-gray-700:hover { background-color: var(--hover-bg) !important; }
+.hover\:text-gray-300:hover { color: var(--text-secondary) !important; }
+
+/* Table specific overrides */
+.table-compact .bg-gray-800 { background-color: var(--bg-secondary) !important; }
+.table-compact .bg-gray-700 { background-color: var(--bg-tertiary) !important; }
+
+h2 {
+  color: var(--text-primary) !important;
+}
+
+.dark h2 {
+  color: var(--text-primary) !important;
+}
+
+
+/* Button text override - white text in light mode only */
+.bg-blue-600, .bg-blue-700 {
+  color: white !important;
+}
+
+
