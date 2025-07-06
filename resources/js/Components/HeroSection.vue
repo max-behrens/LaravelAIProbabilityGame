@@ -65,7 +65,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div class="relative z-10 px-6 py-16 sm:px-12 lg:px-16">
+    <div class="relative z-10 px-6 py-16 sm:px-12 lg:px-16 min-h-[300px]">
       <transition name="fade" appear mode="out-in">
         <div :key="currentSlide" class="max-w-xl">
           <h1 class="text-4xl font-bold !text-white mb-4 font-serif">{{ slides[currentSlide].title }}</h1>

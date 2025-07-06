@@ -11,6 +11,25 @@ const showNav = ref(false);
 
 const currentSection = ref(0);
 
+const slides = [
+  {
+    src: '/images/vecteezy_domesticated-black-donkeys-in-the-paddock-on-the-farm-pets_49542847.jpg',
+    alt: 'Object Detection Game',
+    title: 'Object Detection Game',
+    description: 'Play against the AI to identify objects from a variety of images...',
+    button1: { text: 'View AI Models', href: '/models' },
+    button2: { text: 'Find a Game', href: '/demo' }
+  },
+  {
+    src: '/images/person-with-futuristic-metaverse-avatar-mask.jpg',
+    alt: 'Game of Lies',
+    title: 'Game of Lies',
+    description: 'Determine whether your AI opponent will choose the correct or incorrect answer to each question you do...',
+    button1: { text: 'View AI Models', href: '/avatars' },
+    button2: { text: 'Find a Game', href: '/metaverse-demo' }
+  }
+];
+
 // Watch currentSection and update showNav based on section index
 watch(currentSection, (newVal) => {
   // Show nav only if NOT on the main section (index 0)
