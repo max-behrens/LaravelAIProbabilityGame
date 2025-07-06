@@ -294,7 +294,7 @@ onMounted(() => {
                 :href="route('logout')"
                 method="post"
                 as="button"
-                class="w-full px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-black"
+                class="w-full px-4 py-2 rounded bg-red-600 hover:bg-red-700 !text-white"
                 @click="showLogoutModal = false"
               >
                 Log Out

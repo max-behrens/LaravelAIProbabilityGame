@@ -126,20 +126,20 @@ onUnmounted(() => {
         <transition name="fade">
             <div
                 v-if="showNav"
-                class="hidden sm:block fixed py-2 mx-auto mt-12 ml-4 z-0 bg-gray-800/80 backdrop-blur-sm rounded-lg p-2 shadow-lg"
+                class="hidden sm:block fixed py-2 mx-auto mt-12 ml-4 z-0 bg-gray-800/40 backdrop-blur-sm rounded-lg p-2 shadow-lg"
             >
                 <button 
                 @click="scrollToSection('up')"
                 :disabled="currentSection === 0"
                 class="block w-8 h-8 mb-2 flex items-center justify-center rounded hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-4 h-4 !text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
                 </svg>
             </button>
             
             <div class="text-center py-2 px-1">
-                <span class="text-white font-medium whitespace-nowrap" style="font-size: 11px !important;">
+                <span class="!text-white font-medium whitespace-nowrap" style="font-size: 11px !important;">
                     {{ sections[currentSection]?.name || 'Loading...' }}
                 </span>
             </div>
@@ -149,7 +149,7 @@ onUnmounted(() => {
                 :disabled="currentSection === sections.length - 1"
                 class="block w-8 h-8 mt-2 flex items-center justify-center rounded hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-4 h-4 !text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
             </button>
