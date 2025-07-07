@@ -13,6 +13,10 @@ input {
   font-size: 14px !important; /* Change 18px to your desired size */
 }
 
+html {
+    background-color: #1F2937 !important; /* bg-gray-800 */
+}
+
 main {
     /* transform: scale(0.85); */
     transform-origin: top center; /* Ensures scaling happens from the top */

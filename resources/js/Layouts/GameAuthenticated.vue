@@ -89,11 +89,6 @@ const toggleNavigation = () => {
         <div
           class="flex-1 flex flex-col transition-all duration-300 ease-in-out"
         >
-          <header class="bg-gray-800 shadow" v-if="$slots.header">
-            <div class="header-title py-6 main-width mx-auto px-4 sm:px-6 lg:px-8">
-              <slot name="header" />
-            </div>
-          </header>
 
           <div class="flex-1 pt-4">
             <button

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import BreezeApplicationLogo from '@/Components/ApplicationLogo.vue';
 import BreezeWebsiteLogo from '@/Components/WebsiteLogo.vue';
 import BreezeDropdown from '@/Components/Dropdown.vue';
@@ -11,6 +11,7 @@ import { Link } from '@inertiajs/inertia-vue3';
 const showingNavigationDropdown = ref(false);
 const showLogoutModal = ref(false);
 const isDark = ref(false);
+const isScrolled = ref(false);
 
 // Theme management
 const initializeTheme = () => {
@@ -37,15 +38,41 @@ const toggleTheme = () => {
   applyTheme();
 };
 
+// Handle scroll for navbar color change
+const handleScroll = () => {
+  const featuredSection = document.getElementById('featured');
+  if (featuredSection) {
+    const featuredTop = featuredSection.offsetTop;
+    const scrollPosition = window.scrollY + 100; // Add offset for better detection
+    
+    isScrolled.value = scrollPosition >= featuredTop;
+  }
+};
+
 onMounted(() => {
   initializeTheme();
+  
+  // Add scroll listener
+  window.addEventListener('scroll', handleScroll);
+  
+  // Initial check
+  handleScroll();
+});
+
+// Clean up scroll listener when component unmounts
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', handleScroll);
 });
 </script>
 
 <template>
   <div class="bg-gray-900 text-white min-h-screen flex flex-col">
     <div class="bg-gray-900 flex-grow flex flex-col">
-      <nav class="bg-gray-800 border-b border-gray-700">
+      <!-- Sticky Navigation with dynamic background -->
+      <nav 
+        class="fixed top-0 left-0 right-0 z-50 border-b border-gray-700 transition-all duration-300"
+        :class="isScrolled ? 'bg-gray-700 backdrop-blur-md' : 'bg-gray-800'"
+      >
         <!-- Primary Navigation Menu -->
         <div class="main-width mx-auto px-4 sm:px-6 lg:px-8">
           <div class="flex justify-between items-center h-16">
@@ -112,7 +139,7 @@ onMounted(() => {
               <button
                 @click="showLogoutModal = true"
                 type="button"
-                class="inline-flex items-center px-3 py-2 border border-transparent text-xs leading-4 font-medium rounded-md text-gray-400 bg-gray-800 hover:text-gray-300 focus:outline-none"
+                class="inline-flex items-center px-3 py-2 border border-transparent text-xs leading-4 font-medium rounded-md text-gray-400 hover:text-gray-300 focus:outline-none"
               >
                 {{ $page.props.auth.user.name }}
 
@@ -223,17 +250,20 @@ onMounted(() => {
         </div>
       </nav>
 
-      <!-- Page Heading -->
-      <header class="bg-gray-800 shadow" v-if="$slots.header">
-          <div class="main-width py-6 mx-auto px-4 sm:px-6 lg:px-8">
-          <slot name="header" />
-        </div>
-      </header>
+      <!-- Add padding to account for fixed navbar -->
+      <div class="pt-16">
+        <!-- Page Heading -->
+        <!-- <header class="bg-gray-800 shadow" v-if="$slots.header">
+            <div class="main-width py-6">
+            <slot name="header" />
+          </div>
+        </header> -->
 
-      <!-- Main content area - this will grow to fill available space -->
-      <main class="flex-grow">
-        <slot />
-      </main>
+        <!-- Main content area - this will grow to fill available space -->
+        <main class="py-6 flex-grow">
+          <slot />
+        </main>
+      </div>
 
       <!-- Footer - will stick to bottom -->
       <footer class="bg-gray-800 border-t border-gray-700 text-gray-400 text-xs py-4 mt-auto">

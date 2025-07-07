@@ -40,7 +40,7 @@ const currentTab = ref(0);
         @click="currentTab = index"
         :class="[
           'py-2 px-4 rounded-t',
-          currentTab === index ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-blue-600'
+          currentTab === index ? 'bg-blue-600 text-white' : 'text-white hover:text-blue-600'
         ]"
       >
         {{ tab.title }}

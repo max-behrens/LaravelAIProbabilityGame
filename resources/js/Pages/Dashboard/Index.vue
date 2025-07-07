@@ -8,8 +8,9 @@ import DashboardGameDetails from '@/Components/DashboardGameDetails.vue';
 import DashboardAIDetails from '@/Components/DashboardAIDetails.vue';
 
 const showNav = ref(false);
-
 const currentSection = ref(0);
+const showVerticalNav = ref(false);
+const currentNavSection = ref(0);
 
 const slides = [
   {
@@ -43,12 +44,13 @@ const mobileMenuOpen = ref(false);
 const currentSlide = ref(0);
 
 // Section navigation state
-const sections = [
-    { id: 'main', name: 'Main' },
-    { id: 'featured', name: 'Stats' },
-    { id: 'game-details', name: 'Games' },
-    { id: 'ai-details', name: 'AI' },
-    { id: 'nature-collections', name: 'More' }
+const navSections = [
+  { id: 'main', name: 'Home' },
+  { id: 'featured', name: 'Stats' },
+  { id: 'models', name: 'Models' },
+  { id: 'game-details', name: 'Games' },
+  { id: 'ai-details', name: 'AI' },
+  { id: 'nature-collections', name: 'Collections' }
 ];
 
 const toggleMobileMenu = () => {
@@ -63,69 +65,75 @@ const goToSlide = (index) => {
     currentSlide.value = index;
 };
 
-// Section navigation functions
-const scrollToSection = (direction) => {
-    const newIndex = direction === 'up' 
-        ? Math.max(0, currentSection.value - 1)
-        : Math.min(sections.length - 1, currentSection.value + 1);
+const navigateSection = (direction) => {
+  const newIndex = direction === 'up' 
+    ? Math.max(0, currentNavSection.value - 1)
+    : Math.min(navSections.length - 1, currentNavSection.value + 1);
+  
+  currentNavSection.value = newIndex;
+  scrollToSection(newIndex);
+};
 
-    if (newIndex !== currentSection.value) {
-        currentSection.value = newIndex;
-
-        if (newIndex === 0) {
-            // Scroll to top for 'main'
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        } else {
-            const element = document.getElementById(sections[newIndex].id);
-            if (element) {
-                const yOffset = -80; // adjust this to control how far above you want
-                const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
-                window.scrollTo({ top: y, behavior: 'smooth' });
-            }
-        }
+const scrollToSection = (sectionIndex) => {
+  const section = navSections[sectionIndex];
+  if (section.id === 'main') {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } else {
+    const element = document.getElementById(section.id);
+    if (element) {
+      const yOffset = -80;
+      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
     }
+  }
 };
 
 
 
-const updateCurrentSection = () => {
-    const sectionElements = sections.map(section => ({
-        element: document.getElementById(section.id),
-        index: sections.findIndex(s => s.id === section.id)
-    })).filter(item => item.element);
-
-    const scrollPosition = window.scrollY + 200; // Offset for better detection
-
-    for (let i = sectionElements.length - 1; i >= 0; i--) {
-        const { element, index } = sectionElements[i];
-        if (element.offsetTop <= scrollPosition) {
-            currentSection.value = index;
-            break;
-        }
+const updateNavigation = () => {
+  const scrollY = window.scrollY;
+  const windowHeight = window.innerHeight;
+  
+  // Show nav when scrolled past 30% of viewport height
+  showVerticalNav.value = scrollY > windowHeight * 0.3;
+  
+  // Update current section based on scroll position
+  const sectionElements = navSections.map((section, index) => ({
+    element: document.getElementById(section.id),
+    index: index
+  })).filter(item => item.element);
+  
+  const scrollPosition = scrollY + windowHeight * 0.4;
+  
+  for (let i = sectionElements.length - 1; i >= 0; i--) {
+    const { element, index } = sectionElements[i];
+    if (element.offsetTop <= scrollPosition) {
+      currentNavSection.value = index;
+      break;
     }
+  }
 };
-
 // Auto-advance slideshow every 15 seconds
 let slideInterval;
 onMounted(() => {
-    slideInterval = setInterval(() => {
-        nextSlide();
-    }, 15000); // Change slide every 15 seconds
+  slideInterval = setInterval(() => {
+    nextSlide();
+  }, 15000);
 
-    // Add scroll listener for section detection
-    window.addEventListener('scroll', updateCurrentSection);
-    
-    // Initialize current section
-    nextTick(() => {
-        updateCurrentSection();
-    });
+  // Replace scroll listener
+  window.addEventListener('scroll', updateNavigation);
+  
+  // Initialize
+  nextTick(() => {
+    updateNavigation();
+  });
 });
 
 onUnmounted(() => {
-    if (slideInterval) {
-        clearInterval(slideInterval);
-    }
-    window.removeEventListener('scroll', updateCurrentSection);
+  if (slideInterval) {
+    clearInterval(slideInterval);
+  }
+  window.removeEventListener('scroll', updateNavigation);
 });
 </script>
 
@@ -133,70 +141,119 @@ onUnmounted(() => {
     <Head title="Dashboard" />
 
     <BreezeAuthenticatedLayout>
-        <template #header>
-            <h2 class="font-semibold text-md text-white leading-tight">Dashboard</h2>
-        </template>
 
         <section id="main">
+            <HeroSection />
         </section>
 
-        <!-- Vertical Navigation -->
-
+          <!-- Vertical Navigation -->
         <transition name="fade">
             <div
-                v-if="showNav"
-                class="hidden sm:block fixed py-2 mx-auto mt-12 ml-4 z-0 bg-gray-800/40 backdrop-blur-sm rounded-lg p-2 shadow-lg"
+            v-if="showVerticalNav"
+            class="fixed left-4 top-1/2 transform -translate-y-1/2 z-50 bg-gray-800 backdrop-blur-sm rounded-lg p-2 shadow-lg"
             >
+            <div class="flex flex-col space-y-2">
+                <!-- Up Arrow -->
                 <button 
-                @click="scrollToSection('up')"
-                :disabled="currentSection === 0"
-                class="block w-8 h-8 mb-2 flex items-center justify-center rounded hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                <svg class="w-4 h-4 !text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                @click="navigateSection('up')"
+                :disabled="currentNavSection === 0"
+                class="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed group"
+                >
+                <svg class="w-5 h-5 text-white group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
                 </svg>
-            </button>
-            
-            <div class="text-center py-2 px-1">
-                <span class="!text-white font-medium whitespace-nowrap" style="font-size: 11px !important;">
-                    {{ sections[currentSection]?.name || 'Loading...' }}
-                </span>
-            </div>
-            
-            <button 
-                @click="scrollToSection('down')"
-                :disabled="currentSection === sections.length - 1"
-                class="block w-8 h-8 mt-2 flex items-center justify-center rounded hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                <svg class="w-4 h-4 !text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                </button>
+                
+                <!-- Section Indicator -->
+                <div class="text-center py-2">
+                <div class="text-white text-xs font-medium whitespace-nowrap">
+                    {{ navSections[currentNavSection]?.name || 'Main' }}
+                </div>
+                </div>
+                
+                <!-- Down Arrow -->
+                <button 
+                @click="navigateSection('down')"
+                :disabled="currentNavSection === navSections.length - 1"
+                class="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed group"
+                >
+                <svg class="w-5 h-5 text-white group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
-            </button>
+                </button>
+            </div>
             </div>
         </transition>
 
-        <div class="py-12 main-width mx-auto sm:px-6 lg:px-8">
-            <section class="mb-16">
-                <HeroSection />
-            </section>
 
-            <section id="featured" class="mb-16">
-                <h2 class="text-3xl font-bold text-blue-600 mb-4 text-center">Featured Content</h2>
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div class="lg:col-span-2">
-                        <div class="relative">
-                            <div class="absolute -top-4 -left-4 w-full h-full bg-blue-600 rounded-lg -z-10"></div>
-                            <img src="/images/7.jpg" alt="Interior Design" class="w-full h-96 object-cover rounded-lg shadow-lg">
-                            <div class="absolute bottom-0 left-0 right-0 theme-bg-primary p-6 rounded-lg mx-4 mb-4 shadow-lg">
-                                <h3 class="text-2xl font-bold theme-text-primary mb-2">User Game Stats</h3>
-                                <p class="theme-text-secondary">Sed rhoncus egestas felis, sit amet condimentum sem ultricies at malesuada, tortor sit amet.</p>
+
+        <div class="py-12 max-w-7xl mx-auto px-6 lg:px-8">
+            <section id="featured" class="py-20 bg-gray-800 rounded-lg mb-16">
+                <div class="container mx-auto px-6">
+                    <h2 class="text-4xl font-bold text-center mb-12 text-white">Featured Content</h2>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div class="lg:col-span-2">
+                            <div class="relative">
+                                <div class="absolute -top-4 -left-4 w-full h-full bg-blue-600 rounded-lg -z-10"></div>
+                                <img src="/images/7.jpg" alt="Interior Design" class="w-full h-96 object-cover rounded-lg shadow-lg">
+                                <div class="absolute bottom-0 left-0 right-0 bg-gray-700 p-6 rounded-lg mx-4 mb-4 shadow-lg">
+                                    <h3 class="text-2xl font-bold text-white mb-2">User Game Stats</h3>
+                                    <p class="text-gray-300">Sed rhoncus egestas felis, sit amet condimentum sem ultricies at malesuada, tortor sit amet.</p>
+                                </div>
                             </div>
                         </div>
+                        <div class="space-y-8">
+                            <section>
+                                <ChartComponent />
+                            </section>
+                        </div>
                     </div>
-                    <div class="space-y-8">
-                        <section>
-                            <ChartComponent />
-                        </section>
+                </div>
+            </section>
+
+            <!-- LANGUAGES SECTION -->
+            <section id="models" class="py-20 bg-gray-900 rounded-lg mb-16">
+                <div class="container mx-auto px-6">
+                    <h2 class="text-4xl font-bold text-center mb-12 text-white">
+                        Languages I Use
+                    </h2>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 max-w-6xl mx-auto">
+                        <div class="tech-icon bg-gray-800 p-6 rounded-lg text-center hover:bg-gray-700 transition-colors">
+                            <div class="w-16 h-16 mx-auto mb-4 bg-red-500 rounded-lg flex items-center justify-center">
+                            </div>
+                            <h4 class="text-white font-semibold">PHP Laravel</h4>
+                        </div>
+                        
+                        <div class="tech-icon bg-gray-800 p-6 rounded-lg text-center hover:bg-gray-700 transition-colors">
+                            <div class="w-16 h-16 mx-auto mb-4 bg-green-500 rounded-lg flex items-center justify-center">
+                            </div>
+                            <h4 class="text-white font-semibold">Vue.JS</h4>
+                        </div>
+
+                        <div class="tech-icon bg-gray-800 p-6 rounded-lg text-center hover:bg-gray-700 transition-colors">
+                            <div class="w-16 h-16 mx-auto mb-4 bg-cyan-500 rounded-lg flex items-center justify-center">
+                            </div>
+                            <h4 class="text-white font-semibold">Symfony</h4>
+                        </div>
+                        
+                        <div class="tech-icon bg-gray-800 p-6 rounded-lg text-center hover:bg-gray-700 transition-colors">
+                            <div class="w-16 h-16 mx-auto mb-4 bg-purple-500 rounded-lg flex items-center justify-center">
+                            </div>
+                            <h4 class="text-white font-semibold">MySQL</h4>
+                        </div>
+                        
+                        <div class="tech-icon bg-gray-800 p-6 rounded-lg text-center hover:bg-gray-700 transition-colors">
+                            <div class="w-16 h-16 mx-auto mb-4 bg-blue-500 rounded-lg flex items-center justify-center">
+                            </div>
+                            <h4 class="text-white font-semibold">TypeScript</h4>
+                        </div>
+
+                        <div class="tech-icon bg-gray-800 p-6 rounded-lg text-center hover:bg-gray-700 transition-colors">
+                            <div class="w-16 h-16 mx-auto mb-4 bg-yellow-500 rounded-lg flex items-center justify-center">
+                            </div>
+                            <h4 class="text-white font-semibold">jQuery</h4>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -235,15 +292,31 @@ onUnmounted(() => {
     </BreezeAuthenticatedLayout>
 </template>
 
-<style>
+<style scoped>
+.tech-icon {
+    transition: all 0.3s ease;
+}
+
+.tech-icon:hover {
+    transform: scale(1.1);
+}
+
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: all 0.3s ease;
+}
 
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+  transform: translateX(-20px);
 }
+
 .fade-enter-to,
 .fade-leave-from {
   opacity: 1;
+  transform: translateX(0);
 }
 
 /* Crossfade transition for images */
@@ -269,6 +342,6 @@ onUnmounted(() => {
 
 /* Smooth scrolling for the entire page */
 html {
-  scroll-behavior: smooth;
+    scroll-behavior: smooth;
 }
 </style>

@@ -43,7 +43,6 @@ onMounted(async () => {
 
 <template>
     <div class="w-full h-96 p-4 shadow-md rounded-lg">
-        <h3 class="text-lg font-bold mb-2">Data Visualization</h3>
         <canvas ref="chartCanvas"></canvas>
     </div>
 </template>
