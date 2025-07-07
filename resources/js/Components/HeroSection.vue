@@ -48,7 +48,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="min-h-screen flex items-center justify-center math-bg">
+  <section class="min-h-screen flex items-center justify-center">
     <!-- Background slideshow -->
     <div class="absolute inset-0 z-0">
       <transition-group name="crossfade" tag="div" class="absolute inset-0">
@@ -121,14 +121,6 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.math-bg {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  background-image: 
-    radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 40% 40%, rgba(120, 119, 198, 0.2) 0%, transparent 50%);
-}
-
 .typewriter {
   border-right: 2px solid #fff;
   animation: blink 1s infinite;

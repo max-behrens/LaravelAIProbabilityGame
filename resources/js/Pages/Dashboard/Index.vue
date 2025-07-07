@@ -6,11 +6,18 @@ import ChartComponent from '@/Components/ChartComponent.vue';
 import HeroSection from '@/Components/HeroSection.vue';
 import DashboardGameDetails from '@/Components/DashboardGameDetails.vue';
 import DashboardAIDetails from '@/Components/DashboardAIDetails.vue';
+import GameHeatmapComponent from '@/Components/GameHeatmapComponent.vue';
+import LineChartComponent from '@/Components/LineChartComponent.vue';
+
 
 const showNav = ref(false);
 const currentSection = ref(0);
 const showVerticalNav = ref(false);
 const currentNavSection = ref(0);
+const gameScores = ref([]);
+const gameHeatmapRef = ref(null);
+
+
 
 const slides = [
   {
@@ -187,32 +194,10 @@ onUnmounted(() => {
 
 
 
-        <div class="py-12 max-w-7xl mx-auto px-6 lg:px-8">
-            <section id="featured" class="py-20 bg-gray-800 rounded-lg mb-16">
-                <div class="container mx-auto px-6">
-                    <h2 class="text-4xl font-bold text-center mb-12 text-white">Featured Content</h2>
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div class="lg:col-span-2">
-                            <div class="relative">
-                                <div class="absolute -top-4 -left-4 w-full h-full bg-blue-600 rounded-lg -z-10"></div>
-                                <img src="/images/7.jpg" alt="Interior Design" class="w-full h-96 object-cover rounded-lg shadow-lg">
-                                <div class="absolute bottom-0 left-0 right-0 bg-gray-700 p-6 rounded-lg mx-4 mb-4 shadow-lg">
-                                    <h3 class="text-2xl font-bold text-white mb-2">User Game Stats</h3>
-                                    <p class="text-gray-300">Sed rhoncus egestas felis, sit amet condimentum sem ultricies at malesuada, tortor sit amet.</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="space-y-8">
-                            <section>
-                                <ChartComponent />
-                            </section>
-                        </div>
-                    </div>
-                </div>
-            </section>
+        <div class="py-2 max-w-7xl mx-auto px-6 lg:px-8">
 
             <!-- LANGUAGES SECTION -->
-            <section id="models" class="py-20 bg-gray-900 rounded-lg mb-16">
+            <section id="models" class="py-2 bg-gray-900 rounded-lg mb-16">
                 <div class="container mx-auto px-6">
                     <h2 class="text-4xl font-bold text-center mb-12 text-white">
                         Languages I Use
@@ -257,6 +242,51 @@ onUnmounted(() => {
                     </div>
                 </div>
             </section>
+
+            <section id="featured" class="py-20 bg-gray-800 rounded-lg mb-16">
+                <div class="container mx-auto px-6">
+                    <h2 class="text-4xl font-bold text-center mb-12 text-white">User Statistics</h2>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div class="lg:col-span-3">
+                            
+                            <div class="space-y-6">
+
+                                <div class="space-y-8 bg-gray-700 p-6 rounded-lg shadow-lg">
+                                    <section>
+                                        <div class="w-full lg:w-1/2 lg:max-w-[50%] overflow-hidden">
+                                            <LineChartComponent 
+                                            ref="gameHeatmapRef" 
+                                            :gameId="gameId" 
+                                            :gameQuestions="gameQuestions" 
+                                            />
+                                        </div>
+                                    </section>
+                                </div>
+
+                                <div class="space-y-8">
+                                    <section>
+                                        <div class="w-full lg:w-1/2 lg:max-w-[50%] overflow-hidden">
+                                            <GameHeatmapComponent 
+                                            ref="gameHeatmapRef" 
+                                            :gameId="gameId" 
+                                            :gameQuestions="gameQuestions" 
+                                            />
+                                        </div>
+                                    </section>
+                                </div>
+
+                                <div class="space-y-8">
+                                    <section>
+                                        <ChartComponent />
+                                    </section>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
 
             <section id="game-details" class="mb-16">
                 <h2 class="text-3xl font-bold text-blue-600 mb-4 text-center">Game Details</h2>

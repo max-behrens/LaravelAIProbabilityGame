@@ -1,0 +1,270 @@
+<template>
+  <div class="line-chart-container">
+    <div class="mb-4">
+      <h3 class="text-xl font-semibold text-white mb-2">Performance Over Time</h3>
+      <p class="text-gray-400 text-sm">Track your game performance and progress</p>
+    </div>
+    <div ref="chartContainer" class="w-full h-80"></div>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+
+// Props
+const props = defineProps({
+  gameId: {
+    type: [String, Number],
+    default: null
+  },
+  gameQuestions: {
+    type: Array,
+    default: () => []
+  }
+});
+
+// Refs
+const chartContainer = ref(null);
+let chart = null;
+
+// Sample data - replace with your actual data
+const generateSampleData = () => {
+  const data = [];
+  const categories = [];
+  const baseDate = new Date();
+  
+  for (let i = 0; i < 30; i++) {
+    const date = new Date(baseDate);
+    date.setDate(date.getDate() - (29 - i));
+    categories.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+    
+    // Generate sample performance data (0-100 score)
+    const baseScore = 60 + Math.random() * 30;
+    const variation = (Math.random() - 0.5) * 20;
+    data.push(Math.max(0, Math.min(100, baseScore + variation)));
+  }
+  
+  return { data, categories };
+};
+
+// Chart configuration
+const createChart = () => {
+  const { data, categories } = generateSampleData();
+  
+  const options = {
+    series: [{
+      name: 'Performance Score',
+      data: data,
+      color: '#3B82F6'
+    }],
+    chart: {
+      type: 'line',
+      height: 320,
+      background: 'transparent',
+      toolbar: {
+        show: false
+      },
+      zoom: {
+        enabled: false
+      },
+      animations: {
+        enabled: true,
+        easing: 'easeinout',
+        speed: 800
+      }
+    },
+    stroke: {
+      curve: 'smooth',
+      width: 3,
+      lineCap: 'round'
+    },
+    grid: {
+      show: true,
+      borderColor: '#374151',
+      strokeDashArray: 3,
+      xaxis: {
+        lines: {
+          show: false
+        }
+      },
+      yaxis: {
+        lines: {
+          show: true
+        }
+      },
+      padding: {
+        top: 10,
+        right: 20,
+        bottom: 10,
+        left: 20
+      }
+    },
+    xaxis: {
+      categories: categories,
+      labels: {
+        style: {
+          colors: '#9CA3AF',
+          fontSize: '12px'
+        }
+      },
+      axisBorder: {
+        show: false
+      },
+      axisTicks: {
+        show: false
+      }
+    },
+    yaxis: {
+      min: 0,
+      max: 100,
+      labels: {
+        style: {
+          colors: '#9CA3AF',
+          fontSize: '12px'
+        },
+        formatter: (value) => `${value}%`
+      }
+    },
+    tooltip: {
+      theme: 'dark',
+      style: {
+        fontSize: '12px'
+      },
+      custom: function({ series, seriesIndex, dataPointIndex, w }) {
+        const value = series[seriesIndex][dataPointIndex];
+        const category = w.globals.labels[dataPointIndex];
+        return `
+          <div class="bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-600">
+            <div class="text-white font-semibold">${category}</div>
+            <div class="text-blue-400 font-medium">${value.toFixed(1)}% Performance</div>
+          </div>
+        `;
+      }
+    },
+    markers: {
+      size: 6,
+      colors: ['#3B82F6'],
+      strokeColors: '#1E40AF',
+      strokeWidth: 2,
+      hover: {
+        size: 8
+      }
+    },
+    fill: {
+      type: 'gradient',
+      gradient: {
+        shade: 'dark',
+        type: 'vertical',
+        shadeIntensity: 0.1,
+        gradientToColors: ['#1E40AF'],
+        inverseColors: false,
+        opacityFrom: 0.8,
+        opacityTo: 0.1,
+        stops: [0, 100]
+      }
+    },
+    responsive: [{
+      breakpoint: 768,
+      options: {
+        chart: {
+          height: 280
+        },
+        xaxis: {
+          labels: {
+            show: true,
+            maxHeight: 40,
+            style: {
+              fontSize: '10px'
+            }
+          }
+        }
+      }
+    }]
+  };
+
+  // Initialize ApexCharts
+  if (window.ApexCharts) {
+    chart = new window.ApexCharts(chartContainer.value, options);
+    chart.render();
+  } else {
+    console.error('ApexCharts is not loaded');
+  }
+};
+
+// Load ApexCharts dynamically
+const loadApexCharts = () => {
+  return new Promise((resolve, reject) => {
+    if (window.ApexCharts) {
+      resolve();
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/apexcharts@latest/dist/apexcharts.min.js';
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+};
+
+// Lifecycle hooks
+onMounted(async () => {
+  try {
+    await loadApexCharts();
+    await nextTick();
+    createChart();
+  } catch (error) {
+    console.error('Failed to load ApexCharts:', error);
+  }
+});
+
+onUnmounted(() => {
+  if (chart) {
+    chart.destroy();
+  }
+});
+
+// Method to update chart data (can be called from parent)
+const updateChartData = (newData, newCategories) => {
+  if (chart) {
+    chart.updateOptions({
+      series: [{
+        name: 'Performance Score',
+        data: newData
+      }],
+      xaxis: {
+        categories: newCategories
+      }
+    });
+  }
+};
+
+// Expose methods to parent component
+defineExpose({
+  updateChartData
+});
+</script>
+
+<style scoped>
+.line-chart-container {
+  @apply w-full;
+}
+
+/* Custom scrollbar for responsive design */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-700;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-500 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400;
+}
+</style>
