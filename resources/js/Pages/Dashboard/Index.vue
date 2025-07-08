@@ -225,7 +225,6 @@ watch([activeGameId, dateRange, isExponentialScale, activeUserId], ([newGameId, 
   } else {
     delete params.user_id;
   }
-  router.get(route('dashboard'), params, { preserveState: true, replace: true });
 }, { immediate: false });
 
 
