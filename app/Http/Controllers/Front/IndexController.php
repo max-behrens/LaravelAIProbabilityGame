@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Services\Front\PostService;
 use App\Http\Controllers\Controller;
 use App\Services\Dashboard\GamesService;
+use Illuminate\Support\Facades\Log;
 
 class IndexController extends Controller
 {
@@ -15,7 +16,6 @@ class IndexController extends Controller
     public function __invoke(PostService $service, Request $request)
     {
         return redirect()->route('dashboard');
-
     }
 
     public function __construct(GamesService $gamesService)
@@ -45,5 +45,19 @@ class IndexController extends Controller
             'players' => $players,
             'totalScore' => $totalGameScore,
         ]);
+    }
+
+    /**
+     * Get cumulative scores for all players across all games.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getCumulativeScores()
+    {
+        Log::info('Fetching cumulative scores for all players across all games');
+        $cumulativeScores = $this->gamesService->getCumulativeScoresByPlayer();
+        Log::info('Cumulative scores retrieved', ['cumulativeScores' => $cumulativeScores]);
+
+        return response()->json($cumulativeScores);
     }
 }

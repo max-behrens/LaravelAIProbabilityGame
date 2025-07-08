@@ -82,7 +82,7 @@ onBeforeUnmount(() => {
                 <BreezeApplicationLogo class="block h-7 w-auto text-white" />
               </Link>
 
-                <BreezeWebsiteLogo class="block h-7 w-auto text-white" />
+                <BreezeWebsiteLogo class="block h-7 w-auto" />
             </div>
             
             <!-- Navigation Links - Centered -->

@@ -255,9 +255,6 @@ onUnmounted(() => {
                                     <section>
                                         <div class="w-full lg:w-1/2 lg:max-w-[50%] overflow-hidden">
                                             <LineChartComponent 
-                                            ref="gameHeatmapRef" 
-                                            :gameId="gameId" 
-                                            :gameQuestions="gameQuestions" 
                                             />
                                         </div>
                                     </section>

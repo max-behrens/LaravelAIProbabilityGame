@@ -245,4 +245,59 @@ class GamesService
 
         return $series;
     }
+
+    /**
+     * Retrieves cumulative scores for each player over time across all games.
+     *
+     * @return array
+     */
+    public function getCumulativeScoresByPlayer(): array
+    {
+        Log::info('Fetching cumulative scores by player across all games');
+
+        $gameScores = GameScore::query()
+            ->join('users', 'game_scores.player_id', '=', 'users.id')
+            ->orderBy('game_scores.created_at', 'asc')
+            ->select(
+                'users.name as player_name',
+                'game_scores.score',
+                'game_scores.created_at'
+            )
+            ->get();
+
+        $playerCumulativeScores = [];
+        $playerCurrentScores = [];
+
+        foreach ($gameScores as $score) {
+            $playerName = $score->player_name;
+            $currentScore = $score->score;
+            $timestamp = $score->created_at->timestamp * 1000; // ApexCharts expects milliseconds
+
+            // Initialize if player not seen before
+            if (!isset($playerCurrentScores[$playerName])) {
+                $playerCurrentScores[$playerName] = 0;
+            }
+            if (!isset($playerCumulativeScores[$playerName])) {
+                $playerCumulativeScores[$playerName] = [];
+            }
+
+            $playerCurrentScores[$playerName] += $currentScore;
+            $playerCumulativeScores[$playerName][] = [
+                'x' => $timestamp,
+                'y' => $playerCurrentScores[$playerName],
+            ];
+        }
+
+        $series = [];
+        foreach ($playerCumulativeScores as $playerName => $data) {
+            $series[] = [
+                'name' => $playerName,
+                'data' => $data,
+            ];
+        }
+
+        Log::info('Cumulative scores by player generated', ['series' => $series]);
+
+        return $series;
+    }
 }

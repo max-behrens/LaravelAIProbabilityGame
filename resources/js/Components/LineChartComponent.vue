@@ -9,7 +9,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue';
+import axios from 'axios';
+
 
 // Props
 const props = defineProps({
@@ -27,36 +29,10 @@ const props = defineProps({
 const chartContainer = ref(null);
 let chart = null;
 
-// Sample data - replace with your actual data
-const generateSampleData = () => {
-  const data = [];
-  const categories = [];
-  const baseDate = new Date();
-  
-  for (let i = 0; i < 30; i++) {
-    const date = new Date(baseDate);
-    date.setDate(date.getDate() - (29 - i));
-    categories.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-    
-    // Generate sample performance data (0-100 score)
-    const baseScore = 60 + Math.random() * 30;
-    const variation = (Math.random() - 0.5) * 20;
-    data.push(Math.max(0, Math.min(100, baseScore + variation)));
-  }
-  
-  return { data, categories };
-};
-
 // Chart configuration
-const createChart = () => {
-  const { data, categories } = generateSampleData();
-  
+const createChart = (seriesData) => {
   const options = {
-    series: [{
-      name: 'Performance Score',
-      data: data,
-      color: '#3B82F6'
-    }],
+    series: seriesData, // Use the fetched series data
     chart: {
       type: 'line',
       height: 320,
@@ -100,8 +76,14 @@ const createChart = () => {
       }
     },
     xaxis: {
-      categories: categories,
+      type: 'datetime', // Changed to datetime for timestamps
       labels: {
+        datetimeFormatter: {
+          year: 'yyyy',
+          month: 'MMM \'yy',
+          day: 'dd MMM',
+          hour: 'HH:mm'
+        },
         style: {
           colors: '#9CA3AF',
           fontSize: '12px'
@@ -116,13 +98,12 @@ const createChart = () => {
     },
     yaxis: {
       min: 0,
-      max: 100,
       labels: {
         style: {
           colors: '#9CA3AF',
           fontSize: '12px'
         },
-        formatter: (value) => `${value}%`
+        formatter: (value) => `${value} pts` // Changed formatter to points
       }
     },
     tooltip: {
@@ -130,20 +111,27 @@ const createChart = () => {
       style: {
         fontSize: '12px'
       },
+      x: {
+        format: 'dd MMM yyyy HH:mm' // Format for datetime tooltip
+      },
       custom: function({ series, seriesIndex, dataPointIndex, w }) {
         const value = series[seriesIndex][dataPointIndex];
-        const category = w.globals.labels[dataPointIndex];
+        const playerName = w.globals.seriesNames[seriesIndex];
+        const timestamp = w.globals.seriesX[seriesIndex][dataPointIndex];
+        const date = new Date(timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
         return `
           <div class="bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-600">
-            <div class="text-white font-semibold">${category}</div>
-            <div class="text-blue-400 font-medium">${value.toFixed(1)}% Performance</div>
+            <div class="text-white font-semibold">${playerName}</div>
+            <div class="text-gray-400 text-sm">${date}</div>
+            <div class="text-blue-400 font-medium">${value.toFixed(0)} points total</div>
           </div>
         `;
       }
     },
     markers: {
       size: 6,
-      colors: ['#3B82F6'],
+      colors: ['#3B82F6'], // These will be overridden by series colors if provided
       strokeColors: '#1E40AF',
       strokeWidth: 2,
       hover: {
@@ -156,7 +144,7 @@ const createChart = () => {
         shade: 'dark',
         type: 'vertical',
         shadeIntensity: 0.1,
-        gradientToColors: ['#1E40AF'],
+        // gradientToColors: ['#1E40AF'], // This will be handled by ApexCharts for multiple series
         inverseColors: false,
         opacityFrom: 0.8,
         opacityTo: 0.1,
@@ -183,7 +171,9 @@ const createChart = () => {
   };
 
   // Initialize ApexCharts
-  if (window.ApexCharts) {
+  if (chart) {
+    chart.updateOptions(options); // Update existing chart
+  } else if (window.ApexCharts) {
     chart = new window.ApexCharts(chartContainer.value, options);
     chart.render();
   } else {
@@ -207,42 +197,33 @@ const loadApexCharts = () => {
   });
 };
 
+// Function to fetch cumulative scores
+const fetchCumulativeScores = async () => {
+  try {
+    const response = await axios.get(`/dashboard/cumulative-scores`);
+    return response.data; // axios automatically parses JSON
+  } catch (error) {
+    console.error('Failed to fetch cumulative scores:', error);
+    return [];
+  }
+};
+
 // Lifecycle hooks
 onMounted(async () => {
   try {
     await loadApexCharts();
     await nextTick();
-    createChart();
+    const seriesData = await fetchCumulativeScores(); // Remove gameId parameter
+    createChart(seriesData);
   } catch (error) {
-    console.error('Failed to load ApexCharts:', error);
+    console.error('Failed to load ApexCharts or fetch data:', error);
   }
 });
 
-onUnmounted(() => {
-  if (chart) {
-    chart.destroy();
-  }
-});
-
-// Method to update chart data (can be called from parent)
-const updateChartData = (newData, newCategories) => {
-  if (chart) {
-    chart.updateOptions({
-      series: [{
-        name: 'Performance Score',
-        data: newData
-      }],
-      xaxis: {
-        categories: newCategories
-      }
-    });
-  }
-};
-
-// Expose methods to parent component
-defineExpose({
-  updateChartData
-});
+// Method to update chart data (can be called from parent) - now not directly used by parent
+// defineExpose({
+//   updateChartData
+// });
 </script>
 
 <style scoped>
