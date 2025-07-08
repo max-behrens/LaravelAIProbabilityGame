@@ -428,7 +428,60 @@ onUnmounted(() => {
                                             </button>
                                           </div>
                                       </div>
-                                      <div class="bg-gray-800 px-6 rounded-lg">
+                                     
+                                    </div>
+
+                                    <div class="row flex gap-4 items-start">
+
+                                      <div class="bg-gray-800 p-6 rounded-lg flex flex-col justify-between">
+                                          <div>
+                                              <h4 class="text-white font-semibold text-lg mb-4 text-center">Date Picker</h4>
+                                              <button
+                                                  @click="showDateModal = true"
+                                                  :class="[
+                                                      'flex items-center space-x-3 p-4 rounded-lg shadow-md text-white cursor-pointer h-full',
+                                                      'transition-all duration-300 ease-in-out',
+                                                      dateFilterColor + ' hover:brightness-90',
+                                                      (dateRange[0] && dateRange[1]) ? 'bg-orange-700 ring-2 ring-orange-400' : ''
+                                                  ]"
+                                              >
+                                                  <span class="text-2xl transition-opacity duration-300 ease-in-out">
+                                                      <CalendarDaysIcon />
+                                                  </span>
+                                                  <span class="font-medium transition-opacity duration-300 ease-in-out">{{ dateFilterTitle }}</span>
+                                              </button>
+                                          </div>
+                                      </div>
+
+                                      <div class="bg-gray-800 p-6 rounded-lg flex flex-col justify-between">
+                                          <div>
+                                              <h4 class="text-white font-semibold text-lg mb-4 text-center">Performance</h4>
+                                              <button
+                                                  @click="toggleExponentialScale"
+                                                  :class="[
+                                                      'flex items-center space-x-3 p-4 rounded-lg shadow-md text-white cursor-pointer h-full',
+                                                      'transition-all duration-300 ease-in-out',
+                                                      performanceFilterColor + ' hover:brightness-90',
+                                                      isExponentialScale ? 'bg-purple-700 ring-2 ring-purple-400' : ''
+                                                  ]"
+                                              >
+                                                  <span class="text-2xl transition-opacity duration-300 ease-in-out">
+                                                      <ScalingIcon />
+                                                  </span>
+                                                  <span class="font-medium transition-opacity duration-300 ease-in-out">
+                                                      {{ isExponentialScale ? 'Exponential Scale ON' : 'Exponential Scale OFF' }}
+                                                  </span>
+                                              </button>
+                                          </div>
+                                      </div>
+
+                                    </div>
+
+                                </div>
+
+                                <div class="grid grid-cols-2 md:grid-cols-2 gap-8 ml-6 mr-6">
+
+                                     <div class="bg-gray-800 px-6 rounded-lg">
                                           <button
                                               @click="showAdvancedFilters = !showAdvancedFilters"
                                               :class="[
@@ -489,55 +542,8 @@ onUnmounted(() => {
                                               </div>
                                           </transition>
                                         </div>
-                                    </div>
+                                  </div>
 
-                                    <div class="row flex gap-4 items-start">
-
-                                      <div class="bg-gray-800 p-6 rounded-lg flex flex-col justify-between">
-                                          <div>
-                                              <h4 class="text-white font-semibold text-lg mb-4 text-center">Date Picker</h4>
-                                              <button
-                                                  @click="showDateModal = true"
-                                                  :class="[
-                                                      'flex items-center space-x-3 p-4 rounded-lg shadow-md text-white cursor-pointer h-full',
-                                                      'transition-all duration-300 ease-in-out',
-                                                      dateFilterColor + ' hover:brightness-90',
-                                                      (dateRange[0] && dateRange[1]) ? 'bg-orange-700 ring-2 ring-orange-400' : ''
-                                                  ]"
-                                              >
-                                                  <span class="text-2xl transition-opacity duration-300 ease-in-out">
-                                                      <CalendarDaysIcon />
-                                                  </span>
-                                                  <span class="font-medium transition-opacity duration-300 ease-in-out">{{ dateFilterTitle }}</span>
-                                              </button>
-                                          </div>
-                                      </div>
-
-                                      <div class="bg-gray-800 p-6 rounded-lg flex flex-col justify-between">
-                                          <div>
-                                              <h4 class="text-white font-semibold text-lg mb-4 text-center">Performance</h4>
-                                              <button
-                                                  @click="toggleExponentialScale"
-                                                  :class="[
-                                                      'flex items-center space-x-3 p-4 rounded-lg shadow-md text-white cursor-pointer h-full',
-                                                      'transition-all duration-300 ease-in-out',
-                                                      performanceFilterColor + ' hover:brightness-90',
-                                                      isExponentialScale ? 'bg-purple-700 ring-2 ring-purple-400' : ''
-                                                  ]"
-                                              >
-                                                  <span class="text-2xl transition-opacity duration-300 ease-in-out">
-                                                      <ScalingIcon />
-                                                  </span>
-                                                  <span class="font-medium transition-opacity duration-300 ease-in-out">
-                                                      {{ isExponentialScale ? 'Exponential Scale ON' : 'Exponential Scale OFF' }}
-                                                  </span>
-                                              </button>
-                                          </div>
-                                      </div>
-
-                                    </div>
-
-                                </div>
 
                                 <div class="space-y-8 theme-bg-primary p-6 rounded-lg shadow-lg">
                                     <section>
