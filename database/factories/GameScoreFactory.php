@@ -19,7 +19,6 @@ class GameScoreFactory extends Factory
             'answer_json' => [], // seeded manually in seeder if needed
             'score' => 0,        // calculated in seeder
             'session_id' => $this->faker->uuid,
-            'created_at' => now(),
             'updated_at' => now(),
         ];
     }

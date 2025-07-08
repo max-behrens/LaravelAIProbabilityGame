@@ -2,7 +2,7 @@
   /* Light theme (default) */
   --bg-primary: #ffffff;
   --bg-secondary: #f3f4f6;
-  --bg-tertiary: #a4b0cb;
+  --bg-tertiary: #d0d1d2;
   --text-primary: #333946;
   --text-secondary: #6b7280;
   --text-tertiary: #9ca3af;
@@ -71,7 +71,13 @@ h2 {
 
 
 /* Button text override - white text in light mode only */
-.bg-blue-600, .bg-blue-700 {
+.bg-blue-600, .bg-blue-700,
+.bg-red-600, .bg-red-700,
+.bg-purple-600, .bg-purple-700,
+.bg-pink-600, .bg-pink-700,
+.bg-green-600, .bg-green-700,
+.bg-yellow-600, .bg-yellow-700
+{
   color: white !important;
 }
 

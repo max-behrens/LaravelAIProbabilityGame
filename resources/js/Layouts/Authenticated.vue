@@ -286,7 +286,7 @@ onBeforeUnmount(() => {
               <!-- Theme Toggle Button -->
               <button
                 type="button"
-                class="w-full px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 text-left flex items-center justify-between"
+                class="w-full px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 text-left text-white flex items-center justify-between"
                 @click="toggleTheme"
               >
                 <span>{{ isDark ? 'Light Mode' : 'Dark Mode' }}</span>
@@ -314,7 +314,7 @@ onBeforeUnmount(() => {
 
               <button
                 type="button"
-                class="w-full px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 text-left"
+                class="w-full px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 text-left text-white"
                 @click="() => {}"
               >
                 Settings

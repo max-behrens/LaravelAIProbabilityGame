@@ -6,6 +6,7 @@ use Illuminate\Database\Seeder;
 use App\Models\GameScore;
 use App\Models\Games;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Str;
 
 class GameScoreSeeder extends Seeder
@@ -48,6 +49,7 @@ class GameScoreSeeder extends Seeder
                         'answer_json' => $answerJson,
                         'score' => $score,
                         'session_id' => Str::uuid()->toString(),
+                        'created_at' => Carbon::now()->subDays(rand(0, 60))->subHours(rand(0, 23))->subMinutes(rand(0, 59)),
                     ]);
                 }
             }

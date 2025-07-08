@@ -55,8 +55,17 @@ Route::get('/games/{gameId}/players', [GamesController::class, 'getPlayers']);
 Route::post('/games/{gameId}/broadcast', [GamesController::class, 'broadcast']);
 
 
+// Dashboard Stats Routes
 
-Route::get('/dashboard/cumulative-scores', [IndexController::class, 'getCumulativeScores']);
+Route::get('/dashboard/cumulative-linegraph', [IndexController::class, 'getCumulativeLineGraph']);
+
+Route::get('/dashboard/cumulative-heatmap', [IndexController::class, 'getCumulativeHeatMap']);
+
+Route::get('/dashboard/cumulative-bargraph', [IndexController::class, 'getCumulativeBarGraph']);
+
+Route::get('/users', [IndexController::class, 'getAllUsers']);
+
+
 
 
 

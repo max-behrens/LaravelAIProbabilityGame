@@ -8,6 +8,7 @@ use App\Models\GameType;
 use App\Models\GameQuestion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
 class GamesService
@@ -247,11 +248,133 @@ class GamesService
     }
 
     /**
-     * Retrieves cumulative scores for each player over time across all games.
-     *
-     * @return array
+     * Methods to retrieve cumulative scores for each player across all games to the dashboard.
      */
-    public function getCumulativeScoresByPlayer(): array
+    public function getCumulativeLineGraphData(?int $gameId = null, ?string $startDate = null, ?string $endDate = null, ?int $userId = null)
+    {
+        // Now you directly use the passed arguments
+        // $gameId, $startDate, $endDate, $userId are already available
+
+        $query = GameScore::query()
+            ->select('game_scores.created_at', 'game_scores.player_id', 'game_scores.score', 'users.name as player_name')
+            ->join('users', 'game_scores.player_id', '=', 'users.id')
+            ->orderBy('users.name')
+            ->orderBy('game_scores.created_at');
+
+        if ($gameId !== null) {
+            $query->where('game_id', $gameId);
+        }
+
+        if ($startDate) {
+            $query->whereDate('game_scores.created_at', '>=', Carbon::parse($startDate));
+        }
+
+        if ($endDate) {
+            $query->whereDate('game_scores.created_at', '<=', Carbon::parse($endDate));
+        }
+
+        if ($userId !== null) {
+            $query->where('game_scores.player_id', $userId);
+        }
+
+        $results = $query->get();
+
+        $series = [];
+        $playerData = [];
+
+        foreach ($results as $row) {
+            $playerId = $row->player_id;
+            $playerName = $row->player_name;
+
+            if (!isset($playerData[$playerId])) {
+                $playerData[$playerId] = [
+                    'name' => $playerName,
+                    'scores' => []
+                ];
+            }
+
+            $playerData[$playerId]['scores'][] = [
+                'date' => $row->created_at,
+                'score' => $row->score
+            ];
+        }
+
+        if (count($playerData) > 1) {
+            usort($playerData, fn($a, $b) => strcmp($a['name'], $b['name']));
+        }
+
+        foreach ($playerData as $playerInfo) {
+            $cumulativeScore = 0;
+            $seriesData = [];
+
+            foreach ($playerInfo['scores'] as $scoreData) {
+                $cumulativeScore += $scoreData['score'];
+                $timestamp = Carbon::parse($scoreData['date'])->timestamp * 1000;
+
+                $seriesData[] = [$timestamp, $cumulativeScore];
+            }
+
+            $series[] = [
+                'name' => $playerInfo['name'],
+                'data' => $seriesData
+            ];
+        }
+
+        return $series;
+    }
+
+
+    public function getCumulativeHeatMapData(): array
+    {
+        Log::info('Fetching cumulative scores by player across all games');
+
+        $gameScores = GameScore::query()
+            ->join('users', 'game_scores.player_id', '=', 'users.id')
+            ->orderBy('game_scores.created_at', 'asc')
+            ->select(
+                'users.name as player_name',
+                'game_scores.score',
+                'game_scores.created_at'
+            )
+            ->get();
+
+        $playerCumulativeScores = [];
+        $playerCurrentScores = [];
+
+        foreach ($gameScores as $score) {
+            $playerName = $score->player_name;
+            $currentScore = $score->score;
+            $timestamp = $score->created_at->timestamp * 1000; // ApexCharts expects milliseconds
+
+            // Initialize if player not seen before
+            if (!isset($playerCurrentScores[$playerName])) {
+                $playerCurrentScores[$playerName] = 0;
+            }
+            if (!isset($playerCumulativeScores[$playerName])) {
+                $playerCumulativeScores[$playerName] = [];
+            }
+
+            $playerCurrentScores[$playerName] += $currentScore;
+            $playerCumulativeScores[$playerName][] = [
+                'x' => $timestamp,
+                'y' => $playerCurrentScores[$playerName],
+            ];
+        }
+
+        $series = [];
+        foreach ($playerCumulativeScores as $playerName => $data) {
+            $series[] = [
+                'name' => $playerName,
+                'data' => $data,
+            ];
+        }
+
+        Log::info('Cumulative scores by player generated', ['series' => $series]);
+
+        return $series;
+    }
+
+        public function getCumulativeBarGraphData(): array
     {
         Log::info('Fetching cumulative scores by player across all games');
 

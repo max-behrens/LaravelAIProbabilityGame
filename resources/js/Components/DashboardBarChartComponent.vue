@@ -19,7 +19,7 @@ const playersData = ref([]);
 const totalGameScore = ref(null);
 
 // Fetch player averages
-const fetchScoreTrendStats = async () => {
+const fetchCumulativeBarChartScores = async () => {
   try {
     const response = await axios.get(`/api/games/${props.gameId}/score-trends`);
     playersData.value = response.data.players;
@@ -104,21 +104,21 @@ const drawChart = () => {
 watch(
   () => props.gameId,
   async () => {
-    await fetchScoreTrendStats();
+    await fetchCumulativeBarChartScores();
     drawChart();
   }
 );
 
 // Initial chart render
 onMounted(async () => {
-  await fetchScoreTrendStats();
+  await fetchCumulativeBarChartScores();
   drawChart();
 });
 
 // Expose method to refresh chart externally
 defineExpose({
   refreshChart: async () => {
-    await fetchScoreTrendStats();
+    await fetchCumulativeBarChartScores();
     drawChart();
   },
 });

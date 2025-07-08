@@ -76,7 +76,11 @@ Route::prefix('dashboard')
             Route::post('/update/{post}', [DashboardPostController::class, 'update'])->name('posts.update');
         });
 
-        Route::get('/cumulative-scores', [IndexController::class, 'getCumulativeScores']);
+        // Dashboard Stats Routes
+        Route::get('/cumulative-linegraph', [IndexController::class, 'getCumulativeLineGraph']);
+        Route::get('/cumulative-heatmap', [IndexController::class, 'getCumulativeHeatMap']);
+        Route::get('/cumulative-bargraph', [IndexController::class, 'getCumulativeBarGraph']);
+        Route::get('/users', [IndexController::class, 'getAllUsers']);
 
 
         Route::get('/games', [GamesController::class, 'index']);

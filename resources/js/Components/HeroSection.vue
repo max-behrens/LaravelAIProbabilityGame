@@ -30,7 +30,7 @@ const goToSlide = (index) => {
 };
 
 const scrollToFeatured = () => {
-  const featuredSection = document.getElementById('featured');
+  const featuredSection = document.getElementById('stats');
   if (featuredSection) {
     const yOffset = -80;
     const y = featuredSection.getBoundingClientRect().top + window.pageYOffset + yOffset;
