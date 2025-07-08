@@ -2,7 +2,7 @@
 import BreezeAuthenticatedLayout from '@/Layouts/Authenticated.vue';
 import { Head, router, usePage } from '@inertiajs/inertia-vue3';
 import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue';
-import { ChartBarIcon, PuzzleIcon, Gamepad2Icon, ClockIcon, TrendingUpIcon, EyeIcon, CalendarDaysIcon, ScalingIcon, UserIcon } from 'lucide-vue-next';
+import { ChartBarIcon, PuzzleIcon, Gamepad2Icon, ClockIcon, TrendingUpIcon, EyeIcon, CalendarDaysIcon, ScalingIcon, UserIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-vue-next';
 import HeroSection from '@/Components/HeroSection.vue';
 import DashboardGameDetails from '@/Components/DashboardGameDetails.vue';
 import DashboardAIDetails from '@/Components/DashboardAIDetails.vue';
@@ -29,6 +29,39 @@ const gameScores = ref([]);
 const gameHeatmapRef = ref(null);
 const showAdvancedFilters = ref(false);
 
+// Chart navigation state
+const currentChartIndex = ref(0);
+const chartConfigs = [
+  {
+    title: 'Performance Over Time',
+    description: 'Track your game performance and progress',
+    component: 'DashboardLineChartComponent'
+  },
+  {
+    title: 'Activity Heatmap',
+    description: 'View your gaming activity patterns and frequency',
+    component: 'DashboardHeatmapComponent'
+  },
+  {
+    title: 'Score Distribution',
+    description: 'Analyze your score distribution and performance metrics',
+    component: 'DashboardBarChartComponent'
+  }
+];
+
+// Computed properties for current chart
+const currentChart = computed(() => chartConfigs[currentChartIndex.value]);
+
+// Chart navigation functions
+const previousChart = () => {
+  currentChartIndex.value = currentChartIndex.value === 0 
+    ? chartConfigs.length - 1 
+    : currentChartIndex.value - 1;
+};
+
+const nextChart = () => {
+  currentChartIndex.value = (currentChartIndex.value + 1) % chartConfigs.length;
+};
 
 // Filter States
 const activeGameId = ref(initialGameId);
@@ -55,7 +88,6 @@ const datepickerModel = computed({
         handleDateSelection(newValue);
     }
 });
-
 
 const isExponentialScale = ref(initialExponentialScale);
 
@@ -227,7 +259,6 @@ watch([activeGameId, dateRange, isExponentialScale, activeUserId], ([newGameId, 
   }
 }, { immediate: false });
 
-
 const slides = [
   {
     src: '/images/vecteezy_domesticated-black-donkeys-in-the-paddock-on-the-farm-pets_49542847.jpg',
@@ -397,9 +428,41 @@ onUnmounted(() => {
 
                         <div class="lg:col-span-3">
 
-                              <div class="mb-4">
-                                <h3 class="text-xl font-bold text-white mb-2">Performance Over Time</h3>
-                                <p class="text-white text-xl">Track your game performance and progress</p>
+                              <div class="mb-4 flex items-center justify-center">
+                                <!-- Left Arrow -->
+                                <button 
+                                    @click="previousChart"
+                                    class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-colors mr-4"
+                                >
+                                    <ChevronLeftIcon class="w-5 h-5" />
+                                </button>
+                                
+                                <!-- Title and Description -->
+                                <div class="text-center">
+                                    <h3 class="text-xl font-bold text-white mb-2">{{ currentChart.title }}</h3>
+                                    <p class="text-white text-xl">{{ currentChart.description }}</p>
+                                </div>
+                                
+                                <!-- Right Arrow -->
+                                <button 
+                                    @click="nextChart"
+                                    class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-colors ml-4"
+                                >
+                                    <ChevronRightIcon class="w-5 h-5" />
+                                </button>
+                              </div>
+
+                              <!-- Chart Indicator Dots -->
+                              <div class="flex justify-center space-x-2 mb-6">
+                                <button
+                                    v-for="(chart, index) in chartConfigs"
+                                    :key="index"
+                                    @click="currentChartIndex = index"
+                                    :class="[
+                                        'w-3 h-3 rounded-full transition-all duration-300',
+                                        index === currentChartIndex ? 'bg-blue-500' : 'bg-gray-600 hover:bg-gray-500'
+                                    ]"
+                                ></button>
                               </div>
                             
                             <div class="space-y-6">
@@ -544,33 +607,29 @@ onUnmounted(() => {
                                         </div>
                                   </div>
 
-
+                                <!-- Single Chart Container with Transition -->
                                 <div class="space-y-8 theme-bg-primary p-6 rounded-lg shadow-lg">
                                     <section>
                                         <div class="w-full">
-                                            <DashboardLineChartComponent
-                                                :game-id="activeGameId"
-                                                :start-date="dateRange[0]"
-                                                :end-date="dateRange[1]"
-                                                :is-exponential-scale="isExponentialScale"
-                                                :user-id="activeUserId"
-                                            />
+                                            <transition name="chart-fade" mode="out-in">
+                                                <div :key="currentChartIndex">
+                                                    <DashboardLineChartComponent
+                                                        v-if="currentChart.component === 'DashboardLineChartComponent'"
+                                                        :game-id="activeGameId"
+                                                        :start-date="dateRange[0]"
+                                                        :end-date="dateRange[1]"
+                                                        :is-exponential-scale="isExponentialScale"
+                                                        :user-id="activeUserId"
+                                                    />
+                                                    <DashboardHeatmapComponent
+                                                        v-else-if="currentChart.component === 'DashboardHeatmapComponent'"
+                                                    />
+                                                    <DashboardBarChartComponent
+                                                        v-else-if="currentChart.component === 'DashboardBarChartComponent'"
+                                                    />
+                                                </div>
+                                            </transition>
                                         </div>
-                                    </section>
-                                </div>
-
-                                <div class="space-y-8">
-                                    <section>
-                                        <div class="w-full">
-                                            <DashboardHeatmapComponent 
-                                            />
-                                        </div>
-                                    </section>
-                                </div>
-
-                                <div class="space-y-8">
-                                    <section>
-                                        <DashboardBarChartComponent />
                                     </section>
                                 </div>
 
@@ -580,7 +639,7 @@ onUnmounted(() => {
                 </div>
             </section>
 
-            <section id="game-details" class="mb-16">
+            <section id="game-details" class="mt-16">
                 <h2 class="text-3xl font-bold text-blue-600 mb-4 text-center">Game Details</h2>
                 <DashboardGameDetails />
             </section>
