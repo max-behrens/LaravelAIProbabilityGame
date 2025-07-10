@@ -10,7 +10,7 @@ import axios from 'axios';
 import ApexCharts from 'apexcharts';
 
 const props = defineProps({
-  gameId: {
+  gameTypeId: {
     type: [String, Number],
     default: null
   },
@@ -32,17 +32,51 @@ const props = defineProps({
   },
   userId: {
     type: [String, Number],
-    default: null // Prop to receive the selected user ID
+    default: null
   }
 });
+
+// Add emit for date filter changes
+const emit = defineEmits(['update-date-filter']);
 
 const chartContainer = ref(null);
 let chart = null;
 let currentData = ref([]);
+let rawData = ref([]); // Store the raw data for grouping detection
 
+// Player colors for series lines
 const playerColors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#D946EF', '#6B7280', '#F43F5E', '#A855F7'];
 
+// Local variable to hold the current scale mode for tooltip closure use
+let isExpScale = false;
+
+// Function to detect if multiple points are grouped together
+const detectGroupedPoints = (seriesData, pointTimestamp, tolerance = 300000) => { // 5 minutes tolerance
+  const allPoints = [];
+  
+  seriesData.forEach((series, seriesIndex) => {
+    series.data.forEach((point, pointIndex) => {
+      if (Math.abs(point.x - pointTimestamp) <= tolerance) {
+        allPoints.push({
+          seriesIndex,
+          pointIndex,
+          playerName: series.name,
+          ...point
+        });
+      }
+    });
+  });
+  
+  return allPoints;
+};
+
+
 const getChartOptions = (seriesData, isExponentialScale) => {
+  // Update local flag for tooltip closure
+  isExpScale = isExponentialScale;
+  // Store raw data for grouping detection
+  rawData.value = seriesData;
+
   const yaxisConfig = {
     labels: {
       style: {
@@ -114,9 +148,11 @@ const getChartOptions = (seriesData, isExponentialScale) => {
       style: { fontSize: '12px' },
       x: { show: false },
       custom: function({ series, seriesIndex, dataPointIndex, w }) {
-        const value = series[seriesIndex][dataPointIndex];
+        const point = w.config.series[seriesIndex].data[dataPointIndex];
         const playerName = w.globals.seriesNames[seriesIndex];
-        const timestamp = w.globals.seriesX[seriesIndex][dataPointIndex];
+        const value = point.y;
+        const gameName = point.meta?.game_name || 'Unknown Game';
+        const timestamp = point.x;
         const date = new Date(timestamp).toLocaleString('en-US', {
           month: 'short',
           day: 'numeric',
@@ -125,11 +161,57 @@ const getChartOptions = (seriesData, isExponentialScale) => {
           minute: '2-digit'
         });
 
+        // Detect grouped points
+        const groupedPoints = detectGroupedPoints(rawData.value, timestamp);
+        const hasGroupedPoints = groupedPoints.length > 1;
+
+        let rateChange = '';
+        if (isExpScale && dataPointIndex > 0) {
+          const prevValue = w.config.series[seriesIndex].data[dataPointIndex - 1].y;
+          const change = prevValue === 0 ? 0 : ((value - prevValue) / prevValue) * 100;
+          const triangle = change >= 0 ? '▲' : '▼';
+          const colorClass = change >= 0 ? 'text-blue-400' : 'text-red-400';
+
+          rateChange = `
+            <div class="${colorClass} text-xs italic flex items-center gap-1">
+              <span>${triangle}</span>
+              <span>${Math.abs(change).toFixed(2)}%</span>
+            </div>`;
+        }
+
+        const isDateFilterActive = props.startDate !== null || props.endDate !== null;
+
+        // Add grouped points notification
+        let groupedPointsInfo = '';
+        if (hasGroupedPoints && !isDateFilterActive) {
+          const pointDate = new Date(timestamp);
+          const dateStr = pointDate.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          });
+          
+          groupedPointsInfo = `
+            <div class="mt-2 pt-2 border-t border-gray-600">
+              <div class="text-yellow-400 text-xs">
+                ⚠️ ${groupedPoints.length} scores recorded around this time
+              </div>
+              <div class="mt-1">
+                <a class="text-blue-400 text-xs">
+                  Zoom to ${dateStr} to see all points
+                </a>
+              </div>
+            </div>`;
+        }
+
         return `
           <div class="bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-600">
             <div class="text-white font-semibold">${playerName}</div>
+            <div class="text-white text-sm">${gameName}</div>
             <div class="text-white text-sm">${date}</div>
             <div class="text-white font-medium">${value} points</div>
+            ${rateChange}
+            ${groupedPointsInfo}
           </div>
         `;
       }
@@ -191,6 +273,7 @@ const getChartOptions = (seriesData, isExponentialScale) => {
 };
 
 const initializeChart = (seriesData, isExponentialScale) => {
+  console.log('seriesData: ' + JSON.stringify(seriesData));
   const options = getChartOptions(seriesData, isExponentialScale);
   chart = new ApexCharts(chartContainer.value, options);
   chart.render();
@@ -201,18 +284,18 @@ const updateChart = (seriesData, isExponentialScale) => {
 
   chart.updateOptions({
     yaxis: options.yaxis
-  }, false); // No full animation
+  }, false);
 
-  chart.updateSeries(seriesData, true); // Animate series only
+  chart.updateSeries(seriesData, true);
 };
 
-const fetchCumulativeLineGraphScores = async (gameId = null, startDate = null, endDate = null, userId = null) => {
+const fetchCumulativeLineGraphScores = async (gameTypeId = null, startDate = null, endDate = null, userId = null) => {
   try {
     const params = {};
-    if (gameId !== null) params.game_id = gameId;
+    if (gameTypeId !== null) params.game_type_id = gameTypeId;
     if (startDate) params.start_date = startDate.toISOString().split('T')[0];
     if (endDate) params.end_date = endDate.toISOString().split('T')[0];
-    if (userId !== null) params.user_id = userId; // Pass user ID to the backend
+    if (userId !== null) params.user_id = userId;
 
     const response = await axios.get(`/dashboard/cumulative-linegraph`, { params });
     return response.data;
@@ -225,10 +308,10 @@ const fetchCumulativeLineGraphScores = async (gameId = null, startDate = null, e
 const initOrUpdateChart = async () => {
   try {
     const seriesData = await fetchCumulativeLineGraphScores(
-      props.gameId,
+      props.gameTypeId,
       props.startDate,
       props.endDate,
-      props.userId // Pass the userId prop
+      props.userId
     );
     currentData.value = seriesData;
 
@@ -260,7 +343,7 @@ onUnmounted(() => {
 });
 
 watch(
-  [() => props.gameId, () => props.startDate, () => props.endDate, () => props.userId], // Watch userId prop
+  [() => props.gameTypeId, () => props.startDate, () => props.endDate, () => props.userId],
   () => {
     initOrUpdateChart();
   },

@@ -67,7 +67,7 @@ onUnmounted(() => {
     <!-- Content -->
     <div class="text-center z-10 px-6">
       <transition name="fade" appear mode="out-in">
-        <div :key="currentSlide" class="max-w-4xl mx-auto">
+        <div :key="currentSlide" class="max-w-4xl mx-auto fade-sides-bg rounded-lg p-4">
           <h1 class="text-5xl md:text-7xl font-bold mb-6 !text-white" style="font-size: 20pt !important;">
             {{ slides[currentSlide].title }}
           </h1>
@@ -170,4 +170,14 @@ onUnmounted(() => {
 .animate-bounce {
   animation: bounce 2s infinite;
 }
+
+.fade-sides-bg {
+  background: linear-gradient(to right, 
+    transparent 0%, 
+    rgba(0, 0, 0, 0.5) 10%, 
+    rgba(0, 0, 0, 0.5) 90%, 
+    transparent 100%
+  );
+}
+
 </style>

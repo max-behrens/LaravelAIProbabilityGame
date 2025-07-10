@@ -250,19 +250,27 @@ class GamesService
     /**
      * Methods to retrieve cumulative scores for each player across all games to the dashboard.
      */
-    public function getCumulativeLineGraphData(?int $gameId = null, ?string $startDate = null, ?string $endDate = null, ?int $userId = null)
+    public function getCumulativeLineGraphData(?int $gameTypeId = null, ?string $startDate = null, ?string $endDate = null, ?int $userId = null)
     {
-        // Now you directly use the passed arguments
-        // $gameId, $startDate, $endDate, $userId are already available
-
         $query = GameScore::query()
-            ->select('game_scores.created_at', 'game_scores.player_id', 'game_scores.score', 'users.name as player_name')
+            ->select(
+                'game_scores.created_at',
+                'game_scores.player_id',
+                'game_scores.score',
+                'users.name as player_name',
+                'games.id as game_id',
+                'game_types.id as game_type_id',
+                'game_types.name as game_name'
+            )
             ->join('users', 'game_scores.player_id', '=', 'users.id')
+            ->join('games', 'game_scores.game_id', '=', 'games.id')
+            ->join('game_types', 'games.game_type_id', '=', 'game_types.id')
             ->orderBy('users.name')
             ->orderBy('game_scores.created_at');
 
-        if ($gameId !== null) {
-            $query->where('game_id', $gameId);
+        // Filter by game type instead of individual game
+        if ($gameTypeId !== null) {
+            $query->where('games.game_type_id', $gameTypeId);
         }
 
         if ($startDate) {
@@ -295,7 +303,10 @@ class GamesService
 
             $playerData[$playerId]['scores'][] = [
                 'date' => $row->created_at,
-                'score' => $row->score
+                'score' => $row->score,
+                'game_id' => $row->game_id,
+                'game_type_id' => $row->game_type_id,
+                'game_name' => $row->game_name
             ];
         }
 
@@ -304,14 +315,20 @@ class GamesService
         }
 
         foreach ($playerData as $playerInfo) {
-            $cumulativeScore = 0;
             $seriesData = [];
 
             foreach ($playerInfo['scores'] as $scoreData) {
-                $cumulativeScore += $scoreData['score'];
                 $timestamp = Carbon::parse($scoreData['date'])->timestamp * 1000;
 
-                $seriesData[] = [$timestamp, $cumulativeScore];
+                $seriesData[] = [
+                    'x' => $timestamp,
+                    'y' => $scoreData['score'],
+                    'meta' => [
+                        'game_id' => $scoreData['game_id'],
+                        'game_type_id' => $scoreData['game_type_id'],
+                        'game_name' => $scoreData['game_name']
+                    ]
+                ];
             }
 
             $series[] = [

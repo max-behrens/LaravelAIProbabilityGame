@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\GameScore;
 use App\Models\Games;
+use App\Models\GameType;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
@@ -14,14 +15,21 @@ class GameScoreSeeder extends Seeder
     public function run(): void
     {
         $users = User::inRandomOrder()->take(5)->get();
-        $games = Games::with('gameType.gameQuestions')->take(3)->get();
+        $gameTypes = GameType::with('games.gameQuestions')->get();
 
-        foreach ($games as $game) {
+        foreach ($gameTypes as $type) {
+            // Choose one game per type (you could randomize or take all if needed)
+            $game = $type->games->first();
+
+            // Skip if no game or no questions
+            if (!$game || $game->gameQuestions->isEmpty()) {
+                continue;
+            }
+
             $questions = $game->gameType->gameQuestions;
 
             foreach ($users as $user) {
-                // Random number of attempts for this user/game, from 1 to 3 (or 1 to 5, adjust as you want)
-                $attempts = rand(1, 3);
+                $attempts = 3; // Exactly 3 attempts per user per game
 
                 for ($attempt = 0; $attempt < $attempts; $attempt++) {
                     $answerJson = [];

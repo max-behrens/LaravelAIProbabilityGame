@@ -23,6 +23,11 @@ class GameType extends Model
         'name',
     ];
 
+    public function games()
+    {
+        return $this->hasMany(Games::class, 'game_type_id');
+    }
+
     public function gameQuestions()
     {
         return $this->hasMany(GameQuestion::class, 'game_type_id');

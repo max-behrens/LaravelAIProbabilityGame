@@ -77,19 +77,19 @@ class IndexController extends Controller
     public function getCumulativeLineGraph(Request $request)
     {
         // Extract parameters from the request
-        $gameId = $request->query('game_id');
+        $gameTypeId = $request->query('game_type_id'); // Changed from game_id
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
-        $userId = $request->query('user_id'); // Ensure this is retrieved
+        $userId = $request->query('user_id');
 
         Log::info('getCumulativeLineGraph called', [
-            'requested_game_id' => $gameId,
+            'requested_game_type_id' => $gameTypeId, // Updated logging
             'start_date' => $startDate,
             'end_date' => $endDate,
             'user_id' => $userId
         ]);
 
-        // Validate date formats if provided (good to keep this in the controller or a Form Request)
+        // Validate date formats if provided
         if ($startDate && !Carbon::canBeCreatedFromFormat($startDate, 'Y-m-d')) {
             Log::error('Invalid start date format', ['start_date' => $startDate]);
             return response()->json(['error' => 'Invalid start date format'], 400);
@@ -101,12 +101,12 @@ class IndexController extends Controller
         }
 
         try {
-            // PASS INDIVIDUAL PARAMETERS TO THE SERVICE METHOD
+            // Pass game_type_id instead of game_id
             $cumulativeScores = $this->gamesService->getCumulativeLineGraphData(
-                $gameId,
+                $gameTypeId, // Changed parameter name
                 $startDate,
                 $endDate,
-                $userId // Pass the user ID here
+                $userId
             );
 
             Log::info('Cumulative scores retrieved', [

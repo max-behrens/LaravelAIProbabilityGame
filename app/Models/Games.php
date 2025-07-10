@@ -77,5 +77,17 @@ class Games extends Model
         }
     }
 
+    public function gameQuestions()
+    {
+        return $this->hasManyThrough(
+            GameQuestion::class,
+            GameType::class,
+            'id',            // Foreign key on GameType table...
+            'game_type_id',   // Foreign key on GameQuestion table...
+            'game_type_id',   // Local key on Games table...
+            'id'             // Local key on GameType table...
+        );
+    }
+
 
 }

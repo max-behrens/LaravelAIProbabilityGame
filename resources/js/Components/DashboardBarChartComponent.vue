@@ -1,144 +1,190 @@
-
-
 <script setup>
-import { onMounted, ref, watch } from 'vue';
+import { ref, defineProps, onMounted, watch } from 'vue';
+import VueApexCharts from "vue3-apexcharts";
 import axios from 'axios';
-import { Chart } from 'chart.js/auto';
 
 const props = defineProps({
-  gameId: {
+  gameTypeId: { // Prop for filtering by game type
     type: [String, Number],
-    required: true,
+    default: null
   },
+  startDate: { // Prop for filtering by start date
+    type: [Date, null],
+    default: null
+  },
+  endDate: { // Prop for filtering by end date
+    type: [Date, null],
+    default: null
+  },
+  userId: { // Prop for filtering by user ID
+    type: [String, Number],
+    default: null
+  }
 });
 
-const chartCanvas = ref(null);
-let chartInstance = null;
+// Reactive state for chart series data
+const chartSeries = ref([]);
 
-const playersData = ref([]);
-const totalGameScore = ref(null);
-
-// Fetch player averages
-const fetchCumulativeBarChartScores = async () => {
+/**
+ * Fetches data for the bar chart from the backend API.
+ * This data represents the average score per game type, filtered by the provided props.
+ */
+const fetchBarChartData = async () => {
   try {
-    const response = await axios.get(`/api/games/${props.gameId}/score-trends`);
-    playersData.value = response.data.players;
-    totalGameScore.value = response.data.totalScore;
+    const params = {};
+    if (props.gameTypeId !== null) params.game_type_id = props.gameTypeId;
+    if (props.startDate) params.start_date = props.startDate.toISOString().split('T')[0];
+    if (props.endDate) params.end_date = props.endDate.toISOString().split('T')[0];
+    if (props.userId !== null) params.user_id = props.userId;
+
+    const response = await axios.get(`/dashboard/cumulative-bargraph`, { params });
+    chartSeries.value = response.data;
   } catch (error) {
-    console.error('Error fetching player averages:', error);
+    console.error('Error fetching bar chart data:', error);
+    chartSeries.value = []; // Clear data on error
   }
 };
 
-// Draw or update the chart
-const drawChart = () => {
-  if (!chartCanvas.value) return;
-
-  const ctx = chartCanvas.value.getContext('2d');
-
-  if (chartInstance) {
-    chartInstance.destroy();
-  }
-
-  chartInstance = new Chart(ctx, {
+// Chart options for the bar chart
+const chartOptions = ref({
+  chart: {
     type: 'bar',
-    data: {
-      labels: playersData.value.map(player => player.name),
-      datasets: [
-        {
-          label: 'Average Score',
-          data: playersData.value.map(player => player.average_score),
-          backgroundColor: playersData.value.map(() => 'rgba(54, 162, 235, 0.5)'),
-          borderColor: playersData.value.map(() => 'rgba(54, 162, 235, 1)'),
-          borderWidth: 1,
-        },
-      ],
+    height: 350,
+    foreColor: '#ccc', // Text color for labels, etc.
+    toolbar: {
+      show: false // Hide toolbar (zoom, pan, etc.)
     },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      layout: {
-        padding: {
-          bottom: 3
-        }
+  },
+  plotOptions: {
+    bar: {
+      horizontal: false, // Vertical bars
+      columnWidth: '55%', // Width of the bars
+      endingShape: 'rounded', // Rounded tops for bars
+      borderRadius: 6, // Border radius for bars
+    },
+  },
+  dataLabels: {
+    enabled: false // Hide data labels on bars
+  },
+  stroke: {
+    show: true,
+    width: 2,
+    colors: ['transparent'] // Transparent stroke
+  },
+  xaxis: {
+    type: 'category', // X-axis will be categories (game types)
+    labels: {
+      style: {
+        colors: '#9CA3AF', // Color for X-axis labels
+        fontSize: '12px',
       },
-      scales: {
-        y: {
-          beginAtZero: true,
-          min: 0,
-          grace: '10%',
-          ticks: { stepSize: 1, color: '#758096', padding: 5 },
-          grid: { color: 'rgba(54, 162, 235, 0.15)' }
-        },
-        x: {
-          ticks: { color: '#758096', padding: 10, },
-          grid: { color: 'rgba(54, 162, 235, 0.15)' }
-        }
-      },
-      plugins: {
-        legend: {
-          labels: { color: '#758096' }
-        },
-        tooltip: {
-          callbacks: {
-            label: function (context) {
-              const player = playersData.value[context.dataIndex];
-              const avg = player.average_score !== undefined && player.average_score !== null
-                ? Number(player.average_score).toFixed(2)
-                : 'N/A';
-              const total = player.total_score ?? 'N/A';
-
-              return [
-                `Average Score: ${avg}`,
-                '',
-                `Max Game Score: ${totalGameScore.value ?? 'N/A'}`
-              ];
-            }
-          }
-        }
+    },
+    axisBorder: {
+      show: false // Hide X-axis border
+    },
+    axisTicks: {
+      show: false // Hide X-axis ticks
+    }
+  },
+  yaxis: {
+    title: {
+      text: 'Average Score', // Y-axis title
+      style: {
+        color: '#9CA3AF',
+        fontSize: '14px',
       }
     },
-  });
-};
+    labels: {
+      formatter: function (val) {
+        return val.toFixed(0) + ' pts'; // Format Y-axis labels to show 'pts'
+      },
+      style: {
+        colors: '#9CA3AF', // Color for Y-axis labels
+        fontSize: '12px',
+      },
+    },
+  },
+  fill: {
+    opacity: 1 // Full opacity for bars
+  },
+  tooltip: {
+    theme: 'dark', // Dark tooltip theme
+    y: {
+      formatter: function (val) {
+        return val.toFixed(2) + ' points'; // Format tooltip value
+      }
+    }
+  },
+  grid: {
+    show: true,
+    borderColor: '#374151', // Grid line color
+    strokeDashArray: 3, // Dashed grid lines
+    xaxis: {
+      lines: {
+        show: false // Hide vertical grid lines
+      }
+    },
+    yaxis: {
+      lines: {
+        show: true // Show horizontal grid lines
+      }
+    },
+    padding: {
+      top: 10,
+      right: 20,
+      bottom: 10,
+      left: 20
+    }
+  },
+  colors: ['#10B981'], // Bar color (a nice green)
+});
 
-// Watch for gameId changes
+// Watch for changes in filter props and refetch data
 watch(
-  () => props.gameId,
+  [() => props.gameTypeId, () => props.startDate, () => props.endDate, () => props.userId],
   async () => {
-    await fetchCumulativeBarChartScores();
-    drawChart();
+    await fetchBarChartData();
   }
 );
 
-// Initial chart render
+// Initial data fetch on component mount
 onMounted(async () => {
-  await fetchCumulativeBarChartScores();
-  drawChart();
+  await fetchBarChartData();
 });
 
-// Expose method to refresh chart externally
+// Expose method to refresh bar chart externally if needed
 defineExpose({
-  refreshChart: async () => {
-    await fetchCumulativeBarChartScores();
-    drawChart();
+  refreshBarChart: async () => {
+    await fetchBarChartData();
   },
 });
 </script>
 
-
 <template>
-  <div class="p-4 bg-gray-800 rounded shadow flex flex-col">
-    <h3 class="font-semibold text-lg mb-2">Score Trends</h3>
-    <div class="flex-1 flex items-center justify-center">
-      <div v-if="playersData.length === 0" class="text-center text-gray-400">
-        No player data available.
-      </div>
-      <canvas
-        v-else
-        ref="chartCanvas"
-        class="w-full h-full"
-        role="img"
-        aria-label="Bar chart showing average player scores"
+  <div class="p-4 h-full bg-gray-800 rounded shadow flex flex-col">
+    <h3 class="font-semibold text-lg mb-2 self-start">Average Score Per Game Type</h3>
+    <div class="flex-1 min-h-0 w-full chart-container">
+      <!-- Only render chart if there's data -->
+      <VueApexCharts
+        v-if="chartSeries.length > 0 && chartSeries[0].data.length > 0"
+        type="bar"
+        width="100%"
+        height="100%"
+        :options="chartOptions"
+        :series="chartSeries"
       />
+      <!-- Show message when no data -->
+      <div v-else class="flex items-center justify-center h-full text-gray-400">
+        No average score data available for the selected filters.
+      </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Ensure chart container respects its min-height */
+.chart-container :deep(.apexcharts-canvas) {
+  min-height: 229px !important;
+}
+</style>
+

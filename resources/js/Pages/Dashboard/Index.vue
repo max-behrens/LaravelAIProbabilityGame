@@ -225,39 +225,46 @@ const filteredUsers = computed(() => {
   });
 });
 
-watch([activeGameId, dateRange, isExponentialScale, activeUserId], ([newGameId, newDateRange, newIsExponentialScale, newUserId]) => {
-  const params = {};
-  if (newGameId !== null) {
-    params.game_id = newGameId;
-  }
-  if (newDateRange && newDateRange[0] && newDateRange[1]) {
-    const startDate = newDateRange[0] instanceof Date ? newDateRange[0] : new Date(newDateRange[0]);
-    const endDate = newDateRange[1] instanceof Date ? newDateRange[1] : new Date(newDateRange[1]);
-    
-    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
-      params.start_date = startDate.toISOString().split('T')[0];
-      params.end_date = endDate.toISOString().split('T')[0];
-    }
-  } else {
-    delete params.start_date;
-    delete params.end_date;
-  }
+watch(
+  [activeGameId, dateRange, isExponentialScale, activeUserId],
+  ([newGameId, newDateRange, newIsExponentialScale, newUserId]) => {
+    const params = new URLSearchParams();
 
-  if (newIsExponentialScale) {
-    params.exponential_scale = 'true';
-  } else {
-    if (page.props.current_exponential_scale === 'true') {
-      params.exponential_scale = 'false';
-    } else {
-      delete params.exponential_scale;
+    if (newGameId !== null) {
+      params.set('game_id', newGameId);
     }
-  }
-  if (newUserId !== null) {
-    params.user_id = newUserId;
-  } else {
-    delete params.user_id;
-  }
-}, { immediate: false });
+
+    if (newDateRange && newDateRange[0] && newDateRange[1]) {
+      const startDate = newDateRange[0] instanceof Date ? newDateRange[0] : new Date(newDateRange[0]);
+      const endDate = newDateRange[1] instanceof Date ? newDateRange[1] : new Date(newDateRange[1]);
+
+      if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+        params.set('start_date', startDate.toISOString().split('T')[0]);
+        params.set('end_date', endDate.toISOString().split('T')[0]);
+      }
+    }
+
+    if (newIsExponentialScale) {
+      params.set('exponential_scale', 'true');
+    }
+
+    if (newUserId !== null) {
+      params.set('user_id', newUserId);
+    }
+
+    // Construct new URL with updated query string
+    const newRelativePathQuery = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
+
+    // Use pushState to update the URL without reloading the page
+    window.history.pushState(null, '', newRelativePathQuery);
+  },
+  { immediate: false }
+);
+
+watch(currentSection, (newVal) => {
+  showNav.value = newVal !== 0;
+});
+
 
 const slides = [
   {
@@ -278,9 +285,6 @@ const slides = [
   }
 ];
 
-watch(currentSection, (newVal) => {
-  showNav.value = newVal !== 0;
-});
 
 const mobileMenuOpen = ref(false);
 const currentSlide = ref(0);
@@ -550,7 +554,7 @@ onUnmounted(() => {
                                               :class="[
                                                   'w-full flex items-center justify-center space-x-3 p-4 rounded-lg shadow-md text-white cursor-pointer',
                                                   'transition-all duration-300 ease-in-out',
-                                                  'bg-gray-600 hover:bg-gray-700', // A neutral color for the toggle button
+                                                  'bg-gray-600/50 hover:bg-gray-700', // A neutral color for the toggle button
                                                   showAdvancedFilters ? 'bg-gray-700' : '' // Slightly darker when open
                                               ]"
                                           >
@@ -574,14 +578,14 @@ onUnmounted(() => {
                                                               type="text"
                                                               v-model="userSearchTerm"
                                                               placeholder="Search users..."
-                                                              class="w-full p-2 rounded-md bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                                              class="w-full p-2 rounded-md bg-gray-700 text-white placeholder-gray-400 mt-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
                                                           />
-                                                          <div class="max-h-48 overflow-y-auto custom-scrollbar border border-gray-700 rounded-md">
+                                                          <div class="max-h-48 overflow-y-auto custom-scrollbar rounded-md">
                                                               <button
                                                                   v-for="user in filteredUsers"
                                                                   :key="user.id"
                                                                   :class="[
-                                                                      'flex items-center space-x-2 px-3 py-1.5 rounded-md text-white cursor-pointer w-full text-left',
+                                                                      'flex items-center space-x-2 px-3 py-1.5 rounded-md mt-2 text-white cursor-pointer w-full text-left',
                                                                       'transition-all duration-100 ease-in-out',
                                                                       userFilterColor,
                                                                       activeUserId === user.id ? 'bg-teal-700 ring-1 ring-teal-400' : ''
@@ -615,7 +619,7 @@ onUnmounted(() => {
                                                 <div :key="currentChartIndex">
                                                     <DashboardLineChartComponent
                                                         v-if="currentChart.component === 'DashboardLineChartComponent'"
-                                                        :game-id="activeGameId"
+                                                        :game-type-id="activeGameId"
                                                         :start-date="dateRange[0]"
                                                         :end-date="dateRange[1]"
                                                         :is-exponential-scale="isExponentialScale"
