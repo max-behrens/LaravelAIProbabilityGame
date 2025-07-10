@@ -1,0 +1,527 @@
+<script setup>
+
+
+
+import { ChartBarIcon, PuzzleIcon, Gamepad2Icon, ClockIcon, TrendingUpIcon, EyeIcon, CalendarDaysIcon, ScalingIcon, UserIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-vue-next';
+import DashboardHeatmapComponent from '@/Components/DashboardHeatmapComponent.vue';
+import DashboardBarChartComponent from '@/Components/DashboardBarChartComponent.vue';
+import DashboardLineChartComponent from '@/Components/DashboardLineChartComponent.vue';
+import { Head, router, usePage } from '@inertiajs/inertia-vue3';
+import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import Datepicker from '@vuepic/vue-datepicker';
+
+
+const page = usePage();
+const initialGameId = page.props.current_game_id || null;
+const initialStartDate = page.props.current_start_date ? new Date(page.props.current_start_date) : null;
+const initialEndDate = page.props.current_end_date ? new Date(page.props.current_end_date) : null;
+const initialExponentialScale = page.props.current_exponential_scale === 'true';
+const initialUserId = page.props.current_user_id || null;
+const showAdvancedFilters = ref(false);
+
+// Chart navigation state
+const currentChartIndex = ref(0);
+const chartConfigs = [
+  {
+    title: 'Performance Over Time',
+    description: 'Track your game performance and progress',
+    component: 'DashboardLineChartComponent'
+  },
+  {
+    title: 'Activity Heatmap',
+    description: 'View your gaming activity patterns and frequency',
+    component: 'DashboardHeatmapComponent'
+  },
+  {
+    title: 'Score Distribution',
+    description: 'Analyze your score distribution and performance metrics',
+    component: 'DashboardBarChartComponent'
+  }
+];
+
+
+// Computed properties for current chart
+const currentChart = computed(() => chartConfigs[currentChartIndex.value]);
+
+// Chart navigation functions
+const previousChart = () => {
+  currentChartIndex.value = currentChartIndex.value === 0 
+    ? chartConfigs.length - 1 
+    : currentChartIndex.value - 1;
+};
+
+const nextChart = () => {
+  currentChartIndex.value = (currentChartIndex.value + 1) % chartConfigs.length;
+};
+
+// Filter States
+const activeGameId = ref(initialGameId);
+const showDateModal = ref(false);
+
+// Keep dateRange as originally intended: empty if no URL params
+const dateRange = ref([initialStartDate, initialEndDate]);
+
+// **NEW:** Computed property for the Datepicker's v-model
+// This ensures the datepicker opens to today if dateRange is currently null/empty
+const datepickerModel = computed({
+    get() {
+        // If dateRange is [null, null], provide today's date for the datepicker modal to open on.
+        // Otherwise, return the actual dateRange values.
+        if (!dateRange.value[0] && !dateRange.value[1]) {
+            return [new Date(), new Date()];
+        }
+        return dateRange.value;
+    },
+    set(newValue) {
+        // When the datepicker updates its model, we update the actual dateRange ref.
+        // This setter ensures the link back to dateRange is maintained.
+        // The handleDateSelection will then perform the validation and actual assignment.
+        handleDateSelection(newValue);
+    }
+});
+
+
+onMounted(async () => {
+  
+  // Fetch users on mount
+  await fetchUsers();
+
+});
+
+const isExponentialScale = ref(initialExponentialScale);
+
+// User Filter States
+const activeUserId = ref(initialUserId);
+const userSearchTerm = ref('');
+const allUsers = ref([]);
+const userFilterColor = 'bg-teal-600/50';
+
+// Map selectedGame index to actual game IDs and names
+const gameFilters = [
+  { id: 1, name: 'Object Detection Game' },
+  { id: 2, name: 'Game of Lies' }
+];
+
+const gameIcons = [PuzzleIcon, Gamepad2Icon, ChartBarIcon];
+const performanceIcons = [ClockIcon, TrendingUpIcon, EyeIcon];
+const UserIcons = [UserIcon, UserIcon, UserIcon];
+
+// Adjusted colors for better active state visibility
+const optionColors = ['bg-yellow-600/50', 'bg-blue-600/50'];
+const dateFilterColor = 'bg-orange-600/50';
+const performanceFilterColor = 'bg-purple-600/50';
+
+// Computed property for the dynamic game filter title
+const gameFilterTitle = computed(() => {
+  if (activeGameId.value === null) {
+    return 'Game Filter - All Games';
+  }
+  const selectedFilter = gameFilters.find(filter => filter.id === activeGameId.value);
+  return selectedFilter ? `Game Filter - ${selectedFilter.name}` : 'Game Filter';
+});
+
+// Computed property for the dynamic date filter title
+const dateFilterTitle = computed(() => {
+  if (!dateRange.value || !dateRange.value[0] || !dateRange.value[1]) {
+    return 'All Time';
+  }
+  const start = dateRange.value[0].toLocaleDateString('en-GB');
+  const end = dateRange.value[1].toLocaleDateString('en-GB');
+  return `${start} - ${end}`;
+});
+
+// Computed property for the dynamic user filter title
+const userFilterTitle = computed(() => {
+  if (activeUserId.value === null) {
+    return 'User Filter - All Users';
+  }
+  const selectedUser = allUsers.value.find(user => user.id === activeUserId.value);
+  return selectedUser ? `User Filter - ${selectedUser.name}` : 'User Filter';
+});
+
+// --- Filter Action Functions ---
+
+// Function to handle game filter button click
+const selectGameFilter = (gameId) => {
+  if (activeGameId.value === gameId) {
+    activeGameId.value = null; // Deselect
+  } else {
+    activeGameId.value = gameId; // Select
+  }
+};
+
+// Function to handle user filter button click
+const selectUserFilter = (userId) => {
+  if (activeUserId.value === userId) {
+    activeUserId.value = null; // Deselect
+  } else {
+    activeUserId.value = userId; // Select
+  }
+};
+
+// Function to toggle exponential scale
+const toggleExponentialScale = () => {
+  isExponentialScale.value = !isExponentialScale.value;
+};
+
+// Function to clear date filter
+const clearDateFilter = () => {
+  dateRange.value = [null, null]; // This truly clears the filter
+  showDateModal.value = false;
+};
+
+const handleDateSelection = (modelData) => {
+  if (modelData && Array.isArray(modelData) && modelData.length === 2) {
+    const startDate = modelData[0] instanceof Date ? modelData[0] : new Date(modelData[0]);
+    const endDate = modelData[1] instanceof Date ? modelData[1] : new Date(modelData[1]);
+    
+    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+      dateRange.value = [startDate, endDate];
+    } else {
+      console.error('Invalid date selection:', modelData);
+      dateRange.value = [null, null]; // Set to nulls if invalid selection
+    }
+  } else {
+    dateRange.value = [null, null];
+  }
+  showDateModal.value = false;
+};
+
+const fetchUsers = async () => {
+  try {
+    const response = await axios.get(`/dashboard/users`);
+    if (response.data && Array.isArray(response.data)) {
+      allUsers.value = response.data;
+    } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+      allUsers.value = response.data.data;
+    } else {
+      console.error('Unexpected user data structure:', response.data);
+      allUsers.value = [];
+    }
+  } catch (error) {
+    console.error('Failed to fetch users:', error);
+    allUsers.value = [];
+  }
+};
+
+const filteredUsers = computed(() => {
+  if (!allUsers.value || !Array.isArray(allUsers.value)) {
+    return [];
+  }
+  
+  if (!userSearchTerm.value || !userSearchTerm.value.trim()) {
+    return allUsers.value;
+  }
+  
+  const lowerCaseSearchTerm = userSearchTerm.value.toLowerCase().trim();
+  return allUsers.value.filter(user => {
+    if (!user) return false;
+    
+    const nameMatch = user.name && user.name.toLowerCase().includes(lowerCaseSearchTerm);
+    const emailMatch = user.email && user.email.toLowerCase().includes(lowerCaseSearchTerm);
+    
+    return nameMatch || emailMatch;
+  });
+});
+
+watch(
+  [activeGameId, dateRange, isExponentialScale, activeUserId],
+  ([newGameId, newDateRange, newIsExponentialScale, newUserId]) => {
+    const params = new URLSearchParams();
+
+    if (newGameId !== null) {
+      params.set('game_id', newGameId);
+    }
+
+    if (newDateRange && newDateRange[0] && newDateRange[1]) {
+      const startDate = newDateRange[0] instanceof Date ? newDateRange[0] : new Date(newDateRange[0]);
+      const endDate = newDateRange[1] instanceof Date ? newDateRange[1] : new Date(newDateRange[1]);
+
+      if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+        params.set('start_date', startDate.toISOString().split('T')[0]);
+        params.set('end_date', endDate.toISOString().split('T')[0]);
+      }
+    }
+
+    if (newIsExponentialScale) {
+      params.set('exponential_scale', 'true');
+    }
+
+    if (newUserId !== null) {
+      params.set('user_id', newUserId);
+    }
+
+    // Construct new URL with updated query string
+    const newRelativePathQuery = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
+
+    // Use pushState to update the URL without reloading the page
+    window.history.pushState(null, '', newRelativePathQuery);
+  },
+  { immediate: false }
+);
+
+</script>
+
+
+<template>
+    <section class="py-10 bg-gray-800 rounded-lg">
+
+                <div class="container mx-auto px-6">
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+                        <div class="lg:col-span-3">
+
+                              <div class="mb-4 flex items-center justify-center">
+                                <!-- Left Arrow -->
+                                <button 
+                                    @click="previousChart"
+                                    class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-colors mr-4"
+                                >
+                                    <ChevronLeftIcon class="w-5 h-5" />
+                                </button>
+                                
+                                <!-- Title and Description -->
+                                <div class="text-center">
+                                    <h3 class="text-xl font-bold text-white mb-2">{{ currentChart.title }}</h3>
+                                    <p class="text-white text-xl">{{ currentChart.description }}</p>
+                                </div>
+                                
+                                <!-- Right Arrow -->
+                                <button 
+                                    @click="nextChart"
+                                    class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-colors ml-4"
+                                >
+                                    <ChevronRightIcon class="w-5 h-5" />
+                                </button>
+                              </div>
+
+                              <!-- Chart Indicator Dots -->
+                              <div class="flex justify-center space-x-2 mb-6">
+                                <button
+                                    v-for="(chart, index) in chartConfigs"
+                                    :key="index"
+                                    @click="currentChartIndex = index"
+                                    :class="[
+                                        'w-3 h-3 rounded-full transition-all duration-300',
+                                        index === currentChartIndex ? 'bg-blue-500' : 'bg-gray-600 hover:bg-gray-500'
+                                    ]"
+                                ></button>
+                              </div>
+                            
+                            <div class="space-y-6">
+
+                            <div class="grid grid-cols-2 md:grid-cols-2 gap-8 ml-6 mr-6">
+
+                                  <div>
+                                    <div class="bg-gray-800 p-6 rounded-lg mb-4">
+                                          <h4 class="text-white font-semibold text-lg mb-4 text-center">{{ gameFilterTitle }}</h4>
+                                          <div class="flex flex-col space-y-4">
+                                            <button
+                                                v-for="(filter, index) in gameFilters"
+                                                :key="filter.id"
+                                                :class="[
+                                                    'flex items-center space-x-3 p-4 rounded-lg shadow-md text-white cursor-pointer',
+                                                    'transition-all duration-300 ease-in-out',
+                                                    optionColors[index] + ' hover:brightness-90',
+                                                    activeGameId === filter.id ? 'bg-blue-700 ring-2 ring-blue-400' : ''
+                                                ]"
+                                                @click="selectGameFilter(filter.id)"
+                                            >
+                                                <span class="text-2xl transition-opacity duration-300 ease-in-out">
+                                                    <component :is="gameIcons[index]" />
+                                                </span>
+                                                <span class="font-medium transition-opacity duration-300 ease-in-out">{{ filter.name }}</span>
+                                            </button>
+                                          </div>
+                                      </div>
+                                     
+                                    </div>
+
+                                    <div class="row flex gap-4 items-start">
+
+                                      <div class="bg-gray-800 p-6 rounded-lg flex flex-col justify-between">
+                                          <div>
+                                              <h4 class="text-white font-semibold text-lg mb-4 text-center">Date Picker</h4>
+                                              <button
+                                                  @click="showDateModal = true"
+                                                  :class="[
+                                                      'flex items-center space-x-3 p-4 rounded-lg shadow-md text-white cursor-pointer h-full',
+                                                      'transition-all duration-300 ease-in-out',
+                                                      dateFilterColor + ' hover:brightness-90',
+                                                      (dateRange[0] && dateRange[1]) ? 'bg-orange-700 ring-2 ring-orange-400' : ''
+                                                  ]"
+                                              >
+                                                  <span class="text-2xl transition-opacity duration-300 ease-in-out">
+                                                      <CalendarDaysIcon />
+                                                  </span>
+                                                  <span class="font-medium transition-opacity duration-300 ease-in-out">{{ dateFilterTitle }}</span>
+                                              </button>
+                                          </div>
+                                      </div>
+
+                                      <div class="bg-gray-800 p-6 rounded-lg flex flex-col justify-between">
+                                          <div>
+                                              <h4 class="text-white font-semibold text-lg mb-4 text-center">Performance</h4>
+                                              <button
+                                                  @click="toggleExponentialScale"
+                                                  :class="[
+                                                      'flex items-center space-x-3 p-4 rounded-lg shadow-md text-white cursor-pointer h-full',
+                                                      'transition-all duration-300 ease-in-out',
+                                                      performanceFilterColor + ' hover:brightness-90',
+                                                      isExponentialScale ? 'bg-purple-700 ring-2 ring-purple-400' : ''
+                                                  ]"
+                                              >
+                                                  <span class="text-2xl transition-opacity duration-300 ease-in-out">
+                                                      <ScalingIcon />
+                                                  </span>
+                                                  <span class="font-medium transition-opacity duration-300 ease-in-out">
+                                                      {{ isExponentialScale ? 'Exponential Scale ON' : 'Exponential Scale OFF' }}
+                                                  </span>
+                                              </button>
+                                          </div>
+                                      </div>
+
+                                    </div>
+
+                                </div>
+
+                                <div class="grid grid-cols-2 md:grid-cols-2 gap-8 ml-6 mr-6">
+
+                                     <div class="bg-gray-800 px-6 rounded-lg">
+                                          <button
+                                              @click="showAdvancedFilters = !showAdvancedFilters"
+                                              :class="[
+                                                  'w-full flex items-center justify-center space-x-3 p-4 rounded-lg shadow-md text-white cursor-pointer',
+                                                  'transition-all duration-300 ease-in-out',
+                                                  'bg-gray-600/50 hover:bg-gray-700', // A neutral color for the toggle button
+                                                  showAdvancedFilters ? 'bg-gray-700' : '' // Slightly darker when open
+                                              ]"
+                                          >
+                                              <span class="text-2xl">
+                                                  <template v-if="showAdvancedFilters">
+                                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-up"><path d="m18 15-6-6-6 6"/></svg>
+                                                  </template>
+                                                  <template v-else>
+                                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>
+                                                  </template>
+                                              </span>
+                                              <span class="font-medium">
+                                                  {{ showAdvancedFilters ? 'Hide Advanced Filters' : 'Show Advanced Filters' }}
+                                              </span>
+                                          </button>
+
+                                          <transition name="fade-slide-y">
+                                              <div v-if="showAdvancedFilters" class="mt-4"> <div class="bg-gray-800 p-6 rounded-lg"> <h4 class="text-white font-semibold text-lg mb-4 text-center">{{ userFilterTitle }}</h4>
+                                                      <div class="flex flex-col space-y-2">
+                                                          <input
+                                                              type="text"
+                                                              v-model="userSearchTerm"
+                                                              placeholder="Search users..."
+                                                              class="w-full p-2 rounded-md bg-gray-700 text-white placeholder-gray-400 mt-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                                          />
+                                                          <div class="max-h-48 overflow-y-auto custom-scrollbar rounded-md">
+                                                              <button
+                                                                  v-for="user in filteredUsers"
+                                                                  :key="user.id"
+                                                                  :class="[
+                                                                      'flex items-center space-x-2 px-3 py-1.5 rounded-md mt-2 text-white cursor-pointer w-full text-left',
+                                                                      'transition-all duration-100 ease-in-out',
+                                                                      userFilterColor,
+                                                                      activeUserId === user.id ? 'bg-teal-700 ring-1 ring-teal-400' : ''
+                                                                  ]"
+                                                                  @click="selectUserFilter(user.id)"
+                                                              >
+                                                                  <span class="text-base">
+                                                                      <UserIcon />
+                                                                  </span>
+                                                                  <span class="font-normal text-sm">{{ user.name }}</span>
+                                                              </button>
+                                                              <p v-if="filteredUsers.length === 0 && userSearchTerm.trim()" class="text-gray-400 text-center text-sm py-2">
+                                                                  No users found matching "{{ userSearchTerm }}"
+                                                              </p>
+                                                              <p v-else-if="allUsers.length === 0" class="text-gray-400 text-center text-sm py-2">
+                                                                  Loading users...
+                                                              </p>
+                                                          </div>
+                                                      </div>
+                                                  </div>
+                                              </div>
+                                          </transition>
+                                        </div>
+                                  </div>
+
+                                <!-- Single Chart Container with Transition -->
+                                <div class="space-y-8 theme-bg-primary p-6 rounded-lg shadow-lg">
+                                    <section>
+                                        <div class="w-full">
+                                            <transition name="chart-fade" mode="out-in">
+                                                <div :key="currentChartIndex">
+                                                    <DashboardLineChartComponent
+                                                        v-if="currentChart.component === 'DashboardLineChartComponent'"
+                                                        :game-type-id="activeGameId"
+                                                        :start-date="dateRange[0]"
+                                                        :end-date="dateRange[1]"
+                                                        :is-exponential-scale="isExponentialScale"
+                                                        :user-id="activeUserId"
+                                                    />
+                                                    <DashboardHeatmapComponent
+                                                        v-else-if="currentChart.component === 'DashboardHeatmapComponent'"
+                                                    />
+                                                    <DashboardBarChartComponent
+                                                        v-else-if="currentChart.component === 'DashboardBarChartComponent'"
+                                                    />
+                                                </div>
+                                            </transition>
+                                        </div>
+                                    </section>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <div v-if="showDateModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div class="bg-gray-800 rounded-lg shadow-xl p-6 relative max-w-md w-full">
+                    <h3 class="text-xl font-semibold text-white mb-4">Select Date Range</h3>
+                    <button
+                        @click="showDateModal = false"
+                        class="absolute top-4 right-4 text-gray-400 hover:text-gray-200"
+                    >
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+
+                    <Datepicker
+                        v-model="datepickerModel" range
+                        :enable-time-picker="false"
+                        :dark="true"
+                        :teleport="true"
+                        placeholder="Select Date Range"
+                        :min-date="new Date('2024-01-01')"
+                        :max-date="new Date()"
+                        class="my-4"
+                        @update:model-value="handleDateSelection"
+                    ></Datepicker>
+
+                    <div class="flex justify-end space-x-2 mt-4">
+                        <button
+                            @click="clearDateFilter"
+                            class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md"
+                        >
+                            Clear
+                        </button>
+                        <button
+                            @click="showDateModal = false"
+                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+</template>
