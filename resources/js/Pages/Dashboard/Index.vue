@@ -3,7 +3,7 @@ import BreezeAuthenticatedLayout from '@/Layouts/Authenticated.vue';
 import { Head, router, usePage } from '@inertiajs/inertia-vue3';
 import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { ChartBarIcon, PuzzleIcon, Gamepad2Icon, ClockIcon, TrendingUpIcon, EyeIcon, CalendarDaysIcon, ScalingIcon, UserIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-vue-next';
-import HeroSection from '@/Components/HeroSection.vue';
+import DashboardHeroSection from '@/Components/DashboardHeroSection.vue';
 import DashboardGameDetails from '@/Components/DashboardGameDetails.vue';
 import DashboardAIDetails from '@/Components/DashboardAIDetails.vue';
 import DashboardHeatmapComponent from '@/Components/DashboardHeatmapComponent.vue';
@@ -384,7 +384,7 @@ onUnmounted(() => {
     <BreezeAuthenticatedLayout>
 
         <section id="main">
-            <HeroSection />
+            <DashboardHeroSection />
         </section>
 
           <transition name="fade">
