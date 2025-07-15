@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Services\Dashboard\GamesService;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
 class IndexController extends Controller
@@ -17,20 +18,28 @@ class IndexController extends Controller
 
     public function __invoke(Request $request)
     {
-        // Read game_id from the request query parameters for initial state
-        $requestedGameId = $request->query('game_id');
-        $startDate = $request->query('start_date');
-        $endDate = $request->query('end_date');
-        $exponentialScale = $request->query('exponential_scale'); // Read the new parameter
 
-        return Inertia::render('Dashboard/Index', [
-            'current_game_id' => $requestedGameId ? (int) $requestedGameId : null,
-            'current_start_date' => $startDate,
-            'current_end_date' => $endDate,
-            'current_exponential_scale' => $exponentialScale, // Pass to frontend
-            // ... potentially other props you pass to the dashboard
+
+
+        Log::debug('Authenticated user in DashboardController', [
+            'user' => $request->user(),
         ]);
-    }
+    
+        return Inertia::render('Dashboard/Index', [
+            'current_game_id' => $request->query('game_id'),
+            'current_start_date' => $request->query('start_date'),
+            'current_end_date' => $request->query('end_date'),
+            'current_exponential_scale' => $request->query('exponential_scale'),
+            // Remove this auth override - let HandleInertiaRequests middleware handle it
+            // 'auth' => [
+            //     'user' => $request->user() ? [
+            //         'id' => $request->user()->id,
+            //         'name' => $request->user()->name,
+            //         'email' => $request->user()->email,
+            //     ] : null,
+            // ],
+        ]);
+    }    
 
     public function __construct(GamesService $gamesService)
     {
@@ -76,6 +85,7 @@ class IndexController extends Controller
      */
     public function getCumulativeLineGraph(Request $request)
     {
+
         // Extract parameters from the request
         $gameTypeId = $request->query('game_type_id'); // Changed from game_id
         $startDate = $request->query('start_date');

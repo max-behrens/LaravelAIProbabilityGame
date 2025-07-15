@@ -1,17 +1,29 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue';
+import { Link } from '@inertiajs/inertia-vue3';
+import { Inertia } from '@inertiajs/inertia';
 import BreezeApplicationLogo from '@/Components/ApplicationLogo.vue';
 import BreezeWebsiteLogo from '@/Components/WebsiteLogo.vue';
 import BreezeDropdown from '@/Components/Dropdown.vue';
 import BreezeDropdownLink from '@/Components/DropdownLink.vue';
 import BreezeNavLink from '@/Components/NavLink.vue';
 import BreezeResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
-import { Link } from '@inertiajs/inertia-vue3';
+
 
 const showingNavigationDropdown = ref(false);
 const showLogoutModal = ref(false);
 const isDark = ref(false);
 const isScrolled = ref(false);
+
+const logout = () => {
+  showLogoutModal.value = false;
+  Inertia.post(route('logout'), {}, {
+    onSuccess: () => {
+      Inertia.visit(route('login'));
+    }
+  });
+};
+
 
 // Theme management
 const initializeTheme = () => {
@@ -51,7 +63,7 @@ const handleScroll = () => {
 
 onMounted(() => {
   initializeTheme();
-  
+
   // Add scroll listener
   window.addEventListener('scroll', handleScroll);
   
@@ -74,10 +86,10 @@ onBeforeUnmount(() => {
         :class="isScrolled ? 'bg-gray-700 backdrop-blur-md' : 'bg-gray-800'"
       >
         <!-- Primary Navigation Menu -->
-        <div class="main-width mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="main-width mx-auto px-4 lg:px-6 lg:px-8">
           <div class="flex justify-between items-center h-16">
             <!-- Logo -->
-            <div class="shrink-0 flex items-center w-48">
+            <div class="shrink-0 flex items-center mr-2">
               <Link :href="route('dashboard')">
                 <BreezeApplicationLogo class="block h-7 w-auto text-white" />
               </Link>
@@ -86,7 +98,7 @@ onBeforeUnmount(() => {
             </div>
             
             <!-- Navigation Links - Centered -->
-            <div class="hidden sm:flex absolute left-1/2 transform -translate-x-1/2">
+            <div class="hidden lg:flex absolute left-1/2 transform -translate-x-1/2">
               <div class="flex space-x-8 h-16 items-center">
                 <BreezeNavLink
                   :href="route('dashboard')"
@@ -133,30 +145,32 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <!-- User Section - Fixed width to balance logo -->
-            <div class="hidden sm:flex sm:items-center w-48 justify-end">
-              <!-- User Name button opens modal directly -->
-              <button
-                @click="showLogoutModal = true"
-                type="button"
-                class="inline-flex items-center px-3 py-2 border border-transparent text-xs leading-4 font-medium rounded-md text-gray-400 hover:text-gray-300 focus:outline-none"
-              >
-                {{ $page.props.auth.user.name }}
-
-                <svg
-                class="ml-2 -mr-0.5 h-4 w-4 text-gray-400"
+          <!-- User Section - Fixed width to balance logo -->
+          <div class="hidden lg:flex lg:items-center justify-end">
+            <!-- User Name Display -->
+            <div class="text-sm text-gray-300">
+              {{ $page.props.auth?.user?.name || 'Loading...' }}
+            </div>
+            
+            <!-- Settings button opens modal directly -->
+            <button
+              @click="showLogoutModal = true"
+              type="button"
+              class="inline-flex items-center px-3 py-2 border border-transparent text-xs leading-4 font-medium rounded-md text-gray-400 hover:text-gray-300 focus:outline-none"
+            >
+              <svg
+                class="h-4 w-4 text-gray-400"
                 xmlns="http://www.w3.org/2000/svg"
                 fill="currentColor"
                 viewBox="0 0 24 24"
-                >
+              >
                 <path d="M19.14 12.94a7.002 7.002 0 000-1.88l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.6-.22l-2.39.96a6.978 6.978 0 00-1.6-.94l-.36-2.54A.5.5 0 0014 3h-4a.5.5 0 00-.49.42l-.36 2.54a6.978 6.978 0 00-1.6.94l-2.39-.96a.5.5 0 00-.6.22l-1.92 3.32a.5.5 0 00.12.64l2.03 1.58a7.002 7.002 0 000 1.88l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32a.5.5 0 00.6.22l2.39-.96c.5.38 1.04.7 1.6.94l.36 2.54A.5.5 0 0010 21h4a.5.5 0 00.49-.42l.36-2.54c.56-.24 1.1-.56 1.6-.94l2.39.96a.5.5 0 00.6-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z" />
-                </svg>
-
-              </button>
-            </div>
+              </svg>
+            </button>
+          </div>
 
             <!-- Hamburger -->
-            <div class="-mr-2 flex items-center sm:hidden">
+            <div class="-mr-2 flex items-center lg:hidden">
               <button
                 @click="showingNavigationDropdown = !showingNavigationDropdown"
                 class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-700 focus:outline-none focus:bg-gray-700 focus:text-gray-500 transition duration-50 ease-in-out"
@@ -183,7 +197,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Responsive Navigation Menu -->
-        <div :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }" class="sm:hidden">
+        <div :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }" class="lg:hidden">
           <div class="pt-2 pb-3 space-y-1">
             <BreezeResponsiveNavLink
               :href="route('dashboard')"
@@ -232,8 +246,12 @@ onBeforeUnmount(() => {
           <!-- Responsive Settings Options -->
           <div class="pt-4 pb-1 border-t border-gray-700">
             <div class="px-4">
-              <div class="font-medium text-base text-gray-300">{{ $page.props.auth.user.name }}</div>
-              <div class="font-medium text-sm text-gray-400">{{ $page.props.auth.user.email }}</div>
+              <div class="font-medium text-base text-gray-300">
+                {{ $page.props.auth?.user?.name || 'Loading...' }}
+              </div>
+              <div class="font-medium text-sm text-gray-400">
+                {{ $page.props.auth?.user?.email || 'Loading...' }}
+              </div>
             </div>
 
             <div class="mt-3 space-y-1">
@@ -260,7 +278,7 @@ onBeforeUnmount(() => {
         </header> -->
 
         <!-- Main content area - this will grow to fill available space -->
-        <main class="py-6 flex-grow">
+        <main class="">
           <slot />
         </main>
       </div>
@@ -320,15 +338,14 @@ onBeforeUnmount(() => {
                 Settings
               </button>
 
-              <BreezeDropdownLink
-                :href="route('logout')"
-                method="post"
-                as="button"
-                class="w-full px-4 py-2 rounded bg-red-600 hover:bg-red-700 !text-white"
-                @click="showLogoutModal = false"
+              <button
+                type="button"
+                class="w-full px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white"
+                @click="logout"
               >
                 Log Out
-              </BreezeDropdownLink>
+              </button>
+
             </div>
           </div>
         </div>

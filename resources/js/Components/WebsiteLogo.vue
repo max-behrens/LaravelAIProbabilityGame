@@ -3,5 +3,5 @@
 </script>
 
 <template>
-    <img :src="`/images/website-logo.svg`" alt="Interior Design" class="ml-3" style="width: 250px; height: auto;">
+    <img :src="`/images/website-logo.svg`" alt="Interior Design" style="width: 160px; height: auto;">
 </template>

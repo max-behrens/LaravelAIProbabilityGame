@@ -1,7 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 
-const currentSlide = ref(0);
 const slides = [
   {
     src: '/images/vecteezy_domesticated-black-donkeys-in-the-paddock-on-the-farm-pets_49542847.jpg',
@@ -21,6 +20,10 @@ const slides = [
   }
 ];
 
+// Initialize loadedImages with correct length from the start
+const loadedImages = ref(slides.map(() => false));
+const currentSlide = ref(0);
+
 const nextSlide = () => {
   currentSlide.value = (currentSlide.value + 1) % slides.length;
 };
@@ -38,28 +41,47 @@ const scrollToFeatured = () => {
   }
 };
 
+const handleImageLoad = (index) => {
+  loadedImages.value[index] = true;
+};
+
 let slideInterval;
+
 onMounted(() => {
   slideInterval = setInterval(nextSlide, 15000);
+  console.log('loadedImages onMounted:', loadedImages.value);
 });
+
 onUnmounted(() => {
   clearInterval(slideInterval);
 });
 </script>
 
 <template>
-  <section class="min-h-screen flex items-center justify-center">
+  <section class="min-h-screen flex items-center justify-center relative">
     <!-- Background slideshow -->
     <div class="absolute inset-0 z-0">
-      <transition-group name="crossfade" tag="div" class="absolute inset-0">
+      <div class="absolute inset-0">
         <div
           v-for="(slide, index) in slides"
-          v-show="index === currentSlide"
           :key="`slide-${index}`"
-          class="absolute inset-0 bg-cover bg-center"
-          :style="{ backgroundImage: `url(${slide.src})` }"
-        ></div>
-      </transition-group>
+          class="absolute inset-0"
+          :class="[
+            'transition-opacity duration-1000 ease-in-out',
+            index === currentSlide ? 'opacity-100' : 'opacity-0'
+          ]"
+        >
+          <img
+            :src="slide.src"
+            :alt="slide.alt"
+            @load="handleImageLoad(index)"
+            :class="[
+              'absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out',
+              loadedImages[index] ? 'opacity-100' : 'opacity-0'
+            ]"
+          />
+        </div>
+      </div>
       <!-- Overlay for better text readability -->
       <div class="absolute inset-0 bg-black opacity-40"></div>
     </div>
@@ -75,12 +97,16 @@ onUnmounted(() => {
             <span class="typewriter" style="font-size: 15pt !important;">{{ slides[currentSlide].description }}</span>
           </div>
           <div class="flex flex-col sm:flex-row gap-4 justify-center">
-            <a :href="slides[currentSlide].button1.href" 
-               class="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-large rounded-lg transition-colors">
+            <a
+              :href="slides[currentSlide].button1.href"
+              class="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-large rounded-lg transition-colors"
+            >
               {{ slides[currentSlide].button1.text }}
             </a>
-            <a :href="slides[currentSlide].button2.href" 
-               class="inline-flex items-center px-6 py-3 bg-transparent !text-black border border-white bg-white/70 hover:bg-white hover:text-slate-900 font-large rounded-lg transition-colors">
+            <a
+              :href="slides[currentSlide].button2.href"
+              class="inline-flex items-center px-6 py-3 bg-transparent !text-black border border-white bg-white/70 hover:bg-white hover:text-slate-900 font-large rounded-lg transition-colors"
+            >
               {{ slides[currentSlide].button2.text }}
             </a>
           </div>
@@ -90,31 +116,34 @@ onUnmounted(() => {
 
     <!-- Navigation dots -->
     <div class="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-3 z-20">
-      <button 
+      <button
         v-for="(slide, index) in slides"
         :key="index"
         @click="goToSlide(index)"
         class="w-3 h-3 rounded-full transition-all hover:scale-110"
         :class="index === currentSlide ? 'bg-white shadow-lg' : 'bg-white/50 hover:bg-white/70'"
+        aria-label="Go to slide"
       ></button>
     </div>
 
     <!-- Next button -->
-    <button 
+    <button
       @click="nextSlide"
       class="absolute top-1/2 right-4 z-20 -translate-y-1/2 bg-white/20 hover:bg-white/30 !text-white p-3 rounded-full transition-all duration-300 backdrop-blur-sm hover:scale-110"
+      aria-label="Next slide"
     >
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
       </svg>
     </button>
 
-    <button 
+    <button
       @click="scrollToFeatured"
-      class="absolute bottom-8 left-8 z-20 bg-white/20 hover:bg-white/30 !text-white p-4 rounded-full transition-all duration-300 backdrop-blur-sm hover:scale-110 group animate-bounce"
+      class="absolute left-8 z-20 bg-white/20 hover:bg-white/30 !text-white p-4 rounded-full transition-all duration-300 backdrop-blur-sm hover:scale-110 group animate-bounce"
+      aria-label="Scroll to featured section"
     >
       <svg class="w-6 h-6 group-hover:translate-y-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
       </svg>
     </button>
   </section>
@@ -127,8 +156,14 @@ onUnmounted(() => {
 }
 
 @keyframes blink {
-  0%, 50% { border-color: #fff; }
-  51%, 100% { border-color: transparent; }
+  0%,
+  50% {
+    border-color: #fff;
+  }
+  51%,
+  100% {
+    border-color: transparent;
+  }
 }
 
 .fade-enter-active,
@@ -153,10 +188,15 @@ onUnmounted(() => {
 }
 
 @keyframes bounce {
-  0%, 20%, 53%, 80%, 100% {
-    transform: translate3d(0,0,0);
+  0%,
+  20%,
+  53%,
+  80%,
+  100% {
+    transform: translate3d(0, 0, 0);
   }
-  40%, 43% {
+  40%,
+  43% {
     transform: translate3d(0, -8px, 0);
   }
   70% {
@@ -165,19 +205,26 @@ onUnmounted(() => {
   90% {
     transform: translate3d(0, -2px, 0);
   }
+
+  /* Add extended idle time between bounces */
+  101%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
 }
 
 .animate-bounce {
-  animation: bounce 2s infinite;
+  animation: bounce 10s ease-in-out infinite;
 }
 
+
 .fade-sides-bg {
-  background: linear-gradient(to right, 
-    transparent 0%, 
-    rgba(0, 0, 0, 0.5) 10%, 
-    rgba(0, 0, 0, 0.5) 90%, 
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(0, 0, 0, 0.5) 10%,
+    rgba(0, 0, 0, 0.5) 90%,
     transparent 100%
   );
 }
-
 </style>

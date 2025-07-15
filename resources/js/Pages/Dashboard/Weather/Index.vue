@@ -383,7 +383,7 @@ function setCityInput(input) {
                                 
                                 <!-- Weather Search Input -->
                                 <div class="weather-search">
-                                    <input id="weather-search-input" type="text" v-debounce:300="setCityInput" class="input w-full max-w-xs placeholder-gray-200 bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter City..."/>
+                                    <input id="weather-search-input" type="text" v-debounce:300="setCityInput" class="input w-full max-w-xs bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white" placeholder="Enter City..."/>
 
                                     <!-- Spinner shown while loading -->
                                     <div v-if="loading" class="flex items-center mt-2">
@@ -406,7 +406,7 @@ function setCityInput(input) {
                                       <div v-if="forecastData" class="mt-10">
                                           <h3 class="text-lg font-semibold mb-4 text-center text-gray-100">Daily Average Forecast for {{ displayCity }}</h3>
                                           <div class="grid grid-cols-1 gap-4">
-                                              <div v-for="(forecast, index) in forecastData" :key="index" class="bg-gray-700 border border-gray-600 text-gray-200 px-4 py-3 rounded-lg">
+                                              <div v-for="(forecast, index) in forecastData" :key="index" class="bg-gray-700 border border-gray-600  px-4 py-3 rounded-lg">
                                                   <h4 class="text-md font-semibold mb-2">{{ forecast.formattedTime }}</h4>
                                                   <p><strong>Temperature:</strong> {{ forecast.temperature.toFixed(2) }}°C</p>
                                                   <p><strong>Feels Like:</strong> {{ forecast.feels_like.toFixed(2) }}°C</p>
@@ -421,19 +421,19 @@ function setCityInput(input) {
                                           <h3 class="text-lg font-semibold mb-4 text-center text-gray-100">Weather Fluctuation Values</h3>
 
                                           <div class="grid grid-cols-1 gap-4">
-                                              <div v-if="calculationResults.temperatureChanges" class="bg-gray-700 border border-gray-600 text-gray-200 px-4 py-3 rounded-lg">
+                                              <div v-if="calculationResults.temperatureChanges" class="bg-gray-700 border border-gray-600  px-4 py-3 rounded-lg">
                                                   <h4 class="font-semibold">Temperature Changes</h4>
                                                   <p>Rate of Change Between Each Day: {{ calculationResults.temperatureChanges.join(', ') }}</p>
                                                   <p>Overall Average Rate of Change: {{ calculationResults.averageTemperatureChanges }}</p>
                                               </div>
 
-                                              <div v-if="calculationResults.humidityChanges" class="bg-gray-700 border border-gray-600 text-gray-200 px-4 py-3 rounded-lg">
+                                              <div v-if="calculationResults.humidityChanges" class="bg-gray-700 border border-gray-600  px-4 py-3 rounded-lg">
                                                   <h4 class="font-semibold">Humidity Changes</h4>
                                                   <p>Rate of Change Between Each Day: {{ calculationResults.humidityChanges.join(', ') }}</p>
                                                   <p>Overall Average Rate of Change: {{ calculationResults.averageHumidityChanges }}</p>
                                               </div>
 
-                                              <div v-if="calculationResults.pressureChanges" class="bg-gray-700 border border-gray-600 text-gray-200 px-4 py-3 rounded-lg">
+                                              <div v-if="calculationResults.pressureChanges" class="bg-gray-700 border border-gray-600  px-4 py-3 rounded-lg">
                                                   <h4 class="font-semibold">Pressure Changes</h4>
                                                   <p>Rate of Change Between Each Day: {{ calculationResults.pressureChanges.join(', ') }}</p>
                                                   <p>Overall Average Rate of Change: {{ calculationResults.averagePressureChanges }}</p>
@@ -471,7 +471,7 @@ function setCityInput(input) {
                                   <div v-if="forecastData" class="mt-10">
                                     <h3 class="text-sm font-semibold mb-4 text-center text-gray-100">Daily Average Forecast for {{ displayCity }}</h3>
                                     <div class="flex space-x-4 overflow-x-auto justify-between">
-                                      <div v-for="(forecast, index) in forecastData" :key="index" class="bg-gray-700 border border-gray-600 text-gray-200 px-4 py-3 rounded-lg relative w-64">
+                                      <div v-for="(forecast, index) in forecastData" :key="index" class="bg-gray-700 border border-gray-600  px-4 py-3 rounded-lg relative w-64">
                                         <h4 class="text-sm font-semibold mb-2">{{ forecast.formattedTime }}</h4>
                                         <p><strong>Temperature:</strong> {{ forecast.temperature.toFixed(2) }}°C</p>
                                         <p><strong>Feels Like:</strong> {{ forecast.feels_like.toFixed(2) }}°C</p>
@@ -487,19 +487,19 @@ function setCityInput(input) {
 
                                     <!-- Group temperature, humidity, and pressure changes -->
                                     <div class="flex space-x-4 overflow-x-auto justify-between">
-                                        <div v-if="calculationResults.temperatureChanges" class="bg-gray-700 border border-gray-600 text-gray-200 px-4 py-3 rounded-lg relative">
+                                        <div v-if="calculationResults.temperatureChanges" class="bg-gray-700 border border-gray-600  px-4 py-3 rounded-lg relative">
                                             <h4 class="font-semibold">Temperature Changes</h4>
                                             <p>Rate of Change Between Each Day: {{ calculationResults.temperatureChanges.join(', ') }}</p>
                                             <p>Overall Average Rate of Change: {{ calculationResults.averageTemperatureChanges }}</p>
                                         </div>
 
-                                        <div v-if="calculationResults.humidityChanges" class="bg-gray-700 border border-gray-600 text-gray-200 px-4 py-3 rounded-lg relative">
+                                        <div v-if="calculationResults.humidityChanges" class="bg-gray-700 border border-gray-600  px-4 py-3 rounded-lg relative">
                                             <h4 class="font-semibold">Humidity Changes</h4>
                                             <p>Rate of Change Between Each Day: {{ calculationResults.humidityChanges.join(', ') }}</p>
                                             <p>Overall Average Rate of Change: {{ calculationResults.averageHumidityChanges }}</p>
                                         </div>
 
-                                        <div v-if="calculationResults.pressureChanges" class="bg-gray-700 border border-gray-600 text-gray-200 px-4 py-3 rounded-lg relative">
+                                        <div v-if="calculationResults.pressureChanges" class="bg-gray-700 border border-gray-600  px-4 py-3 rounded-lg relative">
                                             <h4 class="font-semibold">Pressure Changes</h4>
                                             <p>Rate of Change Between Each Day: {{ calculationResults.pressureChanges.join(', ') }}</p>
                                             <p>Overall Average Rate of Change: {{ calculationResults.averagePressureChanges }}</p>

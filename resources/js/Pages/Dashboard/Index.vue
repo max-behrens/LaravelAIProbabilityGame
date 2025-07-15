@@ -11,6 +11,11 @@ import '@vuepic/vue-datepicker/dist/main.css';
 
 // Get initial URL parameters
 const page = usePage();
+const auth = page.props.auth;
+
+console.log('Auth object in Vue component:', auth);
+console.log('Auth user in Vue component:', auth?.user);
+console.log('Auth user name in Vue component:', auth?.user?.name);
 
 const showNav = ref(false);
 const currentSection = ref(0);

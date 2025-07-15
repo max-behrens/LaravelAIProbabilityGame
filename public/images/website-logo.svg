@@ -11,7 +11,7 @@
     <text x="58" y="148" font-family="Arial, sans-serif" font-size="120" font-weight="900" fill="#808080">MAN</text>
     
     <!-- AI shadow -->
-    <text x="448" y="148" font-family="Arial, sans-serif" font-size="120" font-weight="900" fill="#808080">AI</text>
+    <text x="468" y="148" font-family="Arial, sans-serif" font-size="120" font-weight="900" fill="#808080">AI</text>
   </g>
   
   <!-- MAN text (white foreground with stroke) -->
@@ -30,7 +30,7 @@
   <!-- AI text (white foreground with stroke) -->
   <g>
     <text 
-      x="440" y="140" 
+      x="460" y="140" 
       font-family="Arial, sans-serif" 
       font-size="120" 
       font-weight="900" 
@@ -42,13 +42,13 @@
   
   <!-- VS shadow -->
   <g>
-    <text x="353" y="118" font-family="Arial, sans-serif" font-size="60" font-weight="900" fill="#808080">VS</text>
+    <text x="370" y="118" font-family="Arial, sans-serif" font-size="60" font-weight="900" fill="#808080">VS</text>
   </g>
   
   <!-- VS text (white foreground with stroke) -->
   <g>
     <text 
-      x="345" y="110" 
+      x="362" y="110" 
       font-family="Arial, sans-serif" 
       font-size="60" 
       font-weight="900" 

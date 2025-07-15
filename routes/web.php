@@ -127,9 +127,7 @@ Route::prefix('dashboard')
 
         Route::post('/ask-openai', [DashboardAIController::class, 'askOpenAI']);
 
-        Route::get('/dashboard', function () {
-            return Inertia::render('Dashboard');
-        });
+
 
 
     });

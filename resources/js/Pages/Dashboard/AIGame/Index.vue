@@ -160,7 +160,7 @@ const enterGame = (gameId) => {
               <p class="text-gray-300 mb-2">
                 {{ playersCount[game.id] || 0 }} / {{ game.max_players }} players
               </p>
-              <p class="text-xs text-gray-400 mb-2">
+              <p class="text-xs text-gray-400 mb-4">
                 Status: {{ userInGames[game.id] ? 'You have joined' : 'Not joined' }}
               </p>
 

@@ -1,15 +1,45 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import BreezeApplicationLogo from '@/Components/ApplicationLogo.vue';
 import BreezeDropdownLink from '@/Components/DropdownLink.vue';
 import { Link } from '@inertiajs/inertia-vue3';
 
 const showingNavigation = ref(false);
 const showLogoutModal = ref(false);
+const isDark = ref(false);
 
 const toggleNavigation = () => {
   showingNavigation.value = !showingNavigation.value;
 };
+
+// Theme management
+const initializeTheme = () => {
+  // Check if user has a saved preference, otherwise use system preference
+  const savedTheme = localStorage.getItem('theme');
+  const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  
+  isDark.value = savedTheme ? savedTheme === 'dark' : systemPrefersDark;
+  applyTheme();
+};
+
+const applyTheme = () => {
+  if (isDark.value) {
+    document.documentElement.classList.add('dark');
+    localStorage.setItem('theme', 'dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+    localStorage.setItem('theme', 'light');
+  }
+};
+
+const toggleTheme = () => {
+  isDark.value = !isDark.value;
+  applyTheme();
+};
+
+onMounted(() => {
+  initializeTheme();
+});
 </script>
 
 <template>
@@ -70,10 +100,14 @@ const toggleNavigation = () => {
                     @click="showLogoutModal = true"
                     class="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-700"
                   >
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
+                  <svg
+                    class="h-4 w-4 text-gray-400"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M19.14 12.94a7.002 7.002 0 000-1.88l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.6-.22l-2.39.96a6.978 6.978 0 00-1.6-.94l-.36-2.54A.5.5 0 0014 3h-4a.5.5 0 00-.49.42l-.36 2.54a6.978 6.978 0 00-1.6.94l-2.39-.96a.5.5 0 00-.6.22l-1.92 3.32a.5.5 0 00.12.64l2.03 1.58a7.002 7.002 0 000 1.88l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32a.5.5 0 00.6.22l2.39-.96c.5.38 1.04.7 1.6.94l.36 2.54A.5.5 0 0010 21h4a.5.5 0 00.49-.42l.36-2.54c.56-.24 1.1-.56 1.6-.94l2.39.96a.5.5 0 00.6-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z" />
+                  </svg>
                   </button>
                 </div>
               </div>
@@ -143,6 +177,36 @@ const toggleNavigation = () => {
             <h2 class="text-lg font-semibold mb-4">User Options</h2>
 
             <div class="flex flex-col space-y-4">
+
+              <!-- Theme Toggle Button -->
+              <button
+                type="button"
+                class="w-full px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 text-left text-white flex items-center justify-between"
+                @click="toggleTheme"
+              >
+                <span>{{ isDark ? 'Light Mode' : 'Dark Mode' }}</span>
+                <svg 
+                  class="h-5 w-5" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                  v-if="isDark"
+                >
+                  <!-- Sun icon for light mode -->
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                </svg>
+                <svg 
+                  class="h-5 w-5" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                  v-else
+                >
+                  <!-- Moon icon for dark mode -->
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                </svg>
+              </button>
+
               <button
                 type="button"
                 class="w-full px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 text-left transition duration-150 ease-in-out"

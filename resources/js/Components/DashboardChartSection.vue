@@ -264,264 +264,221 @@ watch(
 
 
 <template>
-    <section class="py-10 bg-gray-800 rounded-lg">
+  <section class="py-3 bg-gray-800 rounded-lg">
+      <div class="container mx-auto px-6">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-2">
+              <div class="lg:col-span-3">
+                  <div class="flex items-center justify-center">
+                      <button
+                          @click="previousChart"
+                          class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-colors mr-4"
+                      >
+                          <ChevronLeftIcon class="w-5 h-5" />
+                      </button>
 
-                <div class="container mx-auto px-6">
+                      <div class="text-center mb-4">
+                          <h3 class="text-xl font-bold text-white ">{{ currentChart.title }}</h3>
+                          <p class="text-white !text-sm">{{ currentChart.description }}</p>
+                      </div>
 
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                      <button
+                          @click="nextChart"
+                          class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-colors ml-4"
+                      >
+                          <ChevronRightIcon class="w-5 h-5" />
+                      </button>
+                  </div>
 
-                        <div class="lg:col-span-3">
+                  <div class="flex justify-center space-x-2 mb-5">
+                      <button
+                          v-for="(chart, index) in chartConfigs"
+                          :key="index"
+                          @click="currentChartIndex = index"
+                          :class="[
+                              'w-2 h-2 rounded-full transition-all duration-300',
+                              index === currentChartIndex ? 'bg-blue-500' : 'bg-gray-600 hover:bg-gray-500'
+                          ]"
+                      ></button>
+                  </div>
 
-                              <div class="mb-4 flex items-center justify-center">
-                                <!-- Left Arrow -->
-                                <button 
-                                    @click="previousChart"
-                                    class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-colors mr-4"
-                                >
-                                    <ChevronLeftIcon class="w-5 h-5" />
-                                </button>
-                                
-                                <!-- Title and Description -->
-                                <div class="text-center">
-                                    <h3 class="text-xl font-bold text-white mb-2">{{ currentChart.title }}</h3>
-                                    <p class="text-white text-xl">{{ currentChart.description }}</p>
-                                </div>
-                                
-                                <!-- Right Arrow -->
-                                <button 
-                                    @click="nextChart"
-                                    class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-colors ml-4"
-                                >
-                                    <ChevronRightIcon class="w-5 h-5" />
-                                </button>
-                              </div>
+                  <div class="flex flex-wrap justify-center gap-4 mb-3">
+                    <div class="flex flex-col space-y-2 flex-grow min-w-[180px] max-w-xs">
+                        <button
+                            v-for="(filter, index) in gameFilters"
+                            :key="filter.id"
+                            :class="[
+                                'flex items-center justify-center space-x-2 p-2 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
+                                'transition-all duration-300 ease-in-out',
+                                optionColors[index] + ' hover:brightness-90',
+                                activeGameId === filter.id ? 'bg-blue-700 ring-2 ring-blue-400' : ''
+                            ]"
+                            @click="selectGameFilter(filter.id)"
+                        >
+                            <component :is="gameIcons[index]" class="w-5 h-5 shrink-0" />
+                            <span class="font-medium truncate">{{ filter.name }}</span>
+                        </button>
+                    </div>
 
-                              <!-- Chart Indicator Dots -->
-                              <div class="flex justify-center space-x-2 mb-6">
-                                <button
-                                    v-for="(chart, index) in chartConfigs"
-                                    :key="index"
-                                    @click="currentChartIndex = index"
-                                    :class="[
-                                        'w-3 h-3 rounded-full transition-all duration-300',
-                                        index === currentChartIndex ? 'bg-blue-500' : 'bg-gray-600 hover:bg-gray-500'
-                                    ]"
-                                ></button>
-                              </div>
-                            
-                            <div class="space-y-6">
+                      <div class="flex-grow min-w-[180px] max-w-xs">
+                          <button
+                              @click="showDateModal = true"
+                              :class="[
+                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full w-full',
+                                  'transition-all duration-300 ease-in-out',
+                                  dateFilterColor + ' hover:brightness-90',
+                                  (dateRange[0] && dateRange[1]) ? 'bg-orange-700 ring-2 ring-orange-400' : ''
+                              ]"
+                          >
+                              <CalendarDaysIcon class="w-5 h-5 shrink-0" />
+                              <span class="font-medium truncate">{{ dateFilterTitle }}</span>
+                          </button>
+                      </div>
 
-                            <div class="grid grid-cols-2 md:grid-cols-2 gap-8 ml-6 mr-6">
+                      <div class="flex-grow min-w-[180px] max-w-xs">
+                          <button
+                              @click="toggleExponentialScale"
+                              :class="[
+                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full w-full',
+                                  'transition-all duration-300 ease-in-out',
+                                  performanceFilterColor + ' hover:brightness-90',
+                                  isExponentialScale ? 'bg-purple-700 ring-2 ring-purple-400' : ''
+                              ]"
+                          >
+                              <ScalingIcon class="w-5 h-5 shrink-0" />
+                              <span class="font-medium truncate">{{ isExponentialScale ? 'Exponential ON' : 'Exponential OFF' }}</span>
+                          </button>
+                      </div>
 
-                                  <div>
-                                    <div class="bg-gray-800 p-6 rounded-lg mb-4">
-                                          <h4 class="text-white font-semibold text-lg mb-4 text-center">{{ gameFilterTitle }}</h4>
-                                          <div class="flex flex-col space-y-4">
-                                            <button
-                                                v-for="(filter, index) in gameFilters"
-                                                :key="filter.id"
-                                                :class="[
-                                                    'flex items-center space-x-3 p-4 rounded-lg shadow-md text-white cursor-pointer',
-                                                    'transition-all duration-300 ease-in-out',
-                                                    optionColors[index] + ' hover:brightness-90',
-                                                    activeGameId === filter.id ? 'bg-blue-700 ring-2 ring-blue-400' : ''
-                                                ]"
-                                                @click="selectGameFilter(filter.id)"
-                                            >
-                                                <span class="text-2xl transition-opacity duration-300 ease-in-out">
-                                                    <component :is="gameIcons[index]" />
-                                                </span>
-                                                <span class="font-medium transition-opacity duration-300 ease-in-out">{{ filter.name }}</span>
-                                            </button>
-                                          </div>
-                                      </div>
-                                     
-                                    </div>
+                      <div class="flex-grow min-w-[180px] max-w-xs">
+                          <button
+                              @click="showAdvancedFilters = !showAdvancedFilters"
+                              :class="[
+                                  'w-full flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full',
+                                  'transition-all duration-300 ease-in-out',
+                                  'bg-gray-600/50 hover:bg-gray-700',
+                                  showAdvancedFilters ? 'bg-gray-700' : ''
+                              ]"
+                          >
+                              <span class="text-xl shrink-0">
+                                  <template v-if="showAdvancedFilters">
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-up"><path d="m18 15-6-6-6 6"/></svg>
+                                  </template>
+                                  <template v-else>
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>
+                                  </template>
+                              </span>
+                              <span class="font-medium truncate">Advanced</span>
+                          </button>
+                      </div>
+                  </div>
 
-                                    <div class="row flex gap-4 items-start">
-
-                                      <div class="bg-gray-800 p-6 rounded-lg flex flex-col justify-between">
-                                          <div>
-                                              <h4 class="text-white font-semibold text-lg mb-4 text-center">Date Picker</h4>
-                                              <button
-                                                  @click="showDateModal = true"
-                                                  :class="[
-                                                      'flex items-center space-x-3 p-4 rounded-lg shadow-md text-white cursor-pointer h-full',
-                                                      'transition-all duration-300 ease-in-out',
-                                                      dateFilterColor + ' hover:brightness-90',
-                                                      (dateRange[0] && dateRange[1]) ? 'bg-orange-700 ring-2 ring-orange-400' : ''
-                                                  ]"
-                                              >
-                                                  <span class="text-2xl transition-opacity duration-300 ease-in-out">
-                                                      <CalendarDaysIcon />
-                                                  </span>
-                                                  <span class="font-medium transition-opacity duration-300 ease-in-out">{{ dateFilterTitle }}</span>
-                                              </button>
-                                          </div>
-                                      </div>
-
-                                      <div class="bg-gray-800 p-6 rounded-lg flex flex-col justify-between">
-                                          <div>
-                                              <h4 class="text-white font-semibold text-lg mb-4 text-center">Performance</h4>
-                                              <button
-                                                  @click="toggleExponentialScale"
-                                                  :class="[
-                                                      'flex items-center space-x-3 p-4 rounded-lg shadow-md text-white cursor-pointer h-full',
-                                                      'transition-all duration-300 ease-in-out',
-                                                      performanceFilterColor + ' hover:brightness-90',
-                                                      isExponentialScale ? 'bg-purple-700 ring-2 ring-purple-400' : ''
-                                                  ]"
-                                              >
-                                                  <span class="text-2xl transition-opacity duration-300 ease-in-out">
-                                                      <ScalingIcon />
-                                                  </span>
-                                                  <span class="font-medium transition-opacity duration-300 ease-in-out">
-                                                      {{ isExponentialScale ? 'Exponential Scale ON' : 'Exponential Scale OFF' }}
-                                                  </span>
-                                              </button>
-                                          </div>
-                                      </div>
-
-                                    </div>
-
-                                </div>
-
-                                <div class="grid grid-cols-2 md:grid-cols-2 gap-8 ml-6 mr-6">
-
-                                     <div class="bg-gray-800 px-6 rounded-lg">
-                                          <button
-                                              @click="showAdvancedFilters = !showAdvancedFilters"
-                                              :class="[
-                                                  'w-full flex items-center justify-center space-x-3 p-4 rounded-lg shadow-md text-white cursor-pointer',
-                                                  'transition-all duration-300 ease-in-out',
-                                                  'bg-gray-600/50 hover:bg-gray-700', // A neutral color for the toggle button
-                                                  showAdvancedFilters ? 'bg-gray-700' : '' // Slightly darker when open
-                                              ]"
-                                          >
-                                              <span class="text-2xl">
-                                                  <template v-if="showAdvancedFilters">
-                                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-up"><path d="m18 15-6-6-6 6"/></svg>
-                                                  </template>
-                                                  <template v-else>
-                                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>
-                                                  </template>
-                                              </span>
-                                              <span class="font-medium">
-                                                  {{ showAdvancedFilters ? 'Hide Advanced Filters' : 'Show Advanced Filters' }}
-                                              </span>
-                                          </button>
-
-                                          <transition name="fade-slide-y">
-                                              <div v-if="showAdvancedFilters" class="mt-4"> <div class="bg-gray-800 p-6 rounded-lg"> <h4 class="text-white font-semibold text-lg mb-4 text-center">{{ userFilterTitle }}</h4>
-                                                      <div class="flex flex-col space-y-2">
-                                                          <input
-                                                              type="text"
-                                                              v-model="userSearchTerm"
-                                                              placeholder="Search users..."
-                                                              class="w-full p-2 rounded-md bg-gray-700 text-white placeholder-gray-400 mt-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                                          />
-                                                          <div class="max-h-48 overflow-y-auto custom-scrollbar rounded-md">
-                                                              <button
-                                                                  v-for="user in filteredUsers"
-                                                                  :key="user.id"
-                                                                  :class="[
-                                                                      'flex items-center space-x-2 px-3 py-1.5 rounded-md mt-2 text-white cursor-pointer w-full text-left',
-                                                                      'transition-all duration-100 ease-in-out',
-                                                                      userFilterColor,
-                                                                      activeUserId === user.id ? 'bg-teal-700 ring-1 ring-teal-400' : ''
-                                                                  ]"
-                                                                  @click="selectUserFilter(user.id)"
-                                                              >
-                                                                  <span class="text-base">
-                                                                      <UserIcon />
-                                                                  </span>
-                                                                  <span class="font-normal text-sm">{{ user.name }}</span>
-                                                              </button>
-                                                              <p v-if="filteredUsers.length === 0 && userSearchTerm.trim()" class="text-gray-400 text-center text-sm py-2">
-                                                                  No users found matching "{{ userSearchTerm }}"
-                                                              </p>
-                                                              <p v-else-if="allUsers.length === 0" class="text-gray-400 text-center text-sm py-2">
-                                                                  Loading users...
-                                                              </p>
-                                                          </div>
-                                                      </div>
-                                                  </div>
-                                              </div>
-                                          </transition>
-                                        </div>
+                  <transition name="fade-slide-y">
+                      <div v-if="showAdvancedFilters" class="mb-6">
+                          <div class="bg-gray-800 p-6 rounded-lg shadow-md">
+                              <h4 class="text-white font-semibold text-lg mb-4 text-center">{{ userFilterTitle }}</h4>
+                              <div class="flex flex-col space-y-2">
+                                  <input
+                                      type="text"
+                                      v-model="userSearchTerm"
+                                      placeholder="Search users..."
+                                      class="w-full p-2 rounded-md bg-gray-700 text-white placeholder-gray-400 mt-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                  />
+                                  <div class="max-h-48 overflow-y-auto custom-scrollbar rounded-md">
+                                      <button
+                                          v-for="user in filteredUsers"
+                                          :key="user.id"
+                                          :class="[
+                                              'flex items-center space-x-2 px-3 py-1.5 rounded-md mt-2 text-white cursor-pointer w-full text-left',
+                                              'transition-all duration-100 ease-in-out',
+                                              userFilterColor,
+                                              activeUserId === user.id ? 'bg-teal-700 ring-1 ring-teal-400' : ''
+                                          ]"
+                                          @click="selectUserFilter(user.id)"
+                                      >
+                                          <span class="text-base">
+                                              <UserIcon />
+                                          </span>
+                                          <span class="font-normal text-sm">{{ user.name }}</span>
+                                      </button>
+                                      <p v-if="filteredUsers.length === 0 && userSearchTerm.trim()" class="text-gray-400 text-center text-sm py-2">
+                                          No users found matching "{{ userSearchTerm }}"
+                                      </p>
+                                      <p v-else-if="allUsers.length === 0" class="text-gray-400 text-center text-sm py-2">
+                                          Loading users...
+                                      </p>
                                   </div>
+                              </div>
+                          </div>
+                      </div>
+                  </transition>
 
-                                <!-- Single Chart Container with Transition -->
-                                <div class="space-y-8 theme-bg-primary p-6 rounded-lg shadow-lg">
-                                    <section>
-                                        <div class="w-full">
-                                            <transition name="chart-fade" mode="out-in">
-                                                <div :key="currentChartIndex">
-                                                    <DashboardLineChartComponent
-                                                        v-if="currentChart.component === 'DashboardLineChartComponent'"
-                                                        :game-type-id="activeGameId"
-                                                        :start-date="dateRange[0]"
-                                                        :end-date="dateRange[1]"
-                                                        :is-exponential-scale="isExponentialScale"
-                                                        :user-id="activeUserId"
-                                                    />
-                                                    <DashboardHeatmapComponent
-                                                        v-else-if="currentChart.component === 'DashboardHeatmapComponent'"
-                                                    />
-                                                    <DashboardBarChartComponent
-                                                        v-else-if="currentChart.component === 'DashboardBarChartComponent'"
-                                                    />
-                                                </div>
-                                            </transition>
-                                        </div>
-                                    </section>
-                                </div>
+                  <div class="space-y-8 theme-bg-primary p-6 rounded-lg shadow-lg">
+                      <section>
+                          <div class="w-full">
+                              <transition name="chart-fade" mode="out-in">
+                                  <div :key="currentChartIndex">
+                                      <DashboardLineChartComponent
+                                          v-if="currentChart.component === 'DashboardLineChartComponent'"
+                                          :game-type-id="activeGameId"
+                                          :start-date="dateRange[0]"
+                                          :end-date="dateRange[1]"
+                                          :is-exponential-scale="isExponentialScale"
+                                          :user-id="activeUserId"
+                                      />
+                                      <DashboardHeatmapComponent
+                                          v-else-if="currentChart.component === 'DashboardHeatmapComponent'"
+                                      />
+                                      <DashboardBarChartComponent
+                                          v-else-if="currentChart.component === 'DashboardBarChartComponent'"
+                                      />
+                                  </div>
+                              </transition>
+                          </div>
+                      </section>
+                  </div>
+              </div>
+          </div>
+      </div>
+  </section>
 
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
+  <div v-if="showDateModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div class="bg-gray-800 rounded-lg shadow-xl p-6 relative max-w-md w-full">
+          <h3 class="text-xl font-semibold text-white mb-4">Select Date Range</h3>
+          <button
+              @click="showDateModal = false"
+              class="absolute top-4 right-4 text-gray-400 hover:text-gray-200"
+          >
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+          </button>
 
-            <div v-if="showDateModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div class="bg-gray-800 rounded-lg shadow-xl p-6 relative max-w-md w-full">
-                    <h3 class="text-xl font-semibold text-white mb-4">Select Date Range</h3>
-                    <button
-                        @click="showDateModal = false"
-                        class="absolute top-4 right-4 text-gray-400 hover:text-gray-200"
-                    >
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                        </svg>
-                    </button>
+          <Datepicker
+              v-model="datepickerModel" range
+              :enable-time-picker="false"
+              :dark="true"
+              :teleport="true"
+              placeholder="Select Date Range"
+              :min-date="new Date('2024-01-01')"
+              :max-date="new Date()"
+              class="my-4"
+              @update:model-value="handleDateSelection"
+          ></Datepicker>
 
-                    <Datepicker
-                        v-model="datepickerModel" range
-                        :enable-time-picker="false"
-                        :dark="true"
-                        :teleport="true"
-                        placeholder="Select Date Range"
-                        :min-date="new Date('2024-01-01')"
-                        :max-date="new Date()"
-                        class="my-4"
-                        @update:model-value="handleDateSelection"
-                    ></Datepicker>
-
-                    <div class="flex justify-end space-x-2 mt-4">
-                        <button
-                            @click="clearDateFilter"
-                            class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md"
-                        >
-                            Clear
-                        </button>
-                        <button
-                            @click="showDateModal = false"
-                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
-                        >
-                            Close
-                        </button>
-                    </div>
-                </div>
-            </div>
-
+          <div class="flex justify-end space-x-2 mt-4">
+              <button
+                  @click="clearDateFilter"
+                  class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md"
+              >
+                  Clear
+              </button>
+              <button
+                  @click="showDateModal = false"
+                  class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
+              >
+                  Close
+              </button>
+          </div>
+      </div>
+  </div>
 </template>

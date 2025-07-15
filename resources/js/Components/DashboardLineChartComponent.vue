@@ -273,7 +273,6 @@ const getChartOptions = (seriesData, isExponentialScale) => {
 };
 
 const initializeChart = (seriesData, isExponentialScale) => {
-  console.log('seriesData: ' + JSON.stringify(seriesData));
   const options = getChartOptions(seriesData, isExponentialScale);
   chart = new ApexCharts(chartContainer.value, options);
   chart.render();
