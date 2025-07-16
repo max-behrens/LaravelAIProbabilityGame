@@ -21,30 +21,31 @@ const showNav = ref(false);
 const currentSection = ref(0);
 const showVerticalNav = ref(false);
 const currentNavSection = ref(0);
+const isNavigatingProgrammatically = ref(false);
 
 
 watch(currentSection, (newVal) => {
-  showNav.value = newVal !== 0;
+    showNav.value = newVal !== 0;
 });
 
 
 const slides = [
-  {
-    src: '/images/vecteezy_domesticated-black-donkeys-in-the-paddock-on-the-farm-pets_49542847.jpg',
-    alt: 'Object Detection Game',
-    title: 'Object Detection Game',
-    description: 'Play against the AI to identify objects from a variety of images...',
-    button1: { text: 'View AI Models', href: '/models' },
-    button2: { text: 'Find a Game', href: '/demo' }
-  },
-  {
-    src: '/images/person-with-futuristic-metaverse-avatar-mask.jpg',
-    alt: 'Game of Lies',
-    title: 'Game of Lies',
-    description: 'Determine whether your AI opponent will choose the correct or incorrect answer to each question you do...',
-    button1: { text: 'View AI Models', href: '/avatars' },
-    button2: { text: 'Find a Game', href: '/metaverse-demo' }
-  }
+    {
+        src: '/images/vecteezy_domesticated-black-donkeys-in-the-paddock-on-the-farm-pets_49542847.jpg',
+        alt: 'Object Detection Game',
+        title: 'Object Detection Game',
+        description: 'Play against the AI to identify objects from a variety of images...',
+        button1: { text: 'View AI Models', href: '/models' },
+        button2: { text: 'Find a Game', href: '/demo' }
+    },
+    {
+        src: '/images/person-with-futuristic-metaverse-avatar-mask.jpg',
+        alt: 'Game of Lies',
+        title: 'Game of Lies',
+        description: 'Determine whether your AI opponent will choose the correct or incorrect answer to each question you do...',
+        button1: { text: 'View AI Models', href: '/avatars' },
+        button2: { text: 'Find a Game', href: '/metaverse-demo' }
+    }
 ];
 
 
@@ -52,11 +53,11 @@ const mobileMenuOpen = ref(false);
 const currentSlide = ref(0);
 
 const navSections = [
-  { id: 'main', name: 'Home' },
-  { id: 'stats', name: 'Stats' },
-  { id: 'game-details', name: 'Games' },
-  { id: 'ai-details', name: 'AI' },
-  { id: 'nature-collections', name: 'Collections' }
+    { id: 'main', name: 'Home' },
+    { id: 'stats', name: 'Stats' },
+    { id: 'game-details', name: 'Games' },
+    { id: 'ai-details', name: 'AI' },
+    { id: 'nature-collections', name: 'Collections' }
 ];
 
 const toggleMobileMenu = () => {
@@ -72,71 +73,98 @@ const goToSlide = (index) => {
 };
 
 const navigateSection = (direction) => {
-  const newIndex = direction === 'up'
-    ? Math.max(0, currentNavSection.value - 1)
-    : Math.min(navSections.length - 1, currentNavSection.value + 1);
+    isNavigatingProgrammatically.value = true; 
 
-  currentNavSection.value = newIndex;
-  scrollToSection(newIndex);
+    const newIndex = direction === 'up'
+        ? Math.max(0, currentNavSection.value - 1)
+        : Math.min(navSections.length - 1, currentNavSection.value + 1);
+
+    // Update currentNavSection immediately for instant feedback
+    currentNavSection.value = newIndex; 
+    
+    scrollToSection(newIndex);
 };
 
 const scrollToSection = (sectionIndex) => {
-  const section = navSections[sectionIndex];
-  if (section.id === 'main') {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  } else {
-    const element = document.getElementById(section.id);
-    if (element) {
-      const yOffset = -80;
-      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
-      window.scrollTo({ top: y, behavior: 'smooth' });
+    const section = navSections[sectionIndex];
+    const targetElement = document.getElementById(section.id);
+
+    if (targetElement) {
+        const yOffset = -80;
+        const y = targetElement.getBoundingClientRect().top + window.pageYOffset + yOffset;
+        
+        window.scrollTo({ 
+            top: y, 
+            behavior: 'smooth' 
+        });
+
+        // Use requestAnimationFrame for more precise scroll end detection
+        // or a slightly longer timeout if that's too complex.
+        // For now, let's keep a robust timeout for simplicity.
+        setTimeout(() => {
+            isNavigatingProgrammatically.value = false;
+            // Force an update to showVerticalNav after scroll is likely finished
+            // This ensures it correctly hides if at the top.
+            updateNavigation(); 
+        }, 800); // Adjust timeout based on your scroll behavior duration
+    } else if (section.id === 'main') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        setTimeout(() => {
+            isNavigatingProgrammatically.value = false;
+            updateNavigation(); // Ensure visibility is updated for 'main' section
+        }, 800);
     }
-  }
 };
 
 const updateNavigation = () => {
-  const scrollY = window.scrollY;
-  const windowHeight = window.innerHeight;
+    const scrollY = window.scrollY;
+    const windowHeight = window.innerHeight;
 
-  showVerticalNav.value = scrollY > windowHeight * 0.3;
+    // This part should *always* update, regardless of programmatic navigation
+    showVerticalNav.value = scrollY > windowHeight * 0.3;
 
-  const sectionElements = navSections.map((section, index) => ({
-    element: document.getElementById(section.id),
-    index: index
-  })).filter(item => item.element);
-
-  const scrollPosition = scrollY + windowHeight * 0.4;
-
-  for (let i = sectionElements.length - 1; i >= 0; i--) {
-    const { element, index } = sectionElements[i];
-    if (element.offsetTop <= scrollPosition) {
-      currentNavSection.value = index;
-      break;
+    // Only update currentNavSection if not navigating programmatically
+    if (isNavigatingProgrammatically.value) {
+        return; // Exit here to prevent flickering of currentNavSection name
     }
-  }
+
+    const sectionElements = navSections.map((section, index) => ({
+        element: document.getElementById(section.id),
+        index: index
+    })).filter(item => item.element);
+
+    const scrollPosition = scrollY + windowHeight * 0.4;
+
+    for (let i = sectionElements.length - 1; i >= 0; i--) {
+        const { element, index } = sectionElements[i];
+        if (element.offsetTop <= scrollPosition) {
+            currentNavSection.value = index;
+            break;
+        }
+    }
 };
 
 let slideInterval;
 onMounted(async () => {
-  slideInterval = setInterval(() => {
-    nextSlide();
-  }, 15000);
+    slideInterval = setInterval(() => {
+        nextSlide();
+    }, 15000);
 
-  window.addEventListener('scroll', updateNavigation);
-  
-  // Fetch users on mount
-  await fetchUsers();
+    window.addEventListener('scroll', updateNavigation);
+    
+    // Fetch users on mount (assuming fetchUsers is defined elsewhere in your script)
+    // await fetchUsers(); 
 
-  nextTick(() => {
-    updateNavigation();
-  });
+    nextTick(() => {
+        updateNavigation();
+    });
 });
 
 onUnmounted(() => {
-  if (slideInterval) {
-    clearInterval(slideInterval);
-  }
-  window.removeEventListener('scroll', updateNavigation);
+    if (slideInterval) {
+        clearInterval(slideInterval);
+    }
+    window.removeEventListener('scroll', updateNavigation);
 });
 </script>
 
@@ -227,6 +255,7 @@ onUnmounted(() => {
 
 
 <style scoped>
+/* Your existing styles */
 .tech-icon {
     transition: all 0.3s ease;
 }
@@ -237,68 +266,68 @@ onUnmounted(() => {
 
 .fade-enter-active,
 .fade-leave-active {
-  transition: all 0.3s ease;
+    transition: all 0.3s ease;
 }
 
 .fade-enter-from,
 .fade-leave-to {
-  opacity: 0;
-  transform: translateX(-20px);
+    opacity: 0;
+    transform: translateX(-20px);
 }
 
 .fade-enter-to,
 .fade-leave-from {
-  opacity: 1;
-  transform: translateX(0);
+    opacity: 1;
+    transform: translateX(0);
 }
 
 .crossfade-enter-active,
 .crossfade-leave-active {
-  transition: opacity 0.3s ease;
+    transition: opacity 0.3s ease;
 }
 .crossfade-enter-from {
-  opacity: 0;
+    opacity: 0;
 }
 .crossfade-leave-to {
-  opacity: 0;
+    opacity: 0;
 }
 .crossfade-enter-to,
 .crossfade-leave-from {
-  opacity: 1;
+    opacity: 1;
 }
 
 .fade-slide-y-enter-active,
 .fade-slide-y-leave-active {
-  transition: all 0.3s ease-out;
-  overflow: hidden; /* Ensures content doesn't "jump" during height transition */
+    transition: all 0.3s ease-out;
+    overflow: hidden; /* Ensures content doesn't "jump" during height transition */
 }
 
 .fade-slide-y-enter-from,
 .fade-slide-y-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
-  max-height: 0; /* Animate height from 0 */
-  padding-top: 0;
-  padding-bottom: 0;
-  margin-top: 0;
-  margin-bottom: 0;
+    opacity: 0;
+    transform: translateY(-10px);
+    max-height: 0; /* Animate height from 0 */
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 0;
 }
 
 .fade-slide-y-enter-to,
 .fade-slide-y-leave-from {
-  opacity: 1;
-  transform: translateY(0);
-  max-height: 500px; /* A value larger than the max possible height of the content */
-  /* Restore original padding/margin if they were removed in -from state */
-  padding-top: theme('padding.6'); /* or whatever your original padding-top was, e.g., p-6 means 1.5rem */
-  padding-bottom: theme('padding.6');
-  margin-top: theme('margin.4'); /* mt-4 */
-  margin-bottom: 0; /* if no mb */
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 500px; /* A value larger than the max possible height of the content */
+    /* Restore original padding/margin if they were removed in -from state */
+    padding-top: theme('padding.6'); /* or whatever your original padding-top was, e.g., p-6 means 1.5rem */
+    padding-bottom: theme('padding.6');
+    margin-top: theme('margin.4'); /* mt-4 */
+    margin-bottom: 0; /* if no mb */
 }
 
 .hero-gradient-mask {
-  mask-image: linear-gradient(to right, transparent 0%, black 50%, black 100%);
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 50%, black 100%);
+    mask-image: linear-gradient(to right, transparent 0%, black 50%, black 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 50%, black 100%);
 }
 
 html {
@@ -306,47 +335,47 @@ html {
 }
 
 .custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
+    width: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  @apply bg-gray-700;
+    @apply bg-gray-700;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  @apply bg-gray-500 rounded-full;
+    @apply bg-gray-500 rounded-full;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-400;
+    @apply bg-gray-400;
 }
 
 :deep(.dp__theme_dark) {
-  --dp-background-color: #1F2937;
-  --dp-text-color: #F3F4F6;
-  --dp-hover-color: #374151;
-  --dp-hover-text-color: #F3F4F6;
-  --dp-hover-icon-color: #F3F4F6;
-  --dp-primary-color: #3B82F6;
-  --dp-primary-text-color: #FFFFFF;
-  --dp-secondary-color: #4B5563;
-  --dp-border-color: #4B5563;
-  --dp-border-color-hover: #6B7280;
-  --dp-menu-border-color: #4B5563;
-  --dp-disabled-color: #030405;
-  --dp-scroll-bar-background: #4B5563;
-  --dp-scroll-bar-color: #9CA3AF;
-  --dp-success-color: #10B981;
-  --dp-success-color-disabled: #4B5563;
-  --dp-icon-color: #9CA3AF;
-  --dp-danger-color: #EF4444;
-  --dp-highlight-color: rgba(0, 92, 178, 0.2);
+    --dp-background-color: #1F2937;
+    --dp-text-color: #F3F4F6;
+    --dp-hover-color: #374151;
+    --dp-hover-text-color: #F3F4F6;
+    --dp-hover-icon-color: #F3F4F6;
+    --dp-primary-color: #3B82F6;
+    --dp-primary-text-color: #FFFFFF;
+    --dp-secondary-color: #4B5563;
+    --dp-border-color: #4B5563;
+    --dp-border-color-hover: #6B7280;
+    --dp-menu-border-color: #4B5563;
+    --dp-disabled-color: #030405;
+    --dp-scroll-bar-background: #4B5563;
+    --dp-scroll-bar-color: #9CA3AF;
+    --dp-success-color: #10B981;
+    --dp-success-color-disabled: #4B5563;
+    --dp-icon-color: #9CA3AF;
+    --dp-danger-color: #EF4444;
+    --dp-highlight-color: rgba(0, 92, 178, 0.2);
 }
 
 :deep(.dp__input) {
-  background-color: #1F2937 !important;
-  border-color: #4B5563 !important;
-  color: #F3F4F6 !important;
+    background-color: #1F2937 !important;
+    border-color: #4B5563 !important;
+    color: #F3F4F6 !important;
 }
 
 :deep(.dp__calendar_header),
@@ -363,17 +392,17 @@ html {
 }
 
 :deep(.dp__range_between) {
-  background-color: rgba(59, 130, 246, 0.2) !important;
+    background-color: rgba(59, 130, 246, 0.2) !important;
 }
 
 /* Datepicker action buttons */
 :deep(.dp__action_buttons) button {
-  @apply px-3 py-1 rounded-md text-white transition-colors duration-200;
+    @apply px-3 py-1 rounded-md text-white transition-colors duration-200;
 }
 :deep(.dp__action_buttons) .dp__action_select {
-  @apply bg-blue-600 hover:bg-blue-700;
+    @apply bg-blue-600 hover:bg-blue-700;
 }
 :deep(.dp__action_buttons) .dp__action_cancel {
-  @apply bg-gray-600 hover:bg-gray-700;
+    @apply bg-gray-600 hover:bg-gray-700;
 }
 </style>

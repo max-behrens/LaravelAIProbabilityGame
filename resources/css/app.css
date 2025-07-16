@@ -15,6 +15,7 @@ input {
 
 html {
     background-color: #1F2937 !important; /* bg-gray-800 */
+    overflow-x: hidden;
 }
 
 main {
