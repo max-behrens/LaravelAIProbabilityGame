@@ -1,4 +1,5 @@
 {
+    "name": "laravel-ai-probability-game",
     "private": true,
     "type": "module",
     "scripts": {
