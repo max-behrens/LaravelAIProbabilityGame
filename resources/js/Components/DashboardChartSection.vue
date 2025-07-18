@@ -441,8 +441,8 @@ watch(
       </div>
   </section>
 
-  <div v-if="showDateModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div class="bg-gray-800 rounded-lg shadow-xl p-6 relative max-w-md w-full">
+    <div v-if="showDateModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div class="bg-gray-800 rounded-lg shadow-xl p-6 relative max-w-md w-full min-h-[500px] flex flex-col">
           <h3 class="text-xl font-semibold text-white mb-4">Select Date Range</h3>
           <button
               @click="showDateModal = false"
@@ -453,19 +453,22 @@ watch(
               </svg>
           </button>
 
-          <Datepicker
-              v-model="datepickerModel" range
-              :enable-time-picker="false"
-              :dark="true"
-              :teleport="true"
-              placeholder="Select Date Range"
-              :min-date="new Date('2024-01-01')"
-              :max-date="new Date()"
-              class="my-4"
-              @update:model-value="handleDateSelection"
-          ></Datepicker>
+          <div class="flex-1 mb-4">
+              <Datepicker
+                  v-model="datepickerModel" 
+                  range
+                  :enable-time-picker="false"
+                  :dark="true"
+                  :teleport="false"
+                  placeholder="Select Date Range"
+                  :min-date="new Date('2024-01-01')"
+                  :max-date="new Date()"
+                  class="my-4"
+                  @update:model-value="handleDateSelection"
+              />
+          </div>
 
-          <div class="flex justify-end space-x-2 mt-4">
+          <div class="flex justify-end space-x-2 mt-auto">
               <button
                   @click="clearDateFilter"
                   class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md"
