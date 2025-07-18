@@ -194,14 +194,11 @@ const onPlayerCountChange = async (newCount) => {
 
 const nextOrSubmit = async () => {
     if (!isLastQuestion.value) {
-        // 1. Player answers current question and broadcasts it
+        // Handle non-final questions (unchanged)
         await answerQuestion(currentQuestionIndex.value, answers.value[currentQuestionIndex.value]);
 
-        // 2. AI Logic: If playing with AI, trigger AI answer for the *current* question.
-        // This happens before currentQuestionIndex increments.
         if (playWithAI.value && props.gameQuestions[currentQuestionIndex.value]) {
             console.log('Requesting AI answer for question:', currentQuestionIndex.value);
-            // Ensure `getAIAnswerForQuestion` in useAI accepts these arguments
             await getAIAnswerForQuestion(
                 props.gameQuestions[currentQuestionIndex.value].question,
                 props.gameId,
@@ -209,16 +206,14 @@ const nextOrSubmit = async () => {
             );
         }
 
-        // 3. Move to the next question
         currentQuestionIndex.value++;
     } else {
-        // This is the LAST question, so submit all answers
+        // This is the LAST question
         submitting.value = true;
 
         try {
-            // ⭐ NEW LOGIC: Wait for AI to answer the final question if playWithAI is enabled ⭐
+            // Handle AI for final question
             if (playWithAI.value) {
-                // Ensure AI has answered this specific final question
                 if (!hasAIAnswered(currentQuestionIndex.value)) {
                     addFlashMessage('Waiting for AI to answer the final question...', 'info');
                     console.log('Triggering AI answer for final question:', currentQuestionIndex.value);
@@ -234,15 +229,18 @@ const nextOrSubmit = async () => {
 
             if (result.submitted) {
                 addFlashMessage('Answers submitted successfully!', 'success');
-                gameIsOver.value = true; // Mark game as over
-                console.log('Game finished. Displaying results. Ready for new game via button.');
-
-                // DO NOT call resetGameState() here.
-                // The game state should be reset ONLY when a NEW game is started.
-                // The Pusher callbacks below will handle refreshing scores and charts.
+                gameIsOver.value = true; // Show "Game Over" message
+                
+                // ✅ IMPORTANT: Reset game state after a short delay to allow new games
+                setTimeout(() => {
+                    resetGameState();
+                    gameIsOver.value = false; // Re-enable buttons
+                    console.log('Game state reset - ready for new game');
+                }, 2000); // 2 second delay to show completion message
 
             } else if (result.waitingForOthers) {
                 addFlashMessage('Answers stored, now waiting for other players to submit...', 'success');
+                // Don't set gameIsOver here - still waiting for others
             }
 
         } catch (error) {
@@ -258,16 +256,18 @@ const nextOrSubmit = async () => {
 const startNewGame = () => {
     console.log('Starting a new game - resetting state...');
     resetGameState();
-    gameIsOver.value = false; // Clear the game over flag
-    // Potentially re-join the game or set up initial state if needed
+    // Clear any existing flash messages about game completion
+    clearFlashMessages();
+    addFlashMessage('Ready to start a new game!', 'success');
 };
 
 const resetGameState = () => {
     currentQuestionIndex.value = 0;
     answers.value = [];
     isGameStarted.value = false;
+    gameIsOver.value = false; // ✅ Reset game over state
     resetAI(); // Reset AI state in the composable
-    console.log('Game state fully reset.');
+    console.log('Game state fully reset - ready for new game');
 };
 
 // Lifecycle: fetch data
@@ -370,10 +370,12 @@ onMounted(() => {
                             </div>
                         </div>
 
+                        <!-- Game Over Section - Updated to show for shorter time -->
                         <div v-if="gameIsOver && !isGameStarted" class="basis-full mb-6 text-center">
                             <div class="p-6 bg-gray-800 rounded border border-gray-700 text-white">
                                 <h2 class="text-3xl font-bold mb-4">Game Over! 🎉</h2>
                                 <p class="text-lg mb-4">All players have submitted their answers.</p>
+                                <p class="text-sm text-gray-300 mb-4">Buttons will be re-enabled shortly...</p>
                                 <button @click="startNewGame"
                                     class="mt-4 px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition duration-300">
                                     Play Another Game
@@ -453,18 +455,23 @@ onMounted(() => {
                             </div>
 
                             <div class="flex flex-wrap gap-4 justify-center mt-4 w-full">
+                                <!-- Start Game Button -->
                                 <button @click="startGame"
-                                    :disabled="!isInGame || isGameInProgress || isWaitingForOthers || gameIsOver"
+                                    :disabled="!isInGame || (isGameInProgress && !gameIsOver) || isWaitingForOthers"
                                     class="bg-green-900 hover:bg-green-800 text-green-200 font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed">
                                     {{ isWaitingForOthers ? 'Waiting...' : 'Start Game' }}
                                 </button>
+                                
+                                <!-- Join Game Button -->
                                 <button @click="joinGame"
-                                    :disabled="isInGame || submitting || maxPlayersReached || isGameInProgress || gameIsOver"
+                                    :disabled="isInGame || submitting || maxPlayersReached || (isGameInProgress && !gameIsOver)"
                                     class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50">
                                     Join Game
                                 </button>
+                                
+                                <!-- Leave Game Button -->
                                 <button @click="leaveGame"
-                                    :disabled="!isInGame || submitting || isGameInProgress || gameIsOver"
+                                    :disabled="!isInGame || submitting || (isGameInProgress && !gameIsOver)"
                                     class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50">
                                     Leave Game
                                 </button>
