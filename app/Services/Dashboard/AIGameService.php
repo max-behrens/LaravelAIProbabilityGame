@@ -1,0 +1,98 @@
+<?php
+
+namespace App\Services\Dashboard;
+
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+
+class AIGameService
+{
+    /**
+     * Get AI answer for a specific question
+     */
+    public function getAIAnswerForQuestion($question)
+    {
+        Log::info('Getting AI answer for question', ['question' => $question]);
+
+        try {
+            $response = Http::withoutVerifying()
+                ->withToken(config('services.openai.secret'))
+                ->withHeaders([
+                    'OpenAI-Organization' => config('services.openai.organisation'),
+                ])
+                ->post('https://api.openai.com/v1/chat/completions', [
+                    "model" => "gpt-3.5-turbo-0125",
+                    "messages" => [
+                        [
+                            "role" => "system", 
+                            "content" => "You are an AI participating in a trivia game. You must provide concise, accurate answers to questions. Give only the answer without additional explanation or context."
+                        ],
+                        [
+                            "role" => "user", 
+                            "content" => "Question: " . $question
+                        ],
+                        [
+                            "role" => "assistant", 
+                            "content" => "Please provide a direct, concise answer to this trivia question. Do not include explanations, just the answer."
+                        ]
+                    ],
+                    "max_tokens" => 100,
+                    "temperature" => 0.3 // Lower temperature for more consistent answers
+                ]);
+
+            if ($response->failed()) {
+                Log::error('OpenAI API request failed', [
+                    'status' => $response->status(),
+                    'response' => $response->body()
+                ]);
+                throw new \Exception('OpenAI API request failed');
+            }
+
+            $aiResponse = $response->json('choices.0.message.content');
+            
+            if (!$aiResponse) {
+                Log::error('No AI response received');
+                throw new \Exception('No AI response received');
+            }
+
+            // Clean up the response (remove quotes, trim whitespace)
+            $aiResponse = trim($aiResponse, '"\'');
+            $aiResponse = trim($aiResponse);
+
+            Log::info('AI answer generated', [
+                'question' => $question,
+                'answer' => $aiResponse
+            ]);
+
+            return $aiResponse;
+
+        } catch (\Exception $e) {
+            Log::error('AI Game Service error', [
+                'error' => $e->getMessage(),
+                'question' => $question
+            ]);
+            
+            // Return a fallback answer
+            return "I don't know";
+        }
+    }
+
+    /**
+     * Get multiple AI answers for a batch of questions
+     */
+    public function getAIAnswersForQuestions(array $questions)
+    {
+        $answers = [];
+        
+        foreach ($questions as $index => $question) {
+            $answers[$index] = $this->getAIAnswerForQuestion($question);
+            
+            // Add a small delay to avoid rate limiting
+            if (count($questions) > 1) {
+                sleep(1);
+            }
+        }
+        
+        return $answers;
+    }
+}

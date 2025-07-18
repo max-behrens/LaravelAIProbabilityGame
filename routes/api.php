@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Models\Games;
 use App\Http\Controllers\Front\IndexController;
 use App\Http\Controllers\Dashboard\GamesController;
+use App\Http\Controllers\Dashboard\AIGameController;
 use App\Http\Controllers\Dashboard\DashboardAIController;
 use App\Http\Controllers\Dashboard\PostController;
 use App\Http\Controllers\Dashboard\ParseXmlController;
@@ -64,6 +65,13 @@ Route::get('/dashboard/cumulative-heatmap', [IndexController::class, 'getCumulat
 Route::get('/dashboard/cumulative-bargraph', [IndexController::class, 'getCumulativeBarGraph']);
 
 Route::get('/users', [IndexController::class, 'getAllUsers']);
+
+
+// AI Game Routes
+
+Route::post('/ai/answer', [AIGameController::class, 'getAIAnswer']);
+Route::get('/ai/game/{gameId}/answers', [AIGameController::class, 'getGameAIAnswers']);
+
 
 
 

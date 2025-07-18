@@ -132,7 +132,7 @@ class GamesController extends Controller
         $gameQuestions = $this->gamesService->getGameQuestions($gameDetails);
 
         return Inertia::render('Dashboard/AIGame/Room/Index', [
-            'gameId' => $gameId,
+            'gameId' => (int) $gameId,
             'userId' => $userId,
             'game' => $gameDetails,
             'maxPlayers' => $gameDetails->max_players,

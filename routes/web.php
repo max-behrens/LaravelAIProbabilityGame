@@ -7,6 +7,7 @@ use App\Http\Controllers\Front\IndexController;
 use App\Http\Controllers\Dashboard\WeatherController;
 use App\Http\Controllers\Dashboard\DashboardAIController;
 use App\Http\Controllers\Dashboard\GamesController;
+use App\Http\Controllers\Dashboard\AIGameController;
 use App\Http\Controllers\Dashboard\ParseXmlController;
 use App\Http\Controllers\Auth\ErrorController;
 use App\Http\Controllers\Front\PostController as FrontPostController;
@@ -107,6 +108,9 @@ Route::prefix('dashboard')
         })->name('weather.index');
         
         Route::post('/weather/get-data', [WeatherController::class, 'getWeather'])->name('weather.getData');
+
+        Route::post('/ai/get-answer', [AIGameController::class, 'getAIAnswer'])->name('ai.getAnswer');
+        Route::get('/ai/game/{gameId}/answers', [AIGameController::class, 'getGameAIAnswers'])->name('ai.getGameAnswers');
 
         // Route::get('/dashboard/posts/create', [DashboardPostController::class, 'store'])->name('posts.create');
 

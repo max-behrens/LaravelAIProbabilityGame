@@ -20,11 +20,6 @@ class IndexController extends Controller
     {
 
 
-
-        Log::debug('Authenticated user in DashboardController', [
-            'user' => $request->user(),
-        ]);
-    
         return Inertia::render('Dashboard/Index', [
             'current_game_id' => $request->query('game_id'),
             'current_start_date' => $request->query('start_date'),
