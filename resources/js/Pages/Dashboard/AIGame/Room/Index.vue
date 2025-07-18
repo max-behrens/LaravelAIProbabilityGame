@@ -192,14 +192,13 @@ const onPlayerCountChange = async (newCount) => {
     }
 };
 
-// Navigation / submission for answers
 const nextOrSubmit = async () => {
     if (!isLastQuestion.value) {
         // 1. Player answers current question and broadcasts it
         await answerQuestion(currentQuestionIndex.value, answers.value[currentQuestionIndex.value]);
 
         // 2. AI Logic: If playing with AI, trigger AI answer for the *current* question.
-        //    This happens before currentQuestionIndex increments.
+        // This happens before currentQuestionIndex increments.
         if (playWithAI.value && props.gameQuestions[currentQuestionIndex.value]) {
             console.log('Requesting AI answer for question:', currentQuestionIndex.value);
             // Ensure `getAIAnswerForQuestion` in useAI accepts these arguments
@@ -217,6 +216,20 @@ const nextOrSubmit = async () => {
         submitting.value = true;
 
         try {
+            // ⭐ NEW LOGIC: Wait for AI to answer the final question if playWithAI is enabled ⭐
+            if (playWithAI.value) {
+                // Ensure AI has answered this specific final question
+                if (!hasAIAnswered(currentQuestionIndex.value)) {
+                    addFlashMessage('Waiting for AI to answer the final question...', 'info');
+                    console.log('Triggering AI answer for final question:', currentQuestionIndex.value);
+                    await getAIAnswerForQuestion(
+                        props.gameQuestions[currentQuestionIndex.value].question,
+                        props.gameId,
+                        currentQuestionIndex.value
+                    );
+                }
+            }
+
             const result = await submitAnswers(answers.value, playerCount.value);
 
             if (result.submitted) {

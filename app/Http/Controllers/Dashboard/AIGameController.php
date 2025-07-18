@@ -60,12 +60,15 @@ class AIGameController extends Controller
             if ($existingAnswer) {
                 Log::info('Returning existing AI answer', [
                     'aiAnswerId' => $existingAnswer->id,
-                    'answer' => $existingAnswer->answer
+                    'answer' => $existingAnswer->answer,
+                    'score' => $existingAnswer->score // Log the score for cached answers too
                 ]);
 
                 return response()->json([
                     'success' => true,
                     'answer' => $existingAnswer->answer,
+                    'score' => $existingAnswer->score,
+                    'isCorrect' => $existingAnswer->is_correct ?? null,
                     'cached' => true
                 ]);
             }
