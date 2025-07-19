@@ -383,9 +383,57 @@ onMounted(() => {
                             </div>
                         </div>
 
+                        <div class="basis-full flex flex-wrap gap-4 justify-center p-4 bg-gray-800 rounded shadow">
+                            <div class="flex items-center gap-2 text-white">
+                                <label for="players">Number of Players:</label>
+                                <select id="players" :value="playerCount" @change="onPlayerCountChange($event.target.value)"
+                                    :disabled="isGameInProgress || isWaitingForOthers || gameIsOver"
+                                    class="border rounded px-2 py-1 bg-gray-700 text-white disabled:opacity-50">
+                                    <option value="1">1 Player</option>
+                                    <option value="2">2 Players</option>
+                                </select>
+                            </div>
 
-                        <div v-if="playWithAI" class="basis-full mb-4">
-                          <div class="bg-gray-800 p-4 rounded border border-gray-700">
+                            <div class="flex items-center text-white">
+                                <input type="checkbox" v-model="playWithAI"
+                                    :disabled="isGameInProgress || isWaitingForOthers || gameIsOver" class="mr-2" />
+                                <span>Play with AI</span>
+                            </div>
+
+                            <div class="flex flex-wrap gap-4 justify-center mt-4 w-full">
+                                <!-- Start Game Button -->
+                                <button @click="startGame"
+                                    :disabled="!isInGame || (isGameInProgress && !gameIsOver) || isWaitingForOthers"
+                                    class="bg-green-900 hover:bg-green-800 text-green-200 font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed">
+                                    {{ isWaitingForOthers ? 'Waiting...' : 'Start Game' }}
+                                </button>
+                                
+                                <!-- Join Game Button -->
+                                <button @click="joinGame"
+                                    :disabled="isInGame || submitting || maxPlayersReached || (isGameInProgress && !gameIsOver)"
+                                    class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50">
+                                    Join Game
+                                </button>
+                                
+                                <!-- Leave Game Button -->
+                                <button @click="leaveGame"
+                                    :disabled="!isInGame || submitting || (isGameInProgress && !gameIsOver)"
+                                    class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50">
+                                    Leave Game
+                                </button>
+                            </div>
+                        </div>
+
+                        <div v-if="isWaitingForOthers" class="basis-full mb-6 text-center">
+                            <div class="p-4 bg-yellow-900 text-yellow-200 rounded border border-yellow-700">
+                                <p class="text-lg font-semibold">Waiting for other players...</p>
+                                <p class="text-sm mt-2">Please wait while other players complete their actions.</p>
+                            </div>
+                        </div>
+
+
+                        <div v-if="playWithAI" class="flex flex-wrap gap-6 w-full">
+                          <div class="bg-gray-800 min-w-[300px] basis-1/4 p-4 rounded border border-gray-700">
                               <h4 class="text-white font-semibold mb-2">AI Player Status</h4>
 
                               <div v-if="aiLoading" class="text-yellow-400 flex items-center">
@@ -428,55 +476,36 @@ onMounted(() => {
                                   <p>Debug: AI answers count = {{ Object.keys(aiAnswers).length }}</p>
                               </div>
                           </div>
+
+                          <div class="flex-1 min-w-[300px] p-4 bg-gray-800 rounded shadow">
+                                <h3 class="font-semibold text-lg mb-2">AI Scores</h3>
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr class="bg-gray-700">
+                                            <th class="p-2 border-b">Model</th>
+                                            <th class="p-2 border-b">Game Session</th>
+                                            <th class="p-2 border-b">Score</th>
+                                            <th class="p-2 border-b">Date Created</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="score in gameScores" :key="score.id">
+                                            <td class="p-2 border-b text-white">{{ score.user?.name }}</td>
+                                            <td class="p-2 border-b text-white">{{ score.session_id }}</td>
+                                            <td class="p-2 border-b text-white">{{ score.score }}</td>
+                                            <td class="p-2 border-b text-white">{{ formatDate(score.created_at) }}</td>
+                                        </tr>
+                                        <tr v-if="gameScores.length === 0">
+                                            <td colspan="4" class="p-2 text-center text-gray-400">No scores available
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <DynamicPagination :currentPage="scoresCurrentPage" :totalPages="scoresTotalPages"
+                                    @change-page="changeScoresPage" />
+                            </div>
                       </div>
 
-                        <div v-if="isWaitingForOthers" class="basis-full mb-6 text-center">
-                            <div class="p-4 bg-yellow-900 text-yellow-200 rounded border border-yellow-700">
-                                <p class="text-lg font-semibold">Waiting for other players...</p>
-                                <p class="text-sm mt-2">Please wait while other players complete their actions.</p>
-                            </div>
-                        </div>
-
-                        <div class="basis-full flex flex-wrap gap-4 justify-center p-4 bg-gray-800 rounded shadow">
-                            <div class="flex items-center gap-2 text-white">
-                                <label for="players">Number of Players:</label>
-                                <select id="players" :value="playerCount" @change="onPlayerCountChange($event.target.value)"
-                                    :disabled="isGameInProgress || isWaitingForOthers || gameIsOver"
-                                    class="border rounded px-2 py-1 bg-gray-700 text-white disabled:opacity-50">
-                                    <option value="1">1 Player</option>
-                                    <option value="2">2 Players</option>
-                                </select>
-                            </div>
-
-                            <div class="flex items-center text-white">
-                                <input type="checkbox" v-model="playWithAI"
-                                    :disabled="isGameInProgress || isWaitingForOthers || gameIsOver" class="mr-2" />
-                                <span>Play with AI</span>
-                            </div>
-
-                            <div class="flex flex-wrap gap-4 justify-center mt-4 w-full">
-                                <!-- Start Game Button -->
-                                <button @click="startGame"
-                                    :disabled="!isInGame || (isGameInProgress && !gameIsOver) || isWaitingForOthers"
-                                    class="bg-green-900 hover:bg-green-800 text-green-200 font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed">
-                                    {{ isWaitingForOthers ? 'Waiting...' : 'Start Game' }}
-                                </button>
-                                
-                                <!-- Join Game Button -->
-                                <button @click="joinGame"
-                                    :disabled="isInGame || submitting || maxPlayersReached || (isGameInProgress && !gameIsOver)"
-                                    class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50">
-                                    Join Game
-                                </button>
-                                
-                                <!-- Leave Game Button -->
-                                <button @click="leaveGame"
-                                    :disabled="!isInGame || submitting || (isGameInProgress && !gameIsOver)"
-                                    class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50">
-                                    Leave Game
-                                </button>
-                            </div>
-                        </div>
 
                         <div class="flex flex-wrap gap-6 w-full">
                             <div class="min-w-[300px] basis-1/4 p-4 bg-gray-800 rounded shadow">
