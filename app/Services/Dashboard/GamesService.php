@@ -85,15 +85,12 @@ class GamesService
         return $type;
     }
 
-    public function submitAnswers($gameId, $userId, array $answers)
+    public function submitAnswers($gameId, $userId, array $answers, $sessionId)
     {
         Log::debug('Submitting answers', ['gameId' => $gameId, 'answers' => $answers]);
 
         $game = Games::findOrFail($gameId);
         $gameQuestions = $game->gameType->gameQuestions()->get();
-
-        // Generate session ID
-        $sessionId = Str::uuid()->toString();
 
         Log::debug('Session created', ['sessionId' => $sessionId, 'user' => $userId]);
 

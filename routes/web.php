@@ -62,6 +62,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 Route::post('/games/{game}/player-ready', [GamesController::class, 'playerReady'])->middleware('auth');
 
+Route::post('/games/{gameId}/reset-session', [GamesController::class, 'resetGameSession'])
+    ->middleware('auth');
+
 
 
 Route::prefix('dashboard')

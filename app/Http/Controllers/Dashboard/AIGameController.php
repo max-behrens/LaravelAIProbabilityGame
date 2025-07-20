@@ -20,6 +20,21 @@ class AIGameController extends Controller
     }
 
     /**
+     * Get AI scores for room.
+     */
+     public function getAIScores(Request $request)
+     {
+         $gameId = $request->gameId;
+         $page = $request->query('page', 1);
+ 
+         Log::info('Fetching game scores', ['gameId' => $gameId, 'page' => $page]);
+         $gameScores = $this->gamesService->getGameScores($gameId, $page);
+         Log::info('Game scores retrieved', ['scores' => $gameScores]);
+ 
+         return response()->json($gameScores);
+     }
+
+    /**
      * Get AI answer for a specific question in a game
      */
     public function getAIAnswer(Request $request)

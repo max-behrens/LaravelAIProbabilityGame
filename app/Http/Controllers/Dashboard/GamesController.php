@@ -13,6 +13,9 @@ use App\Events\GameStatusUpdated;
 use App\Services\Dashboard\GamesService;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+
+
 
 class GamesController extends Controller
 {
@@ -158,27 +161,35 @@ class GamesController extends Controller
     public function submitAnswer(Request $request, $gameId)
     {
         Log::info('Submitting answers', ['gameId' => $gameId, 'userId' => $request->user()?->id]);
-
+    
         $request->validate([
             'answers' => 'required|array',
-            'answers.*' => 'nullable|string', // Changed from 'required|string' to 'nullable|string'
+            'answers.*' => 'nullable|string',
         ]);
-
+    
         $user = $request->user();
         if (!$user) {
-            Log::warning('Unauthorized answer submission');
             return response()->json(['error' => 'Unauthorized'], 401);
         }
-
-        $sessionId = $this->gamesService->submitAnswers($gameId, $user->id, $request->answers);
-
+    
+        // 🆕 ROBUST: Use game start time to create unique session per game round
+        $gameStartKey = "game:{$gameId}:start_time";
+        $gameStartTime = Cache::remember($gameStartKey, now()->addHours(1), function() {
+            return now()->timestamp;
+        });
+    
+        $sessionKey = "game:{$gameId}:session_id:{$gameStartTime}";
+        $sessionId = Cache::rememberForever($sessionKey, fn () => Str::uuid()->toString());
+    
+        // 👇 Submit with shared session_id
+        $this->gamesService->submitAnswers($gameId, $user->id, $request->answers, $sessionId);
+    
         $this->triggerGameUpdate($gameId, 'game.answers_submitted', [
             'userId' => $user->id,
             'userName' => $user->name,
             'timestamp' => now()->toISOString(),
         ]);
-
-        Log::info('Answers submitted successfully', ['sessionId' => $sessionId]);
+    
         return response()->json([
             'success' => true,
             'message' => 'Game completed successfully!',
@@ -188,6 +199,11 @@ class GamesController extends Controller
 
     public function start(Games $game)
     {
+
+        // Reset game start time for new session
+        $gameStartKey = "game:{$gameId}:start_time";
+        Cache::forget($gameStartKey);
+
         Log::info('Starting game', ['gameId' => $game->id, 'userId' => auth()->id()]);
         $game->start();
 
@@ -346,5 +362,22 @@ class GamesController extends Controller
         $this->triggerGameUpdate($gameId, $event, $data);
 
         return response()->json(['success' => true]);
+    }
+
+    public function resetGameSession(Request $request, $gameId)
+    {
+        $gameStartKey = "game:{$gameId}:start_time";
+        $sessionKey = "game:{$gameId}:session_id";
+        
+        // Clear both keys to force new session creation
+        Cache::forget($gameStartKey);
+        Cache::forget($sessionKey);
+        
+        Log::info('Game session reset', ['gameId' => $gameId, 'userId' => $request->user()?->id]);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Game session reset successfully'
+        ]);
     }
 }

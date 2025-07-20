@@ -3,7 +3,6 @@ import { ref, defineProps, computed, onMounted } from 'vue';
 import BreezeAuthenticatedLayout from '@/Layouts/Authenticated.vue';
 import GameAuthenticatedLayout from '@/Layouts/GameAuthenticated.vue';
 import { Head, Link } from '@inertiajs/inertia-vue3';
-// import { useGames } from '@/Composables/useGames'; // This was imported but not used, can be removed if still unused
 import { useAI } from '@/Composables/useAI';
 import { usePlayerInteractions } from '@/Composables/usePlayerInteractions';
 import DynamicPagination from '@/Components/DynamicPagination.vue';
@@ -19,7 +18,7 @@ const echo = new Echo({
     broadcaster: 'pusher',
     key: 'c493e35de663a696d88e',
     cluster: 'mt1',
-    forceTLS: true, // optional but recommended
+    forceTLS: true,
 });
 
 // Props
@@ -42,7 +41,7 @@ const submitting = ref(false);
 const currentQuestionIndex = ref(0);
 const answers = ref([]);
 const isGameStarted = ref(false);
-const gameIsOver = ref(false); // NEW: State to indicate if the current game is over
+const gameIsOver = ref(false); // Flag to indicate game is finished, but not necessarily reset yet
 const gameGraphRef = ref(null);
 const gameHeatmapRef = ref(null);
 
@@ -52,6 +51,7 @@ const {
     flashMessages,
     gameState,
     isInGame,
+    preSubmittedAnswers,
     fetchPlayers,
     broadcastJoin,
     broadcastLeave,
@@ -71,7 +71,7 @@ const {
     playWithAI,
     allPlayersAnswered,
     getAIAnswer,
-    getAIAnswerForQuestion, // Assuming this is the helper to fetch a single AI answer
+    getAIAnswerForQuestion,
     hasAIAnswered,
     resetAI
 } = useAI(props.gameId, props.gameQuestions, gameState, players, currentQuestionIndex);
@@ -96,6 +96,11 @@ const isLastQuestion = computed(() => {
 // Watch for game state changes
 const isWaitingForOthers = computed(() => gameState.value.waitingForOthers);
 const isGameInProgress = computed(() => gameState.value.gameInProgress);
+
+// New computed property for controlling question input visibility
+const showQuestionInput = computed(() => {
+    return isGameStarted.value && !isWaitingForOthers.value && !gameIsOver.value;
+});
 
 // Format date helper
 const formatDate = (dateString) => {
@@ -136,6 +141,9 @@ const changeScoresPage = (page) => {
 // Updated game control functions
 const startGame = async () => {
     try {
+        // Reset session before starting new game
+        await axios.post(`/games/${props.gameId}/reset-session`);
+        
         const response = await axios.post(`/games/${props.gameId}/player-ready`, {
             userId: props.auth.user.id,
             userName: props.auth.user.name,
@@ -146,6 +154,7 @@ const startGame = async () => {
             addFlashMessage('Waiting for other players to be ready...', 'success');
         } else if (response.data.status === 'started') {
             isGameStarted.value = true;
+            gameIsOver.value = false; // Ensure gameIsOver is false when game starts
             addFlashMessage('Game started!', 'success');
         }
     } catch (error) {
@@ -159,7 +168,7 @@ const joinGame = async () => {
     try {
         submitting.value = true;
         await axios.post(`/games/${props.gameId}/join`);
-        await fetchPlayers(); // This will be updated via Pusher anyway
+        await fetchPlayers();
         addFlashMessage('You joined the game!', 'success');
     } catch (error) {
         errorMessage.value = error.response?.data?.message || 'Failed to join the game.';
@@ -174,7 +183,7 @@ const leaveGame = async () => {
     try {
         submitting.value = true;
         await axios.post(`/games/${props.gameId}/leave`);
-        await fetchPlayers(); // This will be updated via Pusher anyway
+        await fetchPlayers();
         addFlashMessage('You left the game!', 'success');
     } catch (error) {
         errorMessage.value = error.response?.data?.message || 'Failed to leave the game.';
@@ -194,7 +203,6 @@ const onPlayerCountChange = async (newCount) => {
 
 const nextOrSubmit = async () => {
     if (!isLastQuestion.value) {
-        // Handle non-final questions (unchanged)
         await answerQuestion(currentQuestionIndex.value, answers.value[currentQuestionIndex.value]);
 
         if (playWithAI.value && props.gameQuestions[currentQuestionIndex.value]) {
@@ -228,19 +236,25 @@ const nextOrSubmit = async () => {
             const result = await submitAnswers(answers.value, playerCount.value);
 
             if (result.submitted) {
-                addFlashMessage('Answers submitted successfully!', 'success');
-                gameIsOver.value = true; // Show "Game Over" message
-                
-                // ✅ IMPORTANT: Reset game state after a short delay to allow new games
+                // Game completely finished AND all players have submitted
+                addFlashMessage('Answers submitted successfully! Game Completed.', 'success');
+                gameIsOver.value = true;      // Mark game as over
+                isGameStarted.value = false;  // Immediately hide question input
+
+                // Reset after a delay, allowing time for "Game Over" message (if any)
+                // and for charts to update before disappearing.
                 setTimeout(() => {
                     resetGameState();
-                    gameIsOver.value = false; // Re-enable buttons
-                    console.log('Game state reset - ready for new game');
-                }, 2000); // 2 second delay to show completion message
+                    console.log('Game state fully reset on submitter - ready for new game');
+                }, 2000); // 2 seconds delay for charts/scores to refresh visually
 
-            } else if (result.waitingForOthers) {
-                addFlashMessage('Answers stored, now waiting for other players to submit...', 'success');
-                // Don't set gameIsOver here - still waiting for others
+            } else if (result.waitingForOthers && result.preSubmitted) {
+                // User has submitted, but others are still playing or server is processing
+                addFlashMessage('Your answers are ready! Waiting for other players to submit...', 'success');
+                gameState.value.waitingForOthers = true; // Show waiting message
+                isGameStarted.value = false; // Hide the question input
+                preSubmittedAnswers.value = answers.value;
+                console.log('✅ Answers pre-submitted, waiting for auto-submission...');
             }
 
         } catch (error) {
@@ -256,7 +270,6 @@ const nextOrSubmit = async () => {
 const startNewGame = () => {
     console.log('Starting a new game - resetting state...');
     resetGameState();
-    // Clear any existing flash messages about game completion
     clearFlashMessages();
     addFlashMessage('Ready to start a new game!', 'success');
 };
@@ -265,8 +278,9 @@ const resetGameState = () => {
     currentQuestionIndex.value = 0;
     answers.value = [];
     isGameStarted.value = false;
-    gameIsOver.value = false; // ✅ Reset game over state
-    resetAI(); // Reset AI state in the composable
+    gameIsOver.value = false;
+    gameState.value.waitingForOthers = false; // Ensure waiting state is also reset
+    resetAI();
     console.log('Game state fully reset - ready for new game');
 };
 
@@ -275,11 +289,11 @@ onMounted(() => {
     fetchCurrentGame();
     fetchGameScores();
 
-    // REGISTER CALLBACKS FOR LIVE UPDATES
+    // REGISTER CALLBACKS FOR LIVE UPDATES INCLUDING UI RESET
     registerCallbacks({
         onScoresUpdate: async () => {
             console.log('🔄 Refreshing scores table...');
-            await fetchGameScores(1); // Reset to first page and refresh
+            await fetchGameScores(1);
         },
         onGameUpdate: async () => {
             console.log('🔄 Refreshing game details...');
@@ -287,13 +301,26 @@ onMounted(() => {
         },
         onChartsUpdate: async () => {
             console.log('🔄 Refreshing charts...');
-            // Refresh charts
             if (gameGraphRef.value?.refreshChart) {
                 await gameGraphRef.value.refreshChart();
             }
             if (gameHeatmapRef.value?.refreshHeatmap) {
                 await gameHeatmapRef.value.refreshHeatmap();
             }
+        },
+        // NEW: UI reset callback for auto-submitted users
+        onGameComplete: async (data) => { // Added 'data' parameter to receive info from event
+            console.log('🔄 Received Pusher .game.complete event. Resetting UI state for other users...');
+            addFlashMessage('Your answers have been auto-submitted! Game completed!', 'success');
+            gameIsOver.value = true; // Mark game as over
+            isGameStarted.value = false; // Immediately hide question input
+            gameState.value.waitingForOthers = false; // Clear waiting state
+
+            // Schedule the full reset after a short delay
+            setTimeout(() => {
+                resetGameState();
+                console.log('Auto-submitted user UI state fully reset - ready for new game');
+            }, 2000); // 2 seconds delay
         }
     });
 
@@ -301,8 +328,9 @@ onMounted(() => {
         .listen('.player.ready', (data) => {
             console.log('Player ready:', data.userName);
             fetchPlayers();
-            if (data.requiredCount && players.value.length >= data.requiredCount) {
+            if (data.status === 'started') { // Use the status from the server event
                 isGameStarted.value = true;
+                gameIsOver.value = false; // Ensure gameIsOver is false when game starts
                 addFlashMessage('Game started!', 'success');
             }
         });
@@ -333,11 +361,11 @@ onMounted(() => {
 
                     <div v-for="flash in flashMessages" :key="flash.id" class="mb-2">
                         <div :class="{
-                            'bg-red-900 text-red-200 border-red-700': flash.type === 'error',
-                            'bg-green-900 text-green-200 border-green-700': flash.type === 'success',
-                            'bg-blue-900 text-blue-200 border-blue-700': flash.type === 'info',
-                            'bg-yellow-900 text-yellow-200 border-yellow-700': flash.type === 'warning'
-                        }" class="p-3 rounded border relative">
+                                'bg-red-900 text-red-200 border-red-700': flash.type === 'error',
+                                'bg-green-900 text-green-200 border-green-700': flash.type === 'success',
+                                'bg-blue-900 text-blue-200 border-blue-700': flash.type === 'info',
+                                'bg-yellow-900 text-yellow-200 border-yellow-700': flash.type === 'warning'
+                            }" class="p-3 rounded border relative">
                             {{ flash.message }}
                             <button @click="removeFlashMessage(flash.id)"
                                 class="absolute top-1 right-2 text-xl font-bold opacity-70 hover:opacity-100">
@@ -351,7 +379,7 @@ onMounted(() => {
 
 
                     <div class="flex flex-wrap gap-6 justify-center items-start">
-                        <div v-if="isGameStarted && !isWaitingForOthers && !gameIsOver" class="basis-full mb-6">
+                        <div v-if="showQuestionInput" class="basis-full mb-6">
                             <div class="text-center mb-2 text-gray-400 text-sm font-medium">
                                 Question {{ currentQuestionIndex + 1 }} / {{ props.gameQuestions.length }}
                             </div>
@@ -363,22 +391,9 @@ onMounted(() => {
                                     class="px-4 py-2 rounded w-full sm:w-2/3 text-gray-200 placeholder-gray-400 !text-gray-200"
                                     placeholder="Your answer" />
 
-                                <button :disabled="submitting || isWaitingForOthers" @click="nextOrSubmit"
+                                <button :disabled="submitting" @click="nextOrSubmit"
                                     class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50">
                                     {{ isLastQuestion ? (submitting ? 'Submitting...' : 'Submit') : 'Next' }}
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Game Over Section - Updated to show for shorter time -->
-                        <div v-if="gameIsOver && !isGameStarted" class="basis-full mb-6 text-center">
-                            <div class="p-6 bg-gray-800 rounded border border-gray-700 text-white">
-                                <h2 class="text-3xl font-bold mb-4">Game Over! 🎉</h2>
-                                <p class="text-lg mb-4">All players have submitted their answers.</p>
-                                <p class="text-sm text-gray-300 mb-4">Buttons will be re-enabled shortly...</p>
-                                <button @click="startNewGame"
-                                    class="mt-4 px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition duration-300">
-                                    Play Another Game
                                 </button>
                             </div>
                         </div>
@@ -401,21 +416,18 @@ onMounted(() => {
                             </div>
 
                             <div class="flex flex-wrap gap-4 justify-center mt-4 w-full">
-                                <!-- Start Game Button -->
                                 <button @click="startGame"
                                     :disabled="!isInGame || (isGameInProgress && !gameIsOver) || isWaitingForOthers"
                                     class="bg-green-900 hover:bg-green-800 text-green-200 font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed">
                                     {{ isWaitingForOthers ? 'Waiting...' : 'Start Game' }}
                                 </button>
                                 
-                                <!-- Join Game Button -->
                                 <button @click="joinGame"
                                     :disabled="isInGame || submitting || maxPlayersReached || (isGameInProgress && !gameIsOver)"
                                     class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50">
                                     Join Game
                                 </button>
                                 
-                                <!-- Leave Game Button -->
                                 <button @click="leaveGame"
                                     :disabled="!isInGame || submitting || (isGameInProgress && !gameIsOver)"
                                     class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50">
@@ -424,7 +436,7 @@ onMounted(() => {
                             </div>
                         </div>
 
-                        <div v-if="isWaitingForOthers" class="basis-full mb-6 text-center">
+                        <div v-if="isWaitingForOthers && !gameIsOver" class="basis-full mb-6 text-center">
                             <div class="p-4 bg-yellow-900 text-yellow-200 rounded border border-yellow-700">
                                 <p class="text-lg font-semibold">Waiting for other players...</p>
                                 <p class="text-sm mt-2">Please wait while other players complete their actions.</p>
@@ -569,7 +581,7 @@ onMounted(() => {
                         </div>
 
 
-                    </div>
+                        </div>
                 </div>
             </div>
         </GameAuthenticatedLayout>
