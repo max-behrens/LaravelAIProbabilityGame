@@ -250,20 +250,21 @@ onBeforeUnmount(() => {
                 {{ $page.props.auth?.user?.name || 'Loading...' }}
               </div>
               <div class="font-medium text-sm text-gray-400">
-                {{ $page.props.auth?.user?.email || 'Loading...' }}
+                {{ $page.props.auth?.user?.email || '' }}
+              </div>
+
+              <div class="mt-3 mb-3 space-y-1">
+                <button
+                  type="button"
+                  class="px-2 py-2 rounded bg-red-600 hover:bg-red-700 text-white"
+                  @click="logout"
+                >
+                  Log Out
+                </button>
               </div>
             </div>
 
-            <div class="mt-3 space-y-1">
-              <BreezeResponsiveNavLink
-                :href="route('logout')"
-                method="post"
-                as="button"
-                class="text-xs text-white hover:text-white !bg-transparent"
-              >
-                Log Out
-              </BreezeResponsiveNavLink>
-            </div>
+            
           </div>
         </div>
       </nav>
