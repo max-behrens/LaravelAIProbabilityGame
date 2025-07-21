@@ -37,8 +37,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::post('/games/{gameId}/submit-answer', [GamesController::class, 'submitAnswer'])->name('games.submit-answer');
 
-        Route::post('/games/{gameId}/submit-ai-answer', [GamesController::class, 'submitAnswer'])->name('games.submit-answer');
-
 
             Route::get('/games/{gameId}/scores', [GamesController::class, 'getScores']);
 

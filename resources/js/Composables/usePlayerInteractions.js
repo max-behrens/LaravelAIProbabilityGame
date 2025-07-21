@@ -284,13 +284,6 @@ export function usePlayerInteractions(gameId, auth, aiModule = null) {
             answers: answers
           };
 
-          // Add AI answers if playing with AI
-          if (aiAnswers && aiModule?.playWithAI.value) {
-            requestData.aiAnswers = aiAnswers;
-            requestData.playWithAI = true;
-            console.log('Submitting with AI answers (multiplayer final):', { answers, aiAnswers });
-          }
-
           await axios.post(`/games/${gameId}/submit-answer`, requestData);
           
           // Broadcast game completion

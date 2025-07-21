@@ -133,10 +133,12 @@ class GamesController extends Controller
         $this->gamesService->submitAnswers($gameId, $user->id, $request->answers, $sessionId);
     
         // Submit AI answers if playing with AI
-        if ($request->boolean('playWithAI', false) && $request->has('aiAnswers')) {
+        // if ($request->boolean('playWithAI', false) && $request->has('aiAnswers')) {
             Log::info('Submitting AI answers', [
                 'gameId' => $gameId,
                 'sessionId' => $sessionId,
+                'playWithAI' => $request->boolean('playWithAI', false),
+                'aiAnswers' =>  $request->has('aiAnswers'),
                 'aiAnswersCount' => count($request->aiAnswers ?? [])
             ]);
             
@@ -164,7 +166,7 @@ class GamesController extends Controller
                 // Don't fail the entire request if AI submission fails
                 // But log the error for debugging
             }
-        }
+        // }
     
         $this->triggerGameUpdate($gameId, 'game.answers_submitted', [
             'userId' => $user->id,

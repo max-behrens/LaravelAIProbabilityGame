@@ -1,5 +1,5 @@
 <script setup>
-import { ref, defineProps, computed, onMounted } from 'vue';
+import { ref, defineProps, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import BreezeAuthenticatedLayout from '@/Layouts/Authenticated.vue';
 import GameAuthenticatedLayout from '@/Layouts/GameAuthenticated.vue';
 import { Head, Link } from '@inertiajs/inertia-vue3';
@@ -47,12 +47,29 @@ const isGameStarted = ref(false);
 const gameIsOver = ref(false); // Flag to indicate game is finished, but not necessarily reset yet
 const gameGraphRef = ref(null);
 const gameHeatmapRef = ref(null);
+const showVerticalNav = ref(false);
+const isNavigatingProgrammatically = ref(false);
+const currentNavSection = ref(0);
 
-const players = ref([]); // Initialize players
-const gameState = ref({}); // Initialize gameState
 
-// Pass the AI module to usePlayerInteractions to submit scores
-// 1. First, use the AI composable to declare its reactive variables.
+
+const {
+    players,
+    flashMessages,
+    gameState,
+    isInGame,
+    preSubmittedAnswers,
+    fetchPlayers,
+    changePlayerCount,
+    answerQuestion,
+    submitAnswers,
+    addFlashMessage,
+    removeFlashMessage,
+    clearFlashMessages,
+    registerCallbacks
+} = usePlayerInteractions(props.gameId, props.auth);
+
+// Create AI with dependency getter function
 const {
     aiAnswers,
     aiLoading,
@@ -63,32 +80,11 @@ const {
     getAIAnswerForQuestion,
     hasAIAnswered,
     resetAI
-} = useAI(props.gameId, props.gameQuestions, gameState, players, currentQuestionIndex);
-
-// 2. Now that aiAnswers, playWithAI, etc., are declared, you can pass them.
-const {
-    // players,
-    flashMessages,
-    // gameState,
-    isInGame,
-    preSubmittedAnswers,
-    fetchPlayers,
-    broadcastJoin,
-    broadcastLeave,
-    changePlayerCount,
-    answerQuestion,
-    submitAnswers,
-    addFlashMessage,
-    removeFlashMessage,
-    clearFlashMessages,
-    registerCallbacks
-} = usePlayerInteractions(props.gameId, props.auth, {
-    // Pass AI module as third parameter
-    aiAnswers,
-    playWithAI,
-    hasAIAnswered,
-    resetAI
-});
+} = useAI(props.gameId, () => ({
+    gameState: gameState.value,
+    players: players.value,
+    currentQuestionIndex: currentQuestionIndex.value
+}));
 
 
 // Debug logging
@@ -316,11 +312,104 @@ const resetGameState = () => {
     console.log('Game state fully reset - ready for new game');
 };
 
+// Vertical Nav Section:
+
+
+const navSections = [
+    { id: 'main', name: 'Main' },
+    { id: 'scores', name: 'Scores' },
+    { id: 'stats', name: 'Stats' },
+];
+
+const navigateSection = (direction) => {
+    isNavigatingProgrammatically.value = true; 
+
+    const newIndex = direction === 'up'
+        ? Math.max(0, currentNavSection.value - 1)
+        : Math.min(navSections.length - 1, currentNavSection.value + 1);
+
+    // Update currentNavSection immediately for instant feedback
+    currentNavSection.value = newIndex; 
+    
+    scrollToSection(newIndex);
+};
+
+const scrollToSection = (sectionIndex) => {
+    const section = navSections[sectionIndex];
+    const targetElement = document.getElementById(section.id);
+
+    if (targetElement) {
+        const yOffset = -80;
+        const y = targetElement.getBoundingClientRect().top + window.pageYOffset + yOffset;
+        
+        window.scrollTo({ 
+            top: y, 
+            behavior: 'smooth' 
+        });
+
+        // Use requestAnimationFrame for more precise scroll end detection
+        // or a slightly longer timeout if that's too complex.
+        // For now, let's keep a robust timeout for simplicity.
+        setTimeout(() => {
+            isNavigatingProgrammatically.value = false;
+            // Force an update to showVerticalNav after scroll is likely finished
+            // This ensures it correctly hides if at the top.
+            updateNavigation(); 
+        }, 800); // Adjust timeout based on your scroll behavior duration
+    } else if (section.id === 'main') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        setTimeout(() => {
+            isNavigatingProgrammatically.value = false;
+            updateNavigation(); // Ensure visibility is updated for 'main' section
+        }, 800);
+    }
+};
+
+const updateNavigation = () => {
+    const scrollY = window.scrollY;
+    const windowHeight = window.innerHeight;
+
+    // This part should *always* update, regardless of programmatic navigation
+    showVerticalNav.value = scrollY > windowHeight * 0.3;
+
+    // Only update currentNavSection if not navigating programmatically
+    if (isNavigatingProgrammatically.value) {
+        return; // Exit here to prevent flickering of currentNavSection name
+    }
+
+    const sectionElements = navSections.map((section, index) => ({
+        element: document.getElementById(section.id),
+        index: index
+    })).filter(item => item.element);
+
+    const scrollPosition = scrollY + windowHeight * 0.4;
+
+    for (let i = sectionElements.length - 1; i >= 0; i--) {
+        const { element, index } = sectionElements[i];
+        if (element.offsetTop <= scrollPosition) {
+            currentNavSection.value = index;
+            break;
+        }
+    }
+};
+
+
+
 // Lifecycle: fetch data
 onMounted(() => {
     fetchCurrentGame();
     fetchGameScores();
     fetchAIScores();
+
+    // Vertical Nav:
+    window.addEventListener('scroll', updateNavigation);
+    
+    // Fetch users on mount (assuming fetchUsers is defined elsewhere in your script)
+    // await fetchUsers(); 
+
+    nextTick(() => {
+        updateNavigation();
+    });
 
     // REGISTER CALLBACKS FOR LIVE UPDATES INCLUDING UI RESET
     registerCallbacks({
@@ -368,6 +457,10 @@ onMounted(() => {
             }
         });
 });
+
+onUnmounted(() => {
+    window.removeEventListener('scroll', updateNavigation);
+});
 </script>
 
 <template>
@@ -376,18 +469,44 @@ onMounted(() => {
     <BreezeAuthenticatedLayout>
         <GameAuthenticatedLayout :currentGameId="props.gameId">
 
-            <template #header>
-                <div class="flex items-center justify-between">
-                    <h2 class="font-semibold text-md text-white leading-tight">
-                        Lobby {{ props.gameId }}: {{ props.gameType.name }}
-                    </h2>
 
-                    <Link :href="route('ai-game')"
-                        class="inline-block bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium py-1 px-2 rounded">
-                    ← Back to AI Game Lobby
-                    </Link>
-                </div>
-            </template>
+                <!-- VERTICAL NAV -->
+
+                <transition name="fade">
+                    <div
+                    v-if="showVerticalNav"
+                    class="fixed left-4 top-1/2 transform -translate-y-1/2 z-50 bg-gray-800 backdrop-blur-sm rounded-lg p-2 shadow-lg hidden sm:block"
+                    >
+                    <div class="flex flex-col space-y-2">
+                        <button 
+                        @click="navigateSection('up')"
+                        :disabled="currentNavSection === 0"
+                        class="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed group"
+                        >
+                        <svg class="w-5 h-5 text-white group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+                        </svg>
+                        </button>
+                        
+                        <div class="text-center py-2">
+                        <div class="text-white text-xs font-medium whitespace-nowrap">
+                            {{ navSections[currentNavSection]?.name || 'Main' }}
+                        </div>
+                        </div>
+                        
+                        <button 
+                        @click="navigateSection('down')"
+                        :disabled="currentNavSection === navSections.length - 1"
+                        class="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed group"
+                        >
+                        <svg class="w-5 h-5 text-white group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                        </button>
+                    </div>
+                    </div>
+                </transition> 
+                        
 
             <div class="py-4 mb-6">
                 <div class="main-width mx-auto sm:px-6 lg:px-8">
@@ -476,6 +595,11 @@ onMounted(() => {
                             </div>
                         </div>
 
+                        <section id="scores">
+                        </section>
+
+                        <section id="tats">
+                        </section>
 
                         <div v-if="playWithAI" class="flex flex-wrap gap-6 w-full">
                           <div class="bg-gray-800 min-w-[300px] basis-1/4 p-4 rounded border border-gray-700">
@@ -620,3 +744,30 @@ onMounted(() => {
         </GameAuthenticatedLayout>
     </BreezeAuthenticatedLayout>
 </template>
+
+
+<style scoped>
+
+.fade-slide-y-enter-from,
+.fade-slide-y-leave-to {
+    opacity: 0;
+    transform: translateY(-10px);
+    max-height: 0; /* Animate height from 0 */
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.fade-slide-y-enter-to,
+.fade-slide-y-leave-from {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 500px; /* A value larger than the max possible height of the content */
+    /* Restore original padding/margin if they were removed in -from state */
+    padding-top: theme('padding.6'); /* or whatever your original padding-top was, e.g., p-6 means 1.5rem */
+    padding-bottom: theme('padding.6');
+    margin-top: theme('margin.4'); /* mt-4 */
+    margin-bottom: 0; /* if no mb */
+}
+</style>

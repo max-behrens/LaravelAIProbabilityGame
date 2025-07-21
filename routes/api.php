@@ -65,8 +65,6 @@ Route::get('/ai/game/{gameId}/answers', [AIGameController::class, 'getGameAIAnsw
 
 Route::get('/games/{gameId}/ai-scores', [AIGameController::class, 'getAIScores']);
 
-Route::middleware('auth:sanctum')->post('/games/{gameId}/submit-ai-answer', [GamesController::class, 'submitAnswer']);
-
 
 
 // Dashboard Stats Routes

@@ -1,22 +1,26 @@
 import { ref, computed, watch } from 'vue';
 import axios from 'axios';
 
-export function useAI(gameId, gameQuestions, gameState, players, currentQuestionIndex) {
+// Factory function that creates AI composable with dependencies
+export function createAI(gameId, getDependencies) {
   // Reactive state
   const aiAnswers = ref([]);
   const aiLoading = ref(false);
   const aiError = ref(null);
   const playWithAI = ref(false);
 
-  // FIXED: Computed property to check if all players have answered the current question
+  // Computed property that gets dependencies when needed
   const allPlayersAnswered = computed(() => {
     if (!playWithAI.value) return false;
     
-    const currentQuestion = currentQuestionIndex.value;
-    const totalPlayers = players.value.length;
+    const deps = getDependencies();
+    if (!deps.gameState || !deps.players) return false;
     
-    // SAFETY CHECK: Ensure gameState.value.playersAnswered exists and is iterable
-    if (!gameState.value || !gameState.value.playersAnswered) {
+    const currentQuestion = deps.currentQuestionIndex;
+    const totalPlayers = deps.players.length;
+    
+    // SAFETY CHECK: Ensure gameState.playersAnswered exists and is iterable
+    if (!deps.gameState.playersAnswered) {
       console.warn('gameState.playersAnswered is not initialized yet');
       return false;
     }
@@ -24,12 +28,12 @@ export function useAI(gameId, gameQuestions, gameState, players, currentQuestion
     // Check if it's a Set (which has Symbol.iterator) or convert it to array safely
     let playersAnsweredArray;
     try {
-      if (gameState.value.playersAnswered instanceof Set) {
-        playersAnsweredArray = Array.from(gameState.value.playersAnswered);
-      } else if (Array.isArray(gameState.value.playersAnswered)) {
-        playersAnsweredArray = gameState.value.playersAnswered;
+      if (deps.gameState.playersAnswered instanceof Set) {
+        playersAnsweredArray = Array.from(deps.gameState.playersAnswered);
+      } else if (Array.isArray(deps.gameState.playersAnswered)) {
+        playersAnsweredArray = deps.gameState.playersAnswered;
       } else {
-        console.warn('playersAnswered is not a Set or Array:', typeof gameState.value.playersAnswered);
+        console.warn('playersAnswered is not a Set or Array:', typeof deps.gameState.playersAnswered);
         return false;
       }
     } catch (error) {
@@ -60,7 +64,8 @@ export function useAI(gameId, gameQuestions, gameState, players, currentQuestion
       aiLoading.value = true;
       aiError.value = null;
       
-      const currentQuestion = currentQuestionIndex.value;
+      const deps = getDependencies();
+      const currentQuestion = deps.currentQuestionIndex;
             
       // Use the correct API endpoint that matches your controller
       const response = await axios.post('/api/ai/answer', {
@@ -154,4 +159,13 @@ export function useAI(gameId, gameQuestions, gameState, players, currentQuestion
     hasAIAnswered,
     resetAI
   };
+}
+
+// Convenience wrapper that matches original API
+export function useAI(gameId, gameQuestions, gameState, players, currentQuestionIndex) {
+  return createAI(gameId, () => ({
+    gameState: gameState?.value || gameState,
+    players: players?.value || players,
+    currentQuestionIndex: currentQuestionIndex?.value || currentQuestionIndex
+  }));
 }
