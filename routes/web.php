@@ -30,14 +30,19 @@ Route::get('/', IndexController::class)->name('index');
 Route::get('/403', [ErrorController::class, 'unauthorized'])->name('errors.403');
 
 
+// GENERAL DASHBOARD ROUTES (without prefix)
 
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::post('/games/{gameId}/submit-answer', [GamesController::class, 'submitAnswer'])->name('games.submit-answer');
 
+        Route::post('/games/{gameId}/submit-ai-answer', [GamesController::class, 'submitAnswer'])->name('games.submit-answer');
+
 
             Route::get('/games/{gameId}/scores', [GamesController::class, 'getScores']);
+
+            Route::get('/games/{gameId}/ai-scores', [AIGameController::class, 'getAIScores']);
 
             Route::get('/games/{gameId}/all-scores', [GamesController::class, 'getAllScores']);
 
@@ -66,6 +71,9 @@ Route::post('/games/{gameId}/reset-session', [GamesController::class, 'resetGame
     ->middleware('auth');
 
 
+
+
+// HOMEPAGE DASHBOARD ROUTES (with prefix)
 
 Route::prefix('dashboard')
     ->middleware(['auth', 'verified'])

@@ -56,6 +56,19 @@ Route::get('/games/{gameId}/players', [GamesController::class, 'getPlayers']);
 Route::post('/games/{gameId}/broadcast', [GamesController::class, 'broadcast']);
 
 
+
+// AI Game Routes
+
+Route::post('/ai/answer', [AIGameController::class, 'getAIAnswer']);
+
+Route::get('/ai/game/{gameId}/answers', [AIGameController::class, 'getGameAIAnswers']);
+
+Route::get('/games/{gameId}/ai-scores', [AIGameController::class, 'getAIScores']);
+
+Route::middleware('auth:sanctum')->post('/games/{gameId}/submit-ai-answer', [GamesController::class, 'submitAnswer']);
+
+
+
 // Dashboard Stats Routes
 
 Route::get('/dashboard/cumulative-linegraph', [IndexController::class, 'getCumulativeLineGraph']);
@@ -66,11 +79,6 @@ Route::get('/dashboard/cumulative-bargraph', [IndexController::class, 'getCumula
 
 Route::get('/users', [IndexController::class, 'getAllUsers']);
 
-
-// AI Game Routes
-
-Route::post('/ai/answer', [AIGameController::class, 'getAIAnswer']);
-Route::get('/ai/game/{gameId}/answers', [AIGameController::class, 'getGameAIAnswers']);
 
 
 

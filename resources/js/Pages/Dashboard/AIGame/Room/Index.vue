@@ -33,10 +33,13 @@ const props = defineProps({
 // Reactive state
 const currentGame = ref({ users: [] });
 const gameScores = ref([]);
+const aiScores = ref([]);
 const errorMessage = ref('');
 const playerCount = ref(1);
 const scoresCurrentPage = ref(1);
 const scoresTotalPages = ref(1);
+const aiScoresCurrentPage = ref(1);
+const aiScoresTotalPages = ref(1);
 const submitting = ref(false);
 const currentQuestionIndex = ref(0);
 const answers = ref([]);
@@ -45,11 +48,28 @@ const gameIsOver = ref(false); // Flag to indicate game is finished, but not nec
 const gameGraphRef = ref(null);
 const gameHeatmapRef = ref(null);
 
-// Use the player interactions composable
+const players = ref([]); // Initialize players
+const gameState = ref({}); // Initialize gameState
+
+// Pass the AI module to usePlayerInteractions to submit scores
+// 1. First, use the AI composable to declare its reactive variables.
 const {
-    players,
+    aiAnswers,
+    aiLoading,
+    aiError,
+    playWithAI,
+    allPlayersAnswered,
+    getAIAnswer,
+    getAIAnswerForQuestion,
+    hasAIAnswered,
+    resetAI
+} = useAI(props.gameId, props.gameQuestions, gameState, players, currentQuestionIndex);
+
+// 2. Now that aiAnswers, playWithAI, etc., are declared, you can pass them.
+const {
+    // players,
     flashMessages,
-    gameState,
+    // gameState,
     isInGame,
     preSubmittedAnswers,
     fetchPlayers,
@@ -62,19 +82,14 @@ const {
     removeFlashMessage,
     clearFlashMessages,
     registerCallbacks
-} = usePlayerInteractions(props.gameId, props.auth);
-
-const {
+} = usePlayerInteractions(props.gameId, props.auth, {
+    // Pass AI module as third parameter
     aiAnswers,
-    aiLoading,
-    aiError,
     playWithAI,
-    allPlayersAnswered,
-    getAIAnswer,
-    getAIAnswerForQuestion,
     hasAIAnswered,
     resetAI
-} = useAI(props.gameId, props.gameQuestions, gameState, players, currentQuestionIndex);
+});
+
 
 // Debug logging
 console.log('Game ID:', props.gameId);
@@ -132,10 +147,27 @@ const fetchGameScores = async (page = 1) => {
     }
 };
 
+const fetchAIScores = async (page = 1) => {
+    try {
+        const response = await axios.get(`/api/games/${props.gameId}/ai-scores?page=${page}`);
+        aiScores.value = response.data.data;
+        aiScoresTotalPages.value = response.data.last_page;
+        aiScoresCurrentPage.value = response.data.current_page;
+    } catch (error) {
+        errorMessage.value = 'Failed to load player scores.';
+        console.error(error);
+    }
+};
+
 // Pagination handler
 const changeScoresPage = (page) => {
     if (page < 1 || page > scoresTotalPages.value) return;
     fetchGameScores(page);
+};
+
+const changeAIScoresPage = (page) => {
+    if (page < 1 || page > aiScoresTotalPages.value) return;
+    fetchAIScores(page);
 };
 
 // Updated game control functions
@@ -288,12 +320,14 @@ const resetGameState = () => {
 onMounted(() => {
     fetchCurrentGame();
     fetchGameScores();
+    fetchAIScores();
 
     // REGISTER CALLBACKS FOR LIVE UPDATES INCLUDING UI RESET
     registerCallbacks({
         onScoresUpdate: async () => {
             console.log('🔄 Refreshing scores table...');
             await fetchGameScores(1);
+            await fetchAIScores();
         },
         onGameUpdate: async () => {
             console.log('🔄 Refreshing game details...');
@@ -311,7 +345,6 @@ onMounted(() => {
         // NEW: UI reset callback for auto-submitted users
         onGameComplete: async (data) => { // Added 'data' parameter to receive info from event
             console.log('🔄 Received Pusher .game.complete event. Resetting UI state for other users...');
-            addFlashMessage('Your answers have been auto-submitted! Game completed!', 'success');
             gameIsOver.value = true; // Mark game as over
             isGameStarted.value = false; // Immediately hide question input
             gameState.value.waitingForOthers = false; // Clear waiting state
@@ -501,20 +534,20 @@ onMounted(() => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr v-for="score in gameScores" :key="score.id">
-                                            <td class="p-2 border-b text-white">{{ score.user?.name }}</td>
+                                        <tr v-for="score in aiScores" :key="score.id">
+                                            <td class="p-2 border-b text-white">Normal</td>
                                             <td class="p-2 border-b text-white">{{ score.session_id }}</td>
                                             <td class="p-2 border-b text-white">{{ score.score }}</td>
                                             <td class="p-2 border-b text-white">{{ formatDate(score.created_at) }}</td>
                                         </tr>
-                                        <tr v-if="gameScores.length === 0">
+                                        <tr v-if="aiScores.length === 0">
                                             <td colspan="4" class="p-2 text-center text-gray-400">No scores available
                                             </td>
                                         </tr>
                                     </tbody>
                                 </table>
-                                <DynamicPagination :currentPage="scoresCurrentPage" :totalPages="scoresTotalPages"
-                                    @change-page="changeScoresPage" />
+                                <DynamicPagination :currentPage="aiScoresCurrentPage" :totalPages="aiScoresTotalPages"
+                                    @change-page="changeAIScoresPage" />
                             </div>
                       </div>
 

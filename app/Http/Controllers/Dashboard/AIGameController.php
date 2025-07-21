@@ -28,10 +28,10 @@ class AIGameController extends Controller
          $page = $request->query('page', 1);
  
          Log::info('Fetching game scores', ['gameId' => $gameId, 'page' => $page]);
-         $gameScores = $this->gamesService->getGameScores($gameId, $page);
-         Log::info('Game scores retrieved', ['scores' => $gameScores]);
+         $aiScores = $this->aiGameService->getAIGameScores($gameId, $page);
+         Log::info('Game scores retrieved', ['scores' => $aiScores]);
  
-         return response()->json($gameScores);
+         return response()->json($aiScores);
      }
 
     /**
@@ -67,27 +67,6 @@ class AIGameController extends Controller
 
             $question = $gameQuestions[$questionIndex];
 
-            // Check if AI has already answered this question for this game
-            $existingAnswer = AIScore::where('game_id', $gameId)
-                ->where('question_id', $question->id)
-                ->first();
-
-            if ($existingAnswer) {
-                Log::info('Returning existing AI answer', [
-                    'aiAnswerId' => $existingAnswer->id,
-                    'answer' => $existingAnswer->answer,
-                    'score' => $existingAnswer->score // Log the score for cached answers too
-                ]);
-
-                return response()->json([
-                    'success' => true,
-                    'answer' => $existingAnswer->answer,
-                    'score' => $existingAnswer->score,
-                    'isCorrect' => $existingAnswer->is_correct ?? null,
-                    'cached' => true
-                ]);
-            }
-
             // Get AI answer from service
             $aiAnswer = $this->aiGameService->getAIAnswerForQuestion($question->question);
 
@@ -97,30 +76,6 @@ class AIGameController extends Controller
             // Calculate score (check if AI answer is correct)
             $isCorrect = strtolower(trim($aiAnswer)) === strtolower(trim($question->answer));
             $scoreAwarded = $isCorrect ? ($question->score_awarded ?? 0) : 0;
-
-            // Save AI answer to database
-            $aiAnswerRecord = AIScore::create([
-                'game_id' => $gameId,
-                'question_id' => $question->id,
-                'session_id' => $sessionId,
-                'answer' => $aiAnswer,
-                'score' => $scoreAwarded,
-                'answer_json' => json_encode([
-                    'question_number' => $questionIndex + 1,
-                    'question' => $question->question,
-                    'submitted' => $aiAnswer,
-                    'correct_answer' => $question->answer,
-                    'is_correct' => $isCorrect,
-                    'score_awarded' => $scoreAwarded
-                ])
-            ]);
-
-            Log::info('AI Answer saved', [
-                'aiAnswerId' => $aiAnswerRecord->id,
-                'answer' => $aiAnswer,
-                'score' => $scoreAwarded,
-                'isCorrect' => $isCorrect
-            ]);
 
             return response()->json([
                 'success' => true,

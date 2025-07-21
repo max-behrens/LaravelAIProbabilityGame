@@ -8,15 +8,37 @@ export function useAI(gameId, gameQuestions, gameState, players, currentQuestion
   const aiError = ref(null);
   const playWithAI = ref(false);
 
-  // Computed property to check if all players have answered the current question
+  // FIXED: Computed property to check if all players have answered the current question
   const allPlayersAnswered = computed(() => {
     if (!playWithAI.value) return false;
     
     const currentQuestion = currentQuestionIndex.value;
     const totalPlayers = players.value.length;
     
+    // SAFETY CHECK: Ensure gameState.value.playersAnswered exists and is iterable
+    if (!gameState.value || !gameState.value.playersAnswered) {
+      console.warn('gameState.playersAnswered is not initialized yet');
+      return false;
+    }
+    
+    // Check if it's a Set (which has Symbol.iterator) or convert it to array safely
+    let playersAnsweredArray;
+    try {
+      if (gameState.value.playersAnswered instanceof Set) {
+        playersAnsweredArray = Array.from(gameState.value.playersAnswered);
+      } else if (Array.isArray(gameState.value.playersAnswered)) {
+        playersAnsweredArray = gameState.value.playersAnswered;
+      } else {
+        console.warn('playersAnswered is not a Set or Array:', typeof gameState.value.playersAnswered);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error converting playersAnswered to array:', error);
+      return false;
+    }
+    
     // Count how many players have answered the current question
-    const answeredCount = Array.from(gameState.value.playersAnswered)
+    const answeredCount = playersAnsweredArray
       .filter(key => key.endsWith(`-${currentQuestion}`))
       .length;
         

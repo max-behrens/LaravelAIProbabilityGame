@@ -113,12 +113,6 @@ class GamesService
 
             $totalScore += $scoreAwarded;
 
-            Log::debug('Processed question', [
-                'question_id' => $question->id,
-                'submittedAnswer' => $submittedAnswer,
-                'isCorrect' => $isCorrect,
-                'scoreAwarded' => $scoreAwarded
-            ]);
         }
 
         GameScore::create([
@@ -152,11 +146,7 @@ class GamesService
 
         foreach ($gameQuestions as $question) {
             $totalScore += $question->score_awarded;
-            Log::debug('Adding score', [
-                'question_id' => $question->id,
-                'score_awarded' => $question->score_awarded,
-                'running_total' => $totalScore
-            ]);
+
         }
 
         return $totalScore;

@@ -19,7 +19,6 @@ class AIScore extends Model
     // Define the fillable fields that can be mass-assigned
     protected $fillable = [
         'game_id',
-        'question_id',
         'session_id',
         'answer',
         'score',
@@ -34,11 +33,4 @@ class AIScore extends Model
         return $this->belongsTo(Games::class, 'game_id');
     }
 
-    /**
-     * Get the question that this AI answer belongs to.
-     */
-    public function question()
-    {
-        return $this->belongsTo(GameQuestion::class, 'question_id');
-    }
 }

@@ -2,10 +2,11 @@ import { ref, onMounted, onUnmounted, computed } from 'vue';
 import axios from 'axios';
 import Pusher from 'pusher-js';
 
-export function usePlayerInteractions(gameId, auth) {
+export function usePlayerInteractions(gameId, auth, aiModule = null) {
   // Reactive state
   const players = ref([]);
   const flashMessages = ref([]);
+  const playWithAI = ref(false);
   const gameState = ref({
     playersReady: new Set(),
     playersAnswered: new Set(),
@@ -18,6 +19,7 @@ export function usePlayerInteractions(gameId, auth) {
   
   // ADD: Store pre-submitted answers for auto-submission
   const preSubmittedAnswers = ref(null);
+  const preSubmittedAIAnswers = ref(null); // NEW: Store AI answers for auto-submission
   
   // Pusher instance
   let pusher = null;
@@ -28,7 +30,8 @@ export function usePlayerInteractions(gameId, auth) {
   const callbacks = ref({
     onScoresUpdate: null,
     onGameUpdate: null,
-    onChartsUpdate: null
+    onChartsUpdate: null,
+    onGameComplete: null
   });
   
   const currentUserId = computed(() => auth?.user?.id ?? null);
@@ -115,6 +118,29 @@ export function usePlayerInteractions(gameId, auth) {
     }
   };
 
+  // Helper function to prepare AI answers for submission
+  const prepareAIAnswersForSubmission = () => {
+    if (!aiModule || !aiModule.playWithAI.value) {
+      return null;
+    }
+
+    // Convert aiAnswers object to array format expected by backend
+    const aiAnswersArray = [];
+    const aiAnswersObj = aiModule.aiAnswers.value;
+    
+    // Fill array with AI answers in correct order
+    for (let i = 0; i < Object.keys(aiAnswersObj).length; i++) {
+      if (aiAnswersObj[i] && aiAnswersObj[i].answer) {
+        aiAnswersArray[i] = aiAnswersObj[i].answer;
+      } else {
+        aiAnswersArray[i] = null; // No AI answer for this question
+      }
+    }
+
+    console.log('Prepared AI answers for submission:', aiAnswersArray);
+    return aiAnswersArray;
+  };
+
   // Fetch current players - Fixed API route
   const fetchPlayers = async () => {
     try {
@@ -185,14 +211,28 @@ export function usePlayerInteractions(gameId, auth) {
     }
   };
 
-  // FIXED: Submit answers with proper auto-submission logic
+  // Submit answers with AI support
   const submitAnswers = async (answers, playerCount) => {
     if (!isInGame.value) return { submitted: false, waitingForOthers: false };
     
     try {
+      // Prepare AI answers if AI is enabled
+      const aiAnswers = prepareAIAnswersForSubmission();
+      
       if (playerCount === 1) {
         // Single player - submit immediately
-        await axios.post(`/games/${gameId}/submit-answer`, { answers });
+        const requestData = {
+          answers: answers
+        };
+
+        // Add AI answers if playing with AI
+        if (aiAnswers && aiModule?.playWithAI.value) {
+          requestData.aiAnswers = aiAnswers;
+          requestData.playWithAI = true;
+          console.log('Submitting with AI answers (single player):', { answers, aiAnswers });
+        }
+
+        await axios.post(`/games/${gameId}/submit-answer`, requestData);
 
         // Broadcast completion
         await axios.post(`/api/games/${gameId}/broadcast`, {
@@ -220,6 +260,7 @@ export function usePlayerInteractions(gameId, auth) {
         // MULTIPLAYER: Store answers for potential auto-submission
         console.log('💾 Storing answers for potential auto-submission:', answers);
         preSubmittedAnswers.value = [...answers]; // Create a copy
+        preSubmittedAIAnswers.value = aiAnswers ? [...aiAnswers] : null; // Store AI answers
         gameState.value.playersSubmitted.add(currentUserId.value);
 
         // Broadcast submission
@@ -233,13 +274,25 @@ export function usePlayerInteractions(gameId, auth) {
             timestamp: new Date().toISOString()
           }
         });
-      
+
         // Check if all players have submitted
         if (gameState.value.playersSubmitted.size >= playerCount) {
           // All players submitted - save scores immediately
           console.log('✅ All players submitted - saving scores immediately');
-          await axios.post(`/games/${gameId}/submit-answer`, { answers });
-      
+          
+          const requestData = {
+            answers: answers
+          };
+
+          // Add AI answers if playing with AI
+          if (aiAnswers && aiModule?.playWithAI.value) {
+            requestData.aiAnswers = aiAnswers;
+            requestData.playWithAI = true;
+            console.log('Submitting with AI answers (multiplayer final):', { answers, aiAnswers });
+          }
+
+          await axios.post(`/games/${gameId}/submit-answer`, requestData);
+          
           // Broadcast game completion
           await axios.post(`/api/games/${gameId}/broadcast`, {
             event: 'game.completed.multiplayer',
@@ -248,21 +301,22 @@ export function usePlayerInteractions(gameId, auth) {
               timestamp: new Date().toISOString()
             }
           });
-      
+          
           addFlashMessage('All players submitted! Game completed!', 'success');
-      
+          
           // Trigger updates
           await Promise.all([
             triggerScoresUpdate(),
             triggerGameUpdate(),
             triggerChartsUpdate()
           ]);
-      
+          
           // Clear pre-submitted answers and reset
           preSubmittedAnswers.value = null;
+          preSubmittedAIAnswers.value = null;
           resetGameState();
           return { submitted: true, waitingForOthers: false };
-      
+          
         } else {
           // Waiting for others - answers are stored for auto-submission
           addFlashMessage(`Waiting for other players to submit... (${gameState.value.playersSubmitted.size}/${playerCount})`, 'info');
@@ -288,6 +342,7 @@ export function usePlayerInteractions(gameId, auth) {
     gameState.value.waitingForOthers = false;
     // Clear pre-submitted answers
     preSubmittedAnswers.value = null;
+    preSubmittedAIAnswers.value = null;
   };
 
   // Enhanced Pusher setup with better connection handling
@@ -417,7 +472,7 @@ export function usePlayerInteractions(gameId, auth) {
       }
     });
 
-    // FIXED: Player submitted (multiplayer) - Auto-submission logic
+    // UPDATED: Player submitted (multiplayer) - Auto-submission logic with AI support
     gameChannel.bind('player.submitted', async (data) => {
       console.log('🔔 Received player.submitted event:', data);
       
@@ -442,10 +497,23 @@ export function usePlayerInteractions(gameId, auth) {
         if (allPlayersSubmitted && iHavePreSubmitted && iAlreadyReallySubmitted) {
           console.log('🚀 Auto-submitting pre-saved answers now that all players are done...');
           try {
-            // Submit the stored answers
-            await axios.post(`/games/${gameId}/submit-answer`, {
+            // Prepare request data with answers
+            const requestData = {
               answers: preSubmittedAnswers.value
-            });
+            };
+
+            // Add AI answers if they were stored
+            if (preSubmittedAIAnswers.value && aiModule?.playWithAI.value) {
+              requestData.aiAnswers = preSubmittedAIAnswers.value;
+              requestData.playWithAI = true;
+              console.log('Auto-submitting with AI answers:', { 
+                answers: preSubmittedAnswers.value, 
+                aiAnswers: preSubmittedAIAnswers.value 
+              });
+            }
+
+            // Submit the stored answers
+            await axios.post(`/games/${gameId}/submit-answer`, requestData);
     
             // Broadcast game completion
             await axios.post(`/api/games/${gameId}/broadcast`, {
@@ -474,6 +542,7 @@ export function usePlayerInteractions(gameId, auth) {
     
             // Clean up
             preSubmittedAnswers.value = null;
+            preSubmittedAIAnswers.value = null;
             resetGameState();
     
           } catch (err) {
@@ -488,16 +557,16 @@ export function usePlayerInteractions(gameId, auth) {
     gameChannel.bind('game.completed.single', async (data) => {
       console.log('🔔 Received game.completed.single event:', data);
       // Update scores for EVERYONE, not just other players
-      addFlashMessage(`${data.userName} completed their game!`, 'success');
-      gameState.value.gameInProgress = false;
-      
+        addFlashMessage(`${data.userName} completed their game!`, 'success');
+        gameState.value.gameInProgress = false;
+        
       // TRIGGER LIVE UPDATES FOR ALL PLAYERS (including the one who submitted)
-      console.log('🔄 Triggering live updates for single player completion...');
-      await Promise.all([
-        triggerScoresUpdate(),
-        triggerGameUpdate(),
-        triggerChartsUpdate()
-      ]);
+        console.log('🔄 Triggering live updates for single player completion...');
+        await Promise.all([
+          triggerScoresUpdate(),
+          triggerGameUpdate(),
+          triggerChartsUpdate()
+        ]);
     });
 
     // FIXED: Multiplayer game completed - Trigger score updates for ALL players
@@ -508,16 +577,16 @@ export function usePlayerInteractions(gameId, auth) {
       if (preSubmittedAnswers.value === null && !gameState.value.playersSubmitted.has(currentUserId.value)) {
         addFlashMessage(`Game completed with all ${data.playerCount} players!`, 'success');
       }
-      
-      // TRIGGER LIVE UPDATES FOR ALL PLAYERS
-      console.log('🔄 Triggering live updates for multiplayer completion...');
-      await Promise.all([
-        triggerScoresUpdate(),
-        triggerGameUpdate(),
-        triggerChartsUpdate()
-      ]);
-      
-      resetGameState();
+        
+        // TRIGGER LIVE UPDATES FOR ALL PLAYERS
+        console.log('🔄 Triggering live updates for multiplayer completion...');
+        await Promise.all([
+          triggerScoresUpdate(),
+          triggerGameUpdate(),
+          triggerChartsUpdate()
+        ]);
+        
+        resetGameState();
     });
 
     // Bind to all events for debugging

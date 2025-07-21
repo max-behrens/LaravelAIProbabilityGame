@@ -4,9 +4,46 @@ namespace App\Services\Dashboard;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use App\Models\AIScore;
+use App\Models\Games;
+use App\Models\GameType;
+use App\Models\GameQuestion;
+use Illuminate\Support\Facades\DB;
 
 class AIGameService
 {
+
+
+    public function getAIGameScores($gameId, $page = 1, $perPage = 5)
+    {
+        Log::debug('Fetching paginated game scores', ['gameId' => $gameId, 'page' => $page, 'perPage' => $perPage]);
+
+        $scores = AIScore::query()
+            ->where('ai_scores.game_id', $gameId)
+            ->orderBy('ai_scores.created_at', 'desc')
+            ->select(
+                'ai_scores.id',
+                'ai_scores.session_id',
+                'ai_scores.game_id',
+                'ai_scores.score',
+                'ai_scores.created_at'
+            )
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        Log::debug('Fetched scores', ['scores' => $scores->items()]);
+
+        $scores->getCollection()->transform(function ($score) {
+            $score->user = [
+                'id' => $score->user_id,
+            ];
+            Log::debug('Transformed score', ['score' => $score]);
+            return $score;
+        });
+
+        return $scores;
+    }
+
+
     /**
      * Get AI answer for a specific question
      */
@@ -94,5 +131,46 @@ class AIGameService
         }
         
         return $answers;
+    }
+
+
+    public function submitAIAnswers($gameId, $userId, array $answers, $sessionId)
+    {
+
+        Log::info('HERE AI SERVICE');
+
+        $game = Games::findOrFail($gameId);
+        $gameQuestions = $game->gameType->gameQuestions()->get();
+
+
+        $answerJson = [];
+        $totalScore = 0;
+
+        foreach ($gameQuestions as $index => $question) {
+            $submittedAnswer = $answers[$index] ?? null;
+            $isCorrect = $submittedAnswer !== null && strtolower(trim($submittedAnswer)) === strtolower(trim($question->answer));
+            $scoreAwarded = $isCorrect ? ($question->score_awarded ?? 0) : 0;
+
+            $answerJson[$question->id] = [
+                'question_number' => $index + 1,
+                'question' => $question->question,
+                'submitted' => $submittedAnswer,
+                'correct_answer' => $question->answer,
+                'is_correct' => $isCorrect,
+                'score_awarded' => $scoreAwarded
+            ];
+
+            $totalScore += $scoreAwarded;
+        }
+
+        AIScore::create([
+            'game_id' => $game->id,
+            'answer_json' => json_encode($answerJson),
+            'session_id' => $sessionId,
+            'score' => $totalScore,
+        ]);
+
+
+        return $sessionId;
     }
 }
