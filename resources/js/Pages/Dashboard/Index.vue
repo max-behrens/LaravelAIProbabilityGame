@@ -180,7 +180,7 @@ onUnmounted(() => {
           <transition name="fade">
             <div
             v-if="showVerticalNav"
-            class="fixed left-4 top-1/2 transform -translate-y-1/2 z-50 bg-gray-800 backdrop-blur-sm rounded-lg p-2 shadow-lg"
+            class="fixed left-4 top-1/2 transform -translate-y-1/2 z-50 bg-gray-800 backdrop-blur-sm rounded-lg p-2 shadow-lg hidden sm:block"
             >
             <div class="flex flex-col space-y-2">
                 <button 

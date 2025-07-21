@@ -137,9 +137,11 @@ onUnmounted(() => {
       </svg>
     </button>
 
+    <!-- Down button -->
     <button
       @click="scrollToFeatured"
-      class="absolute left-8 z-20 bg-white/20 hover:bg-white/30 !text-white p-4 rounded-full transition-all duration-300 backdrop-blur-sm hover:scale-110 group animate-bounce"
+      class="absolute z-20 bg-white/20 hover:bg-white/30 !text-white p-4 rounded-full transition-all duration-300 backdrop-blur-sm hover:scale-110 group animate-bounce 
+            bottom-20 left-8 -translate-x-1/2 sm:bottom-auto sm:left-8 sm:translate-x-0"
       aria-label="Scroll to featured section"
     >
       <svg class="w-6 h-6 group-hover:translate-y-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
