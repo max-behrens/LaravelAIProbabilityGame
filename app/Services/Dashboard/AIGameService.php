@@ -114,34 +114,33 @@ class AIGameService
         }
     }
 
-    /**
-     * Get multiple AI answers for a batch of questions
-     */
-    public function getAIAnswersForQuestions(array $questions)
-    {
-        $answers = [];
-        
-        foreach ($questions as $index => $question) {
-            $answers[$index] = $this->getAIAnswerForQuestion($question);
-            
-            // Add a small delay to avoid rate limiting
-            if (count($questions) > 1) {
-                sleep(1);
-            }
-        }
-        
-        return $answers;
-    }
 
 
     public function submitAIAnswers($gameId, $userId, array $answers, $sessionId)
     {
+        Log::info('AI Service submitAIAnswers called', [
+            'gameId' => $gameId,
+            'userId' => $userId,
+            'sessionId' => $sessionId,
+            'answersCount' => count($answers)
+        ]);
 
-        Log::info('HERE AI SERVICE');
+        // Check if AI answers for this session already exist
+        $existingAIScore = AIScore::where('game_id', $gameId)
+            ->where('session_id', $sessionId)
+            ->first();
+
+        if ($existingAIScore) {
+            Log::info('AI answers already saved for this session', [
+                'gameId' => $gameId,
+                'sessionId' => $sessionId,
+                'existingScoreId' => $existingAIScore->id
+            ]);
+            return $sessionId; // Return early, don't save duplicate
+        }
 
         $game = Games::findOrFail($gameId);
         $gameQuestions = $game->gameType->gameQuestions()->get();
-
 
         $answerJson = [];
         $totalScore = 0;
@@ -163,13 +162,19 @@ class AIGameService
             $totalScore += $scoreAwarded;
         }
 
-        AIScore::create([
+        $aiScore = AIScore::create([
             'game_id' => $game->id,
             'answer_json' => json_encode($answerJson),
             'session_id' => $sessionId,
             'score' => $totalScore,
         ]);
 
+        Log::info('AI answers saved successfully', [
+            'gameId' => $gameId,
+            'sessionId' => $sessionId,
+            'aiScoreId' => $aiScore->id,
+            'totalScore' => $totalScore
+        ]);
 
         return $sessionId;
     }

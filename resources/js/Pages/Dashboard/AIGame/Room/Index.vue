@@ -3,7 +3,7 @@ import { ref, defineProps, computed, onMounted, onUnmounted, nextTick } from 'vu
 import BreezeAuthenticatedLayout from '@/Layouts/Authenticated.vue';
 import GameAuthenticatedLayout from '@/Layouts/GameAuthenticated.vue';
 import { Head, Link } from '@inertiajs/inertia-vue3';
-import { useAI } from '@/Composables/useAI';
+import { useAI, createAI } from '@/Composables/useAI';
 import { usePlayerInteractions } from '@/Composables/usePlayerInteractions';
 import DynamicPagination from '@/Components/DynamicPagination.vue';
 import GameGraphComponent from '@/Components/GameGraphComponent.vue';
@@ -51,8 +51,7 @@ const showVerticalNav = ref(false);
 const isNavigatingProgrammatically = ref(false);
 const currentNavSection = ref(0);
 
-
-
+// Initialize player interactions first
 const {
     players,
     flashMessages,
@@ -66,10 +65,17 @@ const {
     addFlashMessage,
     removeFlashMessage,
     clearFlashMessages,
-    registerCallbacks
+    registerCallbacks,
+    setAIModule // Get the setAIModule function
 } = usePlayerInteractions(props.gameId, props.auth);
 
 // Create AI with dependency getter function
+const aiModule = createAI(props.gameId, () => ({
+    gameState: gameState.value,
+    players: players.value,
+    currentQuestionIndex: currentQuestionIndex.value
+}));
+
 const {
     aiAnswers,
     aiLoading,
@@ -80,11 +86,10 @@ const {
     getAIAnswerForQuestion,
     hasAIAnswered,
     resetAI
-} = useAI(props.gameId, () => ({
-    gameState: gameState.value,
-    players: players.value,
-    currentQuestionIndex: currentQuestionIndex.value
-}));
+} = aiModule;
+
+// Set AI module reference in player interactions
+setAIModule(aiModule);
 
 
 // Debug logging
@@ -511,21 +516,6 @@ onUnmounted(() => {
             <div class="py-4 mb-6">
                 <div class="main-width mx-auto sm:px-6 lg:px-8">
 
-                    <div v-for="flash in flashMessages" :key="flash.id" class="mb-2">
-                        <div :class="{
-                                'bg-red-900 text-red-200 border-red-700': flash.type === 'error',
-                                'bg-green-900 text-green-200 border-green-700': flash.type === 'success',
-                                'bg-blue-900 text-blue-200 border-blue-700': flash.type === 'info',
-                                'bg-yellow-900 text-yellow-200 border-yellow-700': flash.type === 'warning'
-                            }" class="p-3 rounded border relative">
-                            {{ flash.message }}
-                            <button @click="removeFlashMessage(flash.id)"
-                                class="absolute top-1 right-2 text-xl font-bold opacity-70 hover:opacity-100">
-                                ×
-                            </button>
-                        </div>
-                    </div>
-
                     <div v-if="errorMessage" class="mb-4 p-4 bg-red-900 text-red-200 rounded border border-red-700">
                         {{ errorMessage }}</div>
 
@@ -546,6 +536,21 @@ onUnmounted(() => {
                                 <button :disabled="submitting" @click="nextOrSubmit"
                                     class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50">
                                     {{ isLastQuestion ? (submitting ? 'Submitting...' : 'Submit') : 'Next' }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div v-for="flash in flashMessages" :key="flash.id" class="mb- w-full">
+                            <div :class="{
+                                    'bg-red-900 text-red-200 border-red-700': flash.type === 'error',
+                                    'bg-green-900 text-green-200 border-green-700': flash.type === 'success',
+                                    'bg-blue-900 text-blue-200 border-blue-700': flash.type === 'info',
+                                    'bg-yellow-900 text-yellow-200 border-yellow-700': flash.type === 'warning'
+                                }" class="p-3 rounded border relative">
+                                {{ flash.message }}
+                                <button @click="removeFlashMessage(flash.id)"
+                                    class="absolute top-1 right-2 text-xl font-bold opacity-70 hover:opacity-100">
+                                    ×
                                 </button>
                             </div>
                         </div>
@@ -587,6 +592,7 @@ onUnmounted(() => {
                                 </button>
                             </div>
                         </div>
+                        
 
                         <div v-if="isWaitingForOthers && !gameIsOver" class="basis-full mb-6 text-center">
                             <div class="p-4 bg-yellow-900 text-yellow-200 rounded border border-yellow-700">

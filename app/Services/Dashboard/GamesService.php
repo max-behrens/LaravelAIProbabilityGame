@@ -176,7 +176,6 @@ class GamesService
                     'id' => $score->user_id,
                     'name' => $score->user_name,
                 ];
-                Log::debug('Mapped score', ['score' => $score]);
                 unset($score->user_name);
                 return $score;
             });

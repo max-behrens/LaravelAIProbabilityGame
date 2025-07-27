@@ -132,41 +132,15 @@ class GamesController extends Controller
         // Submit player answers with shared session_id
         $this->gamesService->submitAnswers($gameId, $user->id, $request->answers, $sessionId);
     
-        // Submit AI answers if playing with AI
-        // if ($request->boolean('playWithAI', false) && $request->has('aiAnswers')) {
-            Log::info('Submitting AI answers', [
-                'gameId' => $gameId,
-                'sessionId' => $sessionId,
-                'playWithAI' => $request->boolean('playWithAI', false),
-                'aiAnswers' =>  $request->has('aiAnswers'),
-                'aiAnswersCount' => count($request->aiAnswers ?? [])
-            ]);
-            
-            try {
-                // Submit AI answers with the same session ID
-                $this->aiGameService->submitAIAnswers(
-                    $gameId, 
-                    $user->id, // Use the current user's ID for consistency
-                    $request->aiAnswers, 
-                    $sessionId
-                );
-                
-                Log::info('AI answers submitted successfully', [
-                    'gameId' => $gameId,
-                    'sessionId' => $sessionId
-                ]);
-                
-            } catch (\Exception $e) {
-                Log::error('Failed to submit AI answers', [
-                    'gameId' => $gameId,
-                    'sessionId' => $sessionId,
-                    'error' => $e->getMessage()
-                ]);
-                
-                // Don't fail the entire request if AI submission fails
-                // But log the error for debugging
-            }
-        // }
+        if ($request->boolean('playWithAI') && $request->has('aiAnswers')) {
+            $this->aiGameService->submitAIAnswers(
+                $gameId,
+                $user->id,
+                $request->aiAnswers,
+                $sessionId
+            );
+        }
+        
     
         $this->triggerGameUpdate($gameId, 'game.answers_submitted', [
             'userId' => $user->id,

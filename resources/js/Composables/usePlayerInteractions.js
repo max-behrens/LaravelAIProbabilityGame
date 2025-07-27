@@ -2,11 +2,10 @@ import { ref, onMounted, onUnmounted, computed } from 'vue';
 import axios from 'axios';
 import Pusher from 'pusher-js';
 
-export function usePlayerInteractions(gameId, auth, aiModule = null) {
+export function usePlayerInteractions(gameId, auth) {
   // Reactive state
   const players = ref([]);
   const flashMessages = ref([]);
-  const playWithAI = ref(false);
   const gameState = ref({
     playersReady: new Set(),
     playersAnswered: new Set(),
@@ -20,6 +19,9 @@ export function usePlayerInteractions(gameId, auth, aiModule = null) {
   // ADD: Store pre-submitted answers for auto-submission
   const preSubmittedAnswers = ref(null);
   const preSubmittedAIAnswers = ref(null); // NEW: Store AI answers for auto-submission
+  
+  // AI Module reference - will be set by main component
+  let aiModule = null;
   
   // Pusher instance
   let pusher = null;
@@ -39,6 +41,12 @@ export function usePlayerInteractions(gameId, auth, aiModule = null) {
   const isInGame = computed(() => 
     players.value.some(player => player.id === currentUserId.value)
   );
+
+  // Function to set AI module reference
+  const setAIModule = (aiModuleRef) => {
+    aiModule = aiModuleRef;
+    console.log('AI Module set in usePlayerInteractions:', !!aiModule);
+  };
 
   // Enhanced debug logging
   console.log('=== Player Interactions Setup ===');
@@ -121,25 +129,22 @@ export function usePlayerInteractions(gameId, auth, aiModule = null) {
   // Helper function to prepare AI answers for submission
   const prepareAIAnswersForSubmission = () => {
     if (!aiModule || !aiModule.playWithAI.value) {
-      return null;
+      console.log('No AI module or AI not enabled');
+      return [];
     }
-
-    // Convert aiAnswers object to array format expected by backend
-    const aiAnswersArray = [];
+  
     const aiAnswersObj = aiModule.aiAnswers.value;
-    
-    // Fill array with AI answers in correct order
+    const aiAnswersArray = [];
+  
+    // Convert object to array, ensuring proper indexing
     for (let i = 0; i < Object.keys(aiAnswersObj).length; i++) {
-      if (aiAnswersObj[i] && aiAnswersObj[i].answer) {
-        aiAnswersArray[i] = aiAnswersObj[i].answer;
-      } else {
-        aiAnswersArray[i] = null; // No AI answer for this question
-      }
+      aiAnswersArray[i] = aiAnswersObj[i]?.answer ?? null;
     }
-
+  
     console.log('Prepared AI answers for submission:', aiAnswersArray);
     return aiAnswersArray;
   };
+  
 
   // Fetch current players - Fixed API route
   const fetchPlayers = async () => {
@@ -226,10 +231,10 @@ export function usePlayerInteractions(gameId, auth, aiModule = null) {
         };
 
         // Add AI answers if playing with AI
-        if (aiAnswers && aiModule?.playWithAI.value) {
+        if (aiModule?.playWithAI.value) {
           requestData.aiAnswers = aiAnswers;
           requestData.playWithAI = true;
-          console.log('Submitting with AI answers (single player):', { answers, aiAnswers });
+          console.log('Single player submitting with AI answers:', { answers, aiAnswers });
         }
 
         await axios.post(`/games/${gameId}/submit-answer`, requestData);
@@ -260,8 +265,10 @@ export function usePlayerInteractions(gameId, auth, aiModule = null) {
         // MULTIPLAYER: Store answers for potential auto-submission
         console.log('💾 Storing answers for potential auto-submission:', answers);
         preSubmittedAnswers.value = [...answers]; // Create a copy
-        preSubmittedAIAnswers.value = aiAnswers ? [...aiAnswers] : null; // Store AI answers
+        preSubmittedAIAnswers.value = aiAnswers && aiAnswers.length > 0 ? [...aiAnswers] : null; // Store AI answers
         gameState.value.playersSubmitted.add(currentUserId.value);
+
+        console.log('Pre-submitted AI answers stored:', preSubmittedAIAnswers.value);
 
         // Broadcast submission
         await axios.post(`/api/games/${gameId}/broadcast`, {
@@ -283,6 +290,13 @@ export function usePlayerInteractions(gameId, auth, aiModule = null) {
           const requestData = {
             answers: answers
           };
+
+          // Add AI answers if playing with AI
+          if (aiModule?.playWithAI.value) {
+            requestData.aiAnswers = aiAnswers;
+            requestData.playWithAI = true;
+            console.log('Multiplayer final submit with AI answers:', { answers, aiAnswers });
+          }
 
           await axios.post(`/games/${gameId}/submit-answer`, requestData);
           
@@ -634,6 +648,7 @@ export function usePlayerInteractions(gameId, auth, aiModule = null) {
     removeFlashMessage,
     clearFlashMessages,
     registerCallbacks,
+    setAIModule, // NEW: Expose setAIModule function
     
     // Cleanup
     cleanup
