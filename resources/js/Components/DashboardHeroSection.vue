@@ -129,7 +129,7 @@ onUnmounted(() => {
     <!-- Next button -->
     <button
       @click="nextSlide"
-      class="absolute top-1/2 right-4 z-20 -translate-y-1/2 bg-white/20 hover:bg-white/30 !text-white p-3 rounded-full transition-all duration-300 backdrop-blur-sm hover:scale-110"
+      class="absolute top-1/2 right-8 z-20 -translate-y-1/2 bg-white/20 hover:bg-white/30 !text-white p-3 rounded-full transition-all duration-300 backdrop-blur-sm hover:scale-110"
       aria-label="Next slide"
     >
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -138,16 +138,19 @@ onUnmounted(() => {
     </button>
 
     <!-- Down button -->
-    <button
-      @click="scrollToFeatured"
-      class="absolute z-20 bg-white/20 hover:bg-white/30 !text-white p-4 rounded-full transition-all duration-300 backdrop-blur-sm hover:scale-110 group animate-bounce 
-            bottom-20 left-8 -translate-x-1/2 sm:bottom-auto sm:left-8 sm:translate-x-0"
-      aria-label="Scroll to featured section"
-    >
+  <button
+    @click="scrollToFeatured"
+    class="absolute z-20 bg-white/20 hover:bg-white/30 !text-white p-4 rounded-full transition-all duration-300 backdrop-blur-sm hover:scale-110 
+          bottom-20 left-8 -translate-x-1/2 sm:bottom-auto sm:left-4 sm:translate-x-0"
+    aria-label="Scroll to featured section"
+  >
+    <div class="animate-bounce">
       <svg class="w-6 h-6 group-hover:translate-y-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
       </svg>
-    </button>
+    </div>
+  </button>
+
   </section>
 </template>
 

@@ -90,11 +90,7 @@ onBeforeUnmount(() => {
           <div class="flex justify-between items-center h-16">
             <!-- Logo -->
             <div class="shrink-0 flex items-center mr-2">
-              <Link :href="route('dashboard')">
-                <BreezeApplicationLogo class="block h-7 w-auto text-white" />
-              </Link>
-
-                <BreezeWebsiteLogo class="block h-7 w-auto" />
+                <BreezeWebsiteLogo :href="route('dashboard')" class="block h-7 w-auto" />
             </div>
             
             <!-- Navigation Links - Centered -->
@@ -285,11 +281,15 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Footer - will stick to bottom -->
-      <footer class="bg-gray-800 border-t border-gray-700 text-gray-400 text-xs py-4 mt-auto">
-        <div class="main-width mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          Max Behrens
+    <footer class="bg-gray-800 border-t border-gray-700 text-gray-400 text-xs py-4 mt-auto">
+      <div>
+        <div class="main-width mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-center gap-4">
+          <span>Max Behrens</span>
+          <BreezeApplicationLogo class="block h-7 w-auto text-white" />
         </div>
-      </footer>
+      </div>
+    </footer>
+
 
       <!-- Logout / Settings Modal -->
       <transition name="fade">
