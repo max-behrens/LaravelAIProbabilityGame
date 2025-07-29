@@ -87,8 +87,7 @@ const datepickerModel = computed({
 
 onMounted(async () => {
   // **FIXED**: Initialize showAiScores from URL param, but default to true if not set
-  showAiScores.value = page.props.current_show_ai_scores === 'false' ? false : true;
-  
+  showAiScores.value = page.props.current_show_ai_scores === 'true';  
   // Fetch users on mount
   await fetchUsers();
 });
@@ -280,8 +279,8 @@ watch(
     }
 
     // **FIXED**: Only add show_ai_scores=false when it's actually false (since true is default)
-    if (!newShowAiScores) {
-        params.set('show_ai_scores', 'false');
+    if (newShowAiScores) {
+        params.set('show_ai_scores', 'true');
     }
 
     // Construct new URL with updated query string
