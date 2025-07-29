@@ -1,15 +1,11 @@
 <script setup>
-
-
-
-import { ChartBarIcon, PuzzleIcon, Gamepad2Icon, ClockIcon, TrendingUpIcon, EyeIcon, CalendarDaysIcon, ScalingIcon, UserIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-vue-next';
+import { ChartBarIcon, PuzzleIcon, Gamepad2Icon, ClockIcon, TrendingUpIcon, EyeIcon, CalendarDaysIcon, ScalingIcon, UserIcon, ChevronLeftIcon, ChevronRightIcon, BrainCircuitIcon } from 'lucide-vue-next';
 import DashboardHeatmapComponent from '@/Components/DashboardHeatmapComponent.vue';
 import DashboardBarChartComponent from '@/Components/DashboardBarChartComponent.vue';
 import DashboardLineChartComponent from '@/Components/DashboardLineChartComponent.vue';
 import { Head, router, usePage } from '@inertiajs/inertia-vue3';
 import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import Datepicker from '@vuepic/vue-datepicker';
-
 
 const page = usePage();
 const initialGameId = page.props.current_game_id || null;
@@ -18,6 +14,13 @@ const initialEndDate = page.props.current_end_date ? new Date(page.props.current
 const initialExponentialScale = page.props.current_exponential_scale === 'true';
 const initialUserId = page.props.current_user_id || null;
 const showAdvancedFilters = ref(false);
+
+const getDefaultDateRange = () => {
+  const endDate = new Date(); // Today
+  const startDate = new Date();
+  startDate.setDate(endDate.getDate() - 2);
+  return [startDate, endDate];
+};
 
 // Chart navigation state
 const currentChartIndex = ref(0);
@@ -39,14 +42,18 @@ const chartConfigs = [
   }
 ];
 
+// **FIXED**: AI Feature States - Default to true (ON)
+const showAiScores = ref(true); // Changed default to true
+const showAiTooltip = ref(false);
+const currentChartPointAiData = ref(null);
 
 // Computed properties for current chart
 const currentChart = computed(() => chartConfigs[currentChartIndex.value]);
 
 // Chart navigation functions
 const previousChart = () => {
-  currentChartIndex.value = currentChartIndex.value === 0 
-    ? chartConfigs.length - 1 
+  currentChartIndex.value = currentChartIndex.value === 0
+    ? chartConfigs.length - 1
     : currentChartIndex.value - 1;
 };
 
@@ -59,33 +66,31 @@ const activeGameId = ref(initialGameId);
 const showDateModal = ref(false);
 
 // Keep dateRange as originally intended: empty if no URL params
-const dateRange = ref([initialStartDate, initialEndDate]);
+const dateRange = ref(
+  initialStartDate && initialEndDate
+    ? [initialStartDate, initialEndDate]
+    : getDefaultDateRange()
+);
 
-// **NEW:** Computed property for the Datepicker's v-model
-// This ensures the datepicker opens to today if dateRange is currently null/empty
+// Computed property for the Datepicker's v-model
 const datepickerModel = computed({
     get() {
-        // If dateRange is [null, null], provide today's date for the datepicker modal to open on.
-        // Otherwise, return the actual dateRange values.
         if (!dateRange.value[0] && !dateRange.value[1]) {
             return [new Date(), new Date()];
         }
         return dateRange.value;
     },
     set(newValue) {
-        // When the datepicker updates its model, we update the actual dateRange ref.
-        // This setter ensures the link back to dateRange is maintained.
-        // The handleDateSelection will then perform the validation and actual assignment.
         handleDateSelection(newValue);
     }
 });
 
-
 onMounted(async () => {
+  // **FIXED**: Initialize showAiScores from URL param, but default to true if not set
+  showAiScores.value = page.props.current_show_ai_scores === 'false' ? false : true;
   
   // Fetch users on mount
   await fetchUsers();
-
 });
 
 const isExponentialScale = ref(initialExponentialScale);
@@ -110,6 +115,7 @@ const UserIcons = [UserIcon, UserIcon, UserIcon];
 const optionColors = ['bg-yellow-600/50', 'bg-blue-600/50'];
 const dateFilterColor = 'bg-orange-600/50';
 const performanceFilterColor = 'bg-purple-600/50';
+const aiFilterColor = 'bg-lime-600/50';
 
 // Computed property for the dynamic game filter title
 const gameFilterTitle = computed(() => {
@@ -164,6 +170,28 @@ const toggleExponentialScale = () => {
   isExponentialScale.value = !isExponentialScale.value;
 };
 
+// **FIXED**: Function to toggle AI scores display
+const toggleAiScores = () => {
+  showAiScores.value = !showAiScores.value;
+  // If we hide AI scores, also hide the tooltip
+  if (!showAiScores.value) {
+    showAiTooltip.value = false;
+    currentChartPointAiData.value = null;
+  }
+};
+
+// Function to handle chart point click and show AI tooltip
+const handleChartPointClick = (data) => {
+  // Only show tooltip if AI scores are enabled
+  if (showAiScores.value && data && data.ai_score !== undefined) {
+    currentChartPointAiData.value = data;
+    showAiTooltip.value = true;
+  } else {
+    showAiTooltip.value = false;
+    currentChartPointAiData.value = null;
+  }
+};
+
 // Function to clear date filter
 const clearDateFilter = () => {
   dateRange.value = [null, null]; // This truly clears the filter
@@ -174,7 +202,7 @@ const handleDateSelection = (modelData) => {
   if (modelData && Array.isArray(modelData) && modelData.length === 2) {
     const startDate = modelData[0] instanceof Date ? modelData[0] : new Date(modelData[0]);
     const endDate = modelData[1] instanceof Date ? modelData[1] : new Date(modelData[1]);
-    
+
     if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
       dateRange.value = [startDate, endDate];
     } else {
@@ -208,25 +236,25 @@ const filteredUsers = computed(() => {
   if (!allUsers.value || !Array.isArray(allUsers.value)) {
     return [];
   }
-  
+
   if (!userSearchTerm.value || !userSearchTerm.value.trim()) {
     return allUsers.value;
   }
-  
+
   const lowerCaseSearchTerm = userSearchTerm.value.toLowerCase().trim();
   return allUsers.value.filter(user => {
     if (!user) return false;
-    
+
     const nameMatch = user.name && user.name.toLowerCase().includes(lowerCaseSearchTerm);
     const emailMatch = user.email && user.email.toLowerCase().includes(lowerCaseSearchTerm);
-    
+
     return nameMatch || emailMatch;
   });
 });
 
 watch(
-  [activeGameId, dateRange, isExponentialScale, activeUserId],
-  ([newGameId, newDateRange, newIsExponentialScale, newUserId]) => {
+  [activeGameId, dateRange, isExponentialScale, activeUserId, showAiScores],
+  ([newGameId, newDateRange, newIsExponentialScale, newUserId, newShowAiScores]) => {
     const params = new URLSearchParams();
 
     if (newGameId !== null) {
@@ -251,6 +279,11 @@ watch(
       params.set('user_id', newUserId);
     }
 
+    // **FIXED**: Only add show_ai_scores=false when it's actually false (since true is default)
+    if (!newShowAiScores) {
+        params.set('show_ai_scores', 'false');
+    }
+
     // Construct new URL with updated query string
     const newRelativePathQuery = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
 
@@ -260,8 +293,18 @@ watch(
   { immediate: false }
 );
 
-</script>
+// Close AI tooltip on outside click
+const handleClickOutside = (event) => {
+    if (showAiTooltip.value && !event.target.closest('.ai-tooltip') && !event.target.closest('.apexcharts-point')) {
+        showAiTooltip.value = false;
+        currentChartPointAiData.value = null;
+    }
+};
 
+onUnmounted(() => {
+    document.removeEventListener('click', handleClickOutside);
+});
+</script>
 
 <template>
   <section class="py-3 bg-gray-800 rounded-lg">
@@ -351,6 +394,21 @@ watch(
 
                       <div class="flex-grow min-w-[180px] max-w-xs">
                           <button
+                              @click="toggleAiScores"
+                              :class="[
+                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full w-full',
+                                  'transition-all duration-300 ease-in-out',
+                                  aiFilterColor + ' hover:brightness-90',
+                                  showAiScores ? 'bg-lime-700 ring-2 ring-lime-400' : ''
+                              ]"
+                          >
+                              <BrainCircuitIcon class="w-5 h-5 shrink-0" />
+                              <span class="font-medium truncate">{{ showAiScores ? 'AI Scores ON' : 'AI Scores OFF' }}</span>
+                          </button>
+                      </div>
+
+                      <div class="flex-grow min-w-[180px] max-w-xs">
+                          <button
                               @click="showAdvancedFilters = !showAdvancedFilters"
                               :class="[
                                   'w-full flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full',
@@ -359,14 +417,14 @@ watch(
                                   showAdvancedFilters ? 'bg-gray-700' : ''
                               ]"
                           >
-                              <span class="text-xl shrink-0">
-                                  <template v-if="showAdvancedFilters">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-up"><path d="m18 15-6-6-6 6"/></svg>
-                                  </template>
-                                  <template v-else>
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>
-                                  </template>
-                              </span>
+                               <span class="text-xl shrink-0">
+                                   <template v-if="showAdvancedFilters">
+                                       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-up"><path d="m18 15-6-6-6 6"/></svg>
+                                   </template>
+                                   <template v-else>
+                                       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>
+                                   </template>
+                               </span>
                               <span class="font-medium truncate">Advanced</span>
                           </button>
                       </div>
@@ -412,7 +470,7 @@ watch(
                       </div>
                   </transition>
 
-                  <div class="space-y-8 p-6 rounded-lg shadow-lg">
+                  <div class="space-y-8 p-6 rounded-lg shadow-lg relative">
                       <section>
                           <div class="w-full">
                               <transition name="chart-fade" mode="out-in">
@@ -424,7 +482,8 @@ watch(
                                           :end-date="dateRange[1]"
                                           :is-exponential-scale="isExponentialScale"
                                           :user-id="activeUserId"
-                                      />
+                                          :show-ai-scores="showAiScores" 
+                                          @pointClicked="handleChartPointClick" />
                                       <DashboardHeatmapComponent
                                           v-else-if="currentChart.component === 'DashboardHeatmapComponent'"
                                       />
@@ -455,7 +514,7 @@ watch(
 
           <div class="flex-1 mb-4">
               <Datepicker
-                  v-model="datepickerModel" 
+                  v-model="datepickerModel"
                   range
                   :enable-time-picker="false"
                   :dark="true"
@@ -485,3 +544,42 @@ watch(
       </div>
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.fade-slide-y-enter-active,
+.fade-slide-y-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.fade-slide-y-enter-from,
+.fade-slide-y-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #333; /* Darker track */
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #555; /* Darker thumb */
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #777; /* Even darker on hover */
+}
+</style>

@@ -243,14 +243,23 @@ class GamesService
                 'game_scores.created_at',
                 'game_scores.player_id',
                 'game_scores.score',
+                'game_scores.session_id',
+                'ai_scores.created_at as ai_created_at',
+                'ai_scores.score as ai_score',
+                'ai_scores.session_id',
                 'users.name as player_name',
                 'games.id as game_id',
                 'game_types.id as game_type_id',
-                'game_types.name as game_name'
+                'game_types.name as game_name',
+
             )
             ->join('users', 'game_scores.player_id', '=', 'users.id')
             ->join('games', 'game_scores.game_id', '=', 'games.id')
             ->join('game_types', 'games.game_type_id', '=', 'game_types.id')
+            ->leftJoin('ai_scores', function($join) { // Use leftJoin to include game scores without AI data
+                $join->on('game_scores.session_id', '=', 'ai_scores.session_id')
+                     ->on('game_scores.game_id', '=', 'ai_scores.game_id'); // Join on game_id too if applicable
+            })
             ->orderBy('users.name')
             ->orderBy('game_scores.created_at');
 
@@ -292,7 +301,10 @@ class GamesService
                 'score' => $row->score,
                 'game_id' => $row->game_id,
                 'game_type_id' => $row->game_type_id,
-                'game_name' => $row->game_name
+                'game_name' => $row->game_name,
+                'session_id' => $row->session_id,
+                'ai_score' => $row->ai_score,
+                'ai_date' => $row->ai_date
             ];
         }
 
@@ -312,7 +324,8 @@ class GamesService
                     'meta' => [
                         'game_id' => $scoreData['game_id'],
                         'game_type_id' => $scoreData['game_type_id'],
-                        'game_name' => $scoreData['game_name']
+                        'game_name' => $scoreData['game_name'],
+                        'ai_score' => $scoreData['ai_score']
                     ]
                 ];
             }

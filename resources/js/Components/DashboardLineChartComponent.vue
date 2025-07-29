@@ -33,6 +33,10 @@ const props = defineProps({
   userId: {
     type: [String, Number],
     default: null
+  },
+  showAiScores: { // New prop for AI toggle
+    type: Boolean,
+    default: false
   }
 });
 
@@ -53,7 +57,7 @@ let isExpScale = false;
 // Function to detect if multiple points are grouped together
 const detectGroupedPoints = (seriesData, pointTimestamp, tolerance = 300000) => { // 5 minutes tolerance
   const allPoints = [];
-  
+
   seriesData.forEach((series, seriesIndex) => {
     series.data.forEach((point, pointIndex) => {
       if (Math.abs(point.x - pointTimestamp) <= tolerance) {
@@ -66,16 +70,39 @@ const detectGroupedPoints = (seriesData, pointTimestamp, tolerance = 300000) => 
       }
     });
   });
-  
+
   return allPoints;
 };
+
+const processDataWithAiScores = (originalSeriesData) => {
+  return originalSeriesData.map(series => {
+    const updatedData = series.data.map(point => {
+      const hasAiScore = props.showAiScores && point.meta?.ai_score !== undefined && point.meta?.ai_score !== null;
+
+      return {
+        ...point,
+        markerSize: hasAiScore ? 8 : 5 // Larger marker if it has AI score
+      };
+    });
+
+    return {
+      ...series,
+      data: updatedData
+    };
+  });
+};
+
 
 
 const getChartOptions = (seriesData, isExponentialScale) => {
   // Update local flag for tooltip closure
   isExpScale = isExponentialScale;
+  
+  // Process data to include AI scores line if enabled
+  const processedSeriesData = processDataWithAiScores(seriesData);
+  
   // Store raw data for grouping detection
-  rawData.value = seriesData;
+  rawData.value = processedSeriesData;
 
   const yaxisConfig = {
     labels: {
@@ -96,8 +123,14 @@ const getChartOptions = (seriesData, isExponentialScale) => {
     yaxisConfig.labels.formatter = (value) => `${Math.round(value)} pts`;
   }
 
+  // Create colors array that includes AI series color
+  const seriesColors = [...playerColors];
+  if (processedSeriesData.length > seriesData.length) {
+    seriesColors.push('#22c55e'); // Green for AI series
+  }
+
   return {
-    series: seriesData,
+    series: processedSeriesData,
     chart: {
       type: 'line',
       height: 320,
@@ -110,7 +143,7 @@ const getChartOptions = (seriesData, isExponentialScale) => {
         speed: 800
       }
     },
-    colors: playerColors,
+    colors: seriesColors,
     stroke: {
       curve: 'smooth',
       width: 3,
@@ -147,11 +180,10 @@ const getChartOptions = (seriesData, isExponentialScale) => {
       theme: 'dark',
       style: { fontSize: '12px' },
       x: { show: false },
-      custom: function({ series, seriesIndex, dataPointIndex, w }) {
+      custom: function({ series, seriesIndex, dataPointIndex, w}) {
         const point = w.config.series[seriesIndex].data[dataPointIndex];
         const playerName = w.globals.seriesNames[seriesIndex];
         const value = point.y;
-        const gameName = point.meta?.game_name || 'Unknown Game';
         const timestamp = point.x;
         const date = new Date(timestamp).toLocaleString('en-US', {
           month: 'short',
@@ -161,6 +193,11 @@ const getChartOptions = (seriesData, isExponentialScale) => {
           minute: '2-digit'
         });
 
+
+
+        // Original tooltip logic for regular points
+        const gameName = point.meta?.game_name || 'Unknown Game';
+        
         // Detect grouped points
         const groupedPoints = detectGroupedPoints(rawData.value, timestamp);
         const hasGroupedPoints = groupedPoints.length > 1;
@@ -190,7 +227,7 @@ const getChartOptions = (seriesData, isExponentialScale) => {
             day: 'numeric',
             year: 'numeric'
           });
-          
+
           groupedPointsInfo = `
             <div class="mt-2 pt-2 border-t border-gray-600">
               <div class="text-yellow-400 text-xs">
@@ -204,9 +241,25 @@ const getChartOptions = (seriesData, isExponentialScale) => {
             </div>`;
         }
 
+        // Enhanced AI Score Tooltip Logic with dark green highlighting
+        let displayPlayerName = playerName;
+        let aiDetails = '';
+        let displayAITitle = '';
+        
+        if (props.showAiScores && point.meta && point.meta.ai_score !== null) {
+            displayAITitle = '<div style="background-color: #065f46; color: #10b981; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-top: 2px;">AI Model - Normal</div>';
+            aiDetails = `
+                <div style="background-color: #065f46; color: #10b981; padding: 4px 6px; border-radius: 4px; margin-top: 4px; font-weight: bold;">
+                    AI Score: ${point.meta.ai_score}
+                </div>
+                `;
+        }
+
         return `
           <div class="bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-600">
-            <div class="text-white font-semibold">${playerName}</div>
+            ${displayAITitle}
+            ${aiDetails}
+            <div class="text-white font-semibold">${displayPlayerName}</div>
             <div class="text-white text-sm">${gameName}</div>
             <div class="text-white text-sm">${date}</div>
             <div class="text-white font-medium">${value} points</div>
@@ -216,14 +269,7 @@ const getChartOptions = (seriesData, isExponentialScale) => {
         `;
       }
     },
-    markers: {
-      size: 4,
-      strokeColors: playerColors,
-      strokeWidth: 1,
-      hover: {
-        size: 6
-      }
-    },
+    markers: getMarkersConfig(processedSeriesData),
     legend: {
       show: true,
       position: 'bottom',
@@ -272,6 +318,33 @@ const getChartOptions = (seriesData, isExponentialScale) => {
   };
 };
 
+
+// Simplified approach for AI highlighting
+const getMarkersConfig = (seriesData) => {
+  return {
+    size: 5,
+    discrete: seriesData.flatMap((series, seriesIndex) =>
+      series.data.map((point, pointIndex) => {
+        if (props.showAiScores && point.meta?.ai_score !== undefined && point.meta?.ai_score !== null) {
+          return {
+            seriesIndex,
+            dataPointIndex: pointIndex,
+            size: 8,
+            fillColor: '#22c55e',
+            strokeColor: '#065f46',
+            shape: 'circle'
+          };
+        }
+        return null;
+      }).filter(Boolean)
+    ),
+    strokeWidth: 1,
+    hover: {
+      size: 9
+    }
+  };
+};
+
 const initializeChart = (seriesData, isExponentialScale) => {
   const options = getChartOptions(seriesData, isExponentialScale);
   chart = new ApexCharts(chartContainer.value, options);
@@ -282,7 +355,9 @@ const updateChart = (seriesData, isExponentialScale) => {
   const options = getChartOptions(seriesData, isExponentialScale);
 
   chart.updateOptions({
-    yaxis: options.yaxis
+    yaxis: options.yaxis,
+    tooltip: options.tooltip, // Make sure to update the tooltip configuration
+    markers: options.markers // Update markers configuration
   }, false);
 
   chart.updateSeries(seriesData, true);
@@ -342,7 +417,7 @@ onUnmounted(() => {
 });
 
 watch(
-  [() => props.gameTypeId, () => props.startDate, () => props.endDate, () => props.userId],
+  [() => props.gameTypeId, () => props.startDate, () => props.endDate, () => props.userId, () => props.showAiScores], // Add showAiScores to watch
   () => {
     initOrUpdateChart();
   },

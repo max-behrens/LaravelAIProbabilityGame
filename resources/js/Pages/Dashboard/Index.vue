@@ -234,7 +234,7 @@ onUnmounted(() => {
                 <div class="text-center mb-12">
                     <h3 class="text-2xl font-semibold text-blue-500 mb-4">Options</h3>
                     <p class="text-xl theme-text-secondary max-w-4xl mx-auto">
-                        Taking inspiration from the organic shapes, movements and sequential patterns that surround us
+                        Test text.
                     </p>
                 </div>
                 <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
