@@ -29,7 +29,7 @@ class AIGameController extends Controller
  
          Log::info('Fetching game scores', ['gameId' => $gameId, 'page' => $page]);
          $aiScores = $this->aiGameService->getAIGameScores($gameId, $page);
-         Log::info('Game scores retrieved', ['scores' => $aiScores]);
+         Log::info('AI Game scores retrieved', ['scores' => $aiScores]);
  
          return response()->json($aiScores);
      }

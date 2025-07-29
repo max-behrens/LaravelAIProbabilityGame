@@ -10,15 +10,20 @@ export function usePlayerInteractions(gameId, auth) {
     playersReady: new Set(),
     playersAnswered: new Set(),
     playersSubmitted: new Set(),
+    //  Track players who have pre-answered each question
+    playersPreAnswered: new Map(), // questionIndex -> Set of userIds
     currentPlayerCount: 1,
     gameInProgress: false,
     waitingForOthers: false
   });
   const error = ref(null);
   
-  // ADD: Store pre-submitted answers for auto-submission
+  // Store pre-submitted answers for auto-submission
   const preSubmittedAnswers = ref(null);
-  const preSubmittedAIAnswers = ref(null); // NEW: Store AI answers for auto-submission
+  const preSubmittedAIAnswers = ref(null);
+  
+  //  Store pre-answered questions for auto-progression
+  const preAnsweredQuestions = ref(new Map()); // questionIndex -> answer
   
   // AI Module reference - will be set by main component
   let aiModule = null;
@@ -33,7 +38,8 @@ export function usePlayerInteractions(gameId, auth) {
     onScoresUpdate: null,
     onGameUpdate: null,
     onChartsUpdate: null,
-    onGameComplete: null
+    onGameComplete: null,
+    onQuestionProgress: null // Enhanced to handle auto-progression
   });
   
   const currentUserId = computed(() => auth?.user?.id ?? null);
@@ -126,6 +132,14 @@ export function usePlayerInteractions(gameId, auth) {
     }
   };
 
+  //  Trigger question progression
+  const triggerQuestionProgress = async (questionIndex, allAnswers = null) => {
+    if (callbacks.value.onQuestionProgress) {
+      console.log('🔄 Triggering question progress for question:', questionIndex);
+      await callbacks.value.onQuestionProgress(questionIndex, allAnswers);
+    }
+  };
+
   // Helper function to prepare AI answers for submission
   const prepareAIAnswersForSubmission = () => {
     if (!aiModule || !aiModule.playWithAI.value) {
@@ -144,7 +158,6 @@ export function usePlayerInteractions(gameId, auth) {
     console.log('Prepared AI answers for submission:', aiAnswersArray);
     return aiAnswersArray;
   };
-  
 
   // Fetch current players - Fixed API route
   const fetchPlayers = async () => {
@@ -180,43 +193,103 @@ export function usePlayerInteractions(gameId, auth) {
         timestamp: new Date().toISOString()
       };
 
-      // Trigger Pusher event directly instead of going through backend
-      if (gameChannel) {
-        // Note: This won't work with Pusher's client events unless you enable them
-        // Better to call a backend endpoint that triggers the event
-        await axios.post(`/api/games/${gameId}/broadcast`, {
-          event: 'player.count.changed',
-          data: eventData
-        });
-      }
+      await axios.post(`/api/games/${gameId}/broadcast`, {
+        event: 'player.count.changed',
+        data: eventData
+      });
     } catch (err) {
       console.error('Failed to broadcast player count change:', err);
     }
   };
 
-  // Answer question
-  const answerQuestion = async (questionIndex, answer) => {
-    if (!isInGame.value) return;
+  //  Enhanced answer question with pre-answering for multiplayer
+  const answerQuestion = async (questionIndex, answer, playerCount = 1) => {
+    if (!isInGame.value) return { submitted: false, waitingForOthers: false };
     
-    gameState.value.playersAnswered.add(`${currentUserId.value}-${questionIndex}`);
-    
-    // Broadcast answer
     try {
-      await axios.post(`/api/games/${gameId}/broadcast`, {
-        event: 'player.answered',
-        data: {
-          userId: currentUserId.value,
-          userName: currentUserName.value,
-          questionIndex: questionIndex + 1,
-          timestamp: new Date().toISOString()
+      if (playerCount === 1) {
+        // Single player - answer immediately
+        gameState.value.playersAnswered.add(`${currentUserId.value}-${questionIndex}`);
+        
+        // Broadcast answer
+        await axios.post(`/api/games/${gameId}/broadcast`, {
+          event: 'player.answered',
+          data: {
+            userId: currentUserId.value,
+            userName: currentUserName.value,
+            questionIndex: questionIndex + 1,
+            timestamp: new Date().toISOString()
+          }
+        });
+        
+        return { submitted: true, waitingForOthers: false };
+        
+      } else {
+        // MULTIPLAYER: Store answer for potential auto-submission
+        console.log('💾 Storing answer for potential auto-progression:', { questionIndex, answer });
+        preAnsweredQuestions.value.set(questionIndex, answer);
+        
+        // Initialize the set for this question if it doesn't exist
+        if (!gameState.value.playersPreAnswered.has(questionIndex)) {
+          gameState.value.playersPreAnswered.set(questionIndex, new Set());
         }
-      });
+        gameState.value.playersPreAnswered.get(questionIndex).add(currentUserId.value);
+
+        // Broadcast pre-answer
+        await axios.post(`/api/games/${gameId}/broadcast`, {
+          event: 'player.pre.answered',
+          data: {
+            userId: currentUserId.value,
+            userName: currentUserName.value,
+            questionIndex: questionIndex,
+            answeredCount: gameState.value.playersPreAnswered.get(questionIndex).size,
+            requiredCount: playerCount,
+            timestamp: new Date().toISOString()
+          }
+        });
+
+        // Check if all players have pre-answered this question
+        const preAnsweredCount = gameState.value.playersPreAnswered.get(questionIndex).size;
+        if (preAnsweredCount >= playerCount) {
+          console.log('✅ All players pre-answered question', questionIndex, '- triggering progression');
+          
+          // All players pre-answered - mark as officially answered for everyone
+          gameState.value.playersAnswered.add(`${currentUserId.value}-${questionIndex}`);
+          
+          // Broadcast that all players can progress
+          await axios.post(`/api/games/${gameId}/broadcast`, {
+            event: 'question.all.answered',
+            data: {
+              questionIndex: questionIndex,
+              playerCount: playerCount,
+              timestamp: new Date().toISOString()
+            }
+          });
+          
+          addFlashMessage('All players answered! Moving forward...', 'success');
+          
+          // Clear pre-answered data for this question
+          preAnsweredQuestions.value.delete(questionIndex);
+          gameState.value.playersPreAnswered.delete(questionIndex);
+          
+          return { submitted: true, waitingForOthers: false };
+          
+        } else {
+          // Waiting for others - answer is stored for auto-progression
+          addFlashMessage(`Waiting for other players to answer... (${preAnsweredCount}/${playerCount})`, 'info');
+          return { submitted: false, waitingForOthers: true, preAnswered: true };
+        }
+      }
+      
     } catch (err) {
-      console.error('Failed to broadcast answer:', err);
+      error.value = err;
+      addFlashMessage('Failed to answer question: ' + (err.response?.data?.message || err.message), 'error');
+      console.error('Failed to answer question:', err);
+      return { submitted: false, waitingForOthers: false };
     }
   };
 
-  // Submit answers with AI support
+  // Submit answers with AI support (keep existing logic)
   const submitAnswers = async (answers, playerCount) => {
     if (!isInGame.value) return { submitted: false, waitingForOthers: false };
     
@@ -345,11 +418,13 @@ export function usePlayerInteractions(gameId, auth) {
     gameState.value.playersReady.clear();
     gameState.value.playersAnswered.clear();
     gameState.value.playersSubmitted.clear();
+    gameState.value.playersPreAnswered.clear(); //  Clear pre-answered questions
     gameState.value.gameInProgress = false;
     gameState.value.waitingForOthers = false;
-    // Clear pre-submitted answers
+    // Clear pre-submitted answers and pre-answered questions
     preSubmittedAnswers.value = null;
     preSubmittedAIAnswers.value = null;
+    preAnsweredQuestions.value.clear(); //  Clear pre-answered questions
   };
 
   // Enhanced Pusher setup with better connection handling
@@ -417,7 +492,6 @@ export function usePlayerInteractions(gameId, auth) {
           fetchPlayers();
         }, 500);
       }
-      // Don't show any message for own actions
     });
 
     // Player left - Fixed to show correct messages
@@ -432,7 +506,6 @@ export function usePlayerInteractions(gameId, auth) {
           fetchPlayers();
         }, 500);
       }
-      // Don't show any message for own actions
     });
 
     // Player count changed
@@ -471,7 +544,7 @@ export function usePlayerInteractions(gameId, auth) {
       }
     });
 
-    // Player answered question
+    // Player answered question (existing logic)
     gameChannel.bind('player.answered', (data) => {
       console.log('🔔 Received player.answered event:', data);
       if (data.userId !== currentUserId.value) {
@@ -479,6 +552,106 @@ export function usePlayerInteractions(gameId, auth) {
       }
     });
 
+    //  Player pre-answered question (multiplayer auto-progression)
+    gameChannel.bind('player.pre.answered', async (data) => {
+      console.log('🔔 Received player.pre.answered event:', data);
+      
+      if (data.userId !== currentUserId.value) {
+        // Another player pre-answered
+        if (!gameState.value.playersPreAnswered.has(data.questionIndex)) {
+          gameState.value.playersPreAnswered.set(data.questionIndex, new Set());
+        }
+        gameState.value.playersPreAnswered.get(data.questionIndex).add(data.userId);
+        
+        addFlashMessage(`${data.userName} answered question ${data.questionIndex + 1}! (${data.answeredCount}/${data.requiredCount} answered)`, 'info');
+        
+        // Check if all required players have now answered
+        const allPlayersAnswered = data.answeredCount >= data.requiredCount;
+        const iHavePreAnswered = preAnsweredQuestions.value.has(data.questionIndex);
+        const iAlreadyReallyAnswered = gameState.value.playersAnswered.has(`${currentUserId.value}-${data.questionIndex}`);
+        
+        console.log('Auto-progression check:', {
+          allPlayersAnswered,
+          iHavePreAnswered,
+          iAlreadyReallyAnswered,
+          answeredCount: data.answeredCount,
+          requiredCount: data.requiredCount,
+          questionIndex: data.questionIndex
+        });
+        
+        if (allPlayersAnswered && iHavePreAnswered && !iAlreadyReallyAnswered) {
+          console.log('🚀 Auto-progressing pre-saved answer for question', data.questionIndex);
+          try {
+            // Mark as officially answered
+            gameState.value.playersAnswered.add(`${currentUserId.value}-${data.questionIndex}`);
+            
+            // Broadcast that all players can progress
+            await axios.post(`/api/games/${gameId}/broadcast`, {
+              event: 'question.all.answered',
+              data: {
+                questionIndex: data.questionIndex,
+                playerCount: data.requiredCount,
+                timestamp: new Date().toISOString()
+              }
+            });
+    
+            addFlashMessage('Your answer has been auto-submitted! Moving forward...', 'success');
+            
+            // Clean up pre-answered data
+            preAnsweredQuestions.value.delete(data.questionIndex);
+            gameState.value.playersPreAnswered.delete(data.questionIndex);
+    
+          } catch (err) {
+            console.error('Auto-progression failed:', err);
+            addFlashMessage('Failed to auto-progress your answer. Please try manually.', 'error');
+          }
+        }
+      }
+    });
+
+    //  All players answered a question
+    gameChannel.bind('question.all.answered', async (data) => {
+      console.log('🔔 Received question.all.answered event:', data);
+      
+      // Trigger question progression for all players who haven't progressed yet
+      if (preAnsweredQuestions.value.has(data.questionIndex)) {
+        console.log('🔄 Triggering auto-progression for question:', data.questionIndex);
+        
+        // Get all current answers to pass to the callback
+        const allAnswers = Array.from(preAnsweredQuestions.value.entries());
+        
+        // Clean up this question's pre-answered data
+        preAnsweredQuestions.value.delete(data.questionIndex);
+        gameState.value.playersPreAnswered.delete(data.questionIndex);
+        
+        // Trigger external callback to progress to next question
+        await triggerQuestionProgress(data.questionIndex, allAnswers);
+      }
+    });
+
+    // AI answered event
+    gameChannel.bind('ai.answered', (data) => {
+      console.log('🔔 Received ai.answered event:', data);
+      
+      // Store the AI answer with ALL properties in the aiAnswers ref
+      if (aiModule && data.aiAnswer) {
+          aiModule.aiAnswers.value[data.questionIndex] = {
+              answer: data.aiAnswer,
+              score: data.aiScore, // Preserve the score
+              isCorrect: data.isCorrect, // Preserve other properties
+              cached: false // Default for received answers
+          };
+          console.log('AI answer stored with score:', aiModule.aiAnswers.value[data.questionIndex]);
+      }
+      
+      // Trigger external callback to progress to next question
+      if (callbacks.value.onQuestionProgress) {
+          callbacks.value.onQuestionProgress(data.questionIndex);
+      }
+      
+      addFlashMessage('AI answered! Moving to next question...', 'success');
+  });
+  
     // UPDATED: Player submitted (multiplayer) - Auto-submission logic with AI support
     gameChannel.bind('player.submitted', async (data) => {
       console.log('🔔 Received player.submitted event:', data);
@@ -637,18 +810,19 @@ export function usePlayerInteractions(gameId, auth) {
     error,
     isInGame,
     preSubmittedAnswers, // Expose for debugging if needed
+    preAnsweredQuestions, //  Expose pre-answered questions
     
     // Methods
     fetchPlayers,
     changePlayerCount,
-    answerQuestion,
+    answerQuestion, // ENHANCED: Now handles auto-progression
     submitAnswers,
     resetGameState,
     addFlashMessage,
     removeFlashMessage,
     clearFlashMessages,
     registerCallbacks,
-    setAIModule, // NEW: Expose setAIModule function
+    setAIModule, //  Expose setAIModule function
     
     // Cleanup
     cleanup

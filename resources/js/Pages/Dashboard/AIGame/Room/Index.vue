@@ -1,5 +1,5 @@
 <script setup>
-import { ref, defineProps, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, defineProps, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import BreezeAuthenticatedLayout from '@/Layouts/Authenticated.vue';
 import GameAuthenticatedLayout from '@/Layouts/GameAuthenticated.vue';
 import { Head, Link } from '@inertiajs/inertia-vue3';
@@ -236,24 +236,71 @@ const onPlayerCountChange = async (newCount) => {
 
 const nextOrSubmit = async () => {
     if (!isLastQuestion.value) {
-        await answerQuestion(currentQuestionIndex.value, answers.value[currentQuestionIndex.value]);
+        // ENHANCED: Use the new answerQuestion function with auto-progression
+        const result = await answerQuestion(currentQuestionIndex.value, answers.value[currentQuestionIndex.value], playerCount.value);
 
-        if (playWithAI.value && props.gameQuestions[currentQuestionIndex.value]) {
-            console.log('Requesting AI answer for question:', currentQuestionIndex.value);
-            await getAIAnswerForQuestion(
-                props.gameQuestions[currentQuestionIndex.value].question,
-                props.gameId,
-                currentQuestionIndex.value
-            );
+        if (result.submitted) {
+            // Answer was submitted successfully (single player or all players answered)
+            // Check if we're playing with AI and need to wait for AI answer
+            if (playWithAI.value && props.gameQuestions[currentQuestionIndex.value]) {
+                // For single player: Get AI answer immediately
+                if (playerCount.value === 1) {
+                    console.log('Single player: Requesting AI answer for question:', currentQuestionIndex.value);
+                    await getAIAnswerForQuestion(
+                        props.gameQuestions[currentQuestionIndex.value].question,
+                        props.gameId,
+                        currentQuestionIndex.value
+                    );
+                    // Progress to next question immediately after AI responds
+                    currentQuestionIndex.value++;
+                } else {
+                    // For multiplayer: Only the first player to trigger "all answered" should request AI
+                    console.log('Multiplayer: All players answered, checking if need to request AI');
+                    
+                    // If AI hasn't answered this question yet, request it
+                    if (!hasAIAnswered(currentQuestionIndex.value)) {
+                        console.log('Requesting AI answer for question:', currentQuestionIndex.value);
+                        await getAIAnswerForQuestion(
+                            props.gameQuestions[currentQuestionIndex.value].question,
+                            props.gameId,
+                            currentQuestionIndex.value
+                        );
+                        
+                        // Broadcast that AI has answered and all players can progress
+                        await axios.post(`/api/games/${props.gameId}/broadcast`, {
+                            event: 'ai.answered',
+                            data: {
+                                questionIndex: currentQuestionIndex.value,
+                                aiAnswer: aiAnswers.value[currentQuestionIndex.value]?.answer,
+                                aiScore: aiAnswers.value[currentQuestionIndex.value]?.score, // Add this line
+                                isCorrect: aiAnswers.value[currentQuestionIndex.value]?.isCorrect, // Add this too
+                                timestamp: new Date().toISOString()
+                            }
+                        });
+                    }
+                    
+                    // In multiplayer, progress will happen via Pusher event
+                    // Don't increment currentQuestionIndex here - wait for the event
+                }
+            } else {
+                // No AI - progress immediately in single player, or wait for multiplayer sync
+                if (playerCount.value === 1) {
+                    currentQuestionIndex.value++;
+                } else {
+                    // Multiplayer without AI - progress will happen via Pusher event
+                    // Don't increment currentQuestionIndex here
+                }
+            }
+        } else if (result.waitingForOthers && result.preAnswered) {
+            // Answer was pre-submitted, waiting for auto-progression
+            addFlashMessage('Your answer is ready! Waiting for other players...', 'success');
+            // Don't increment currentQuestionIndex - this will happen automatically via Pusher
         }
-
-        currentQuestionIndex.value++;
     } else {
-        // This is the LAST question
+        // This is the LAST question - use existing final submission logic
         submitting.value = true;
 
         try {
-            // Handle AI for final question
             if (playWithAI.value) {
                 if (!hasAIAnswered(currentQuestionIndex.value)) {
                     addFlashMessage('Waiting for AI to answer the final question...', 'info');
@@ -269,23 +316,19 @@ const nextOrSubmit = async () => {
             const result = await submitAnswers(answers.value, playerCount.value);
 
             if (result.submitted) {
-                // Game completely finished AND all players have submitted
                 addFlashMessage('Answers submitted successfully! Game Completed.', 'success');
-                gameIsOver.value = true;      // Mark game as over
-                isGameStarted.value = false;  // Immediately hide question input
+                gameIsOver.value = true;
+                isGameStarted.value = false;
 
-                // Reset after a delay, allowing time for "Game Over" message (if any)
-                // and for charts to update before disappearing.
                 setTimeout(() => {
                     resetGameState();
                     console.log('Game state fully reset on submitter - ready for new game');
-                }, 2000); // 2 seconds delay for charts/scores to refresh visually
+                }, 2000);
 
             } else if (result.waitingForOthers && result.preSubmitted) {
-                // User has submitted, but others are still playing or server is processing
                 addFlashMessage('Your answers are ready! Waiting for other players to submit...', 'success');
-                gameState.value.waitingForOthers = true; // Show waiting message
-                isGameStarted.value = false; // Hide the question input
+                gameState.value.waitingForOthers = true;
+                isGameStarted.value = false;
                 preSubmittedAnswers.value = answers.value;
                 console.log('✅ Answers pre-submitted, waiting for auto-submission...');
             }
@@ -298,6 +341,18 @@ const nextOrSubmit = async () => {
         }
     }
 };
+
+const debugAIAnswers = computed(() => {
+    const debug = {};
+    Object.keys(aiAnswers.value).forEach(key => {
+        debug[key] = {
+            hasAnswer: !!aiAnswers.value[key]?.answer,
+            hasScore: aiAnswers.value[key]?.score !== undefined,
+            score: aiAnswers.value[key]?.score
+        };
+    });
+    return debug;
+});
 
 // Function to handle starting a new game (called by a "Play Again" button)
 const startNewGame = () => {
@@ -398,6 +453,11 @@ const updateNavigation = () => {
     }
 };
 
+watch(() => gameState.value.gameInProgress, (newVal, oldVal) => {
+    if (newVal && !oldVal) {
+        console.log('Game started - AI answers preserved:', Object.keys(aiAnswers.value));
+    }
+});
 
 
 // Lifecycle: fetch data
@@ -436,18 +496,45 @@ onMounted(() => {
                 await gameHeatmapRef.value.refreshHeatmap();
             }
         },
-        // NEW: UI reset callback for auto-submitted users
-        onGameComplete: async (data) => { // Added 'data' parameter to receive info from event
-            console.log('🔄 Received Pusher .game.complete event. Resetting UI state for other users...');
-            gameIsOver.value = true; // Mark game as over
-            isGameStarted.value = false; // Immediately hide question input
-            gameState.value.waitingForOthers = false; // Clear waiting state
+        // UI reset callback for auto-submitted users
+        onGameComplete: async (data) => {
+            console.log('🔄 Received game complete event. Resetting UI state...');
+            gameIsOver.value = true;
+            isGameStarted.value = false;
+            gameState.value.waitingForOthers = false;
 
-            // Schedule the full reset after a short delay
             setTimeout(() => {
                 resetGameState();
                 console.log('Auto-submitted user UI state fully reset - ready for new game');
-            }, 2000); // 2 seconds delay
+            }, 2000);
+        },
+
+        // ENHANCED: Handle both AI answered and question progression
+        onQuestionProgress: async (questionIndex, allAnswers = null) => {
+            console.log('🔄 Received question progress event for question:', questionIndex);
+            
+            // If this is from an AI answer event, just progress
+            if (allAnswers === null) {
+                if (questionIndex === currentQuestionIndex.value) {
+                    currentQuestionIndex.value++;
+                    addFlashMessage('Moving to next question!', 'success');
+                }
+            } else {
+                // This is from auto-progression - all players answered
+                if (questionIndex === currentQuestionIndex.value) {
+                    // Check if we need AI to answer before progressing
+                    if (playWithAI.value && !hasAIAnswered(questionIndex)) {
+                        console.log('All players answered, waiting for AI...');
+                        addFlashMessage('All players answered! Waiting for AI...', 'info');
+                        // AI will be requested by the first player who triggered this
+                        // We'll progress when we receive the ai.answered event
+                    } else {
+                        // No AI needed or AI already answered - progress immediately
+                        currentQuestionIndex.value++;
+                        addFlashMessage('All players answered! Moving to next question!', 'success');
+                    }
+                }
+            }
         }
     });
 
@@ -525,7 +612,7 @@ onUnmounted(() => {
                             <div class="text-center mb-2 text-gray-400 text-sm font-medium">
                                 Question {{ currentQuestionIndex + 1 }} / {{ props.gameQuestions.length }}
                             </div>
-                            <div class="text-center mb-4 text-gray-200 text-xl font-semibold">
+                            <div class="text-center mb-4 text-white text-xl font-semibold">
                                 {{ props.gameQuestions[currentQuestionIndex]?.question }}
                             </div>
                             <div class="flex flex-col sm:flex-row gap-4 justify-center">
@@ -627,29 +714,29 @@ onUnmounted(() => {
                               </div>
 
                               <div v-if="!aiLoading && !aiError" class="space-y-2">
-                                  <div v-for="(question, index) in props.gameQuestions" :key="question.id"
-                                      class="text-gray-300">
-                                      <span class="font-medium">Q{{ index + 1 }}:</span>
-                                      <span v-if="hasAIAnswered(index)" class="text-green-400 ml-2">
-                                          {{ aiAnswers[index]?.answer || 'Answer not available' }}
-                                          <span v-if="aiAnswers[index]?.score !== undefined" class="text-blue-400 ml-1">
-                                              (Score: {{ aiAnswers[index].score }})
-                                          </span>
-                                      </span>
-                                      <span v-else-if="index < currentQuestionIndex" class="text-gray-500 ml-2">
-                                          Waiting for AI...
-                                      </span>
-                                      <span v-else class="text-gray-500 ml-2">
-                                          Not answered yet
-                                      </span>
-                                  </div>
+                                <div v-for="(question, index) in props.gameQuestions" :key="question.id" class="text-gray-300">
+                                    <span class="font-medium">Q{{ index + 1 }}:</span>
+                                    <span v-if="hasAIAnswered(index)" class="text-green-400 ml-2">
+                                        {{ aiAnswers[index]?.answer || 'Answer not available' }}
+                                        <span v-if="aiAnswers[index]?.score !== undefined && aiAnswers[index]?.score !== null" 
+                                            class="text-blue-400 ml-1">
+                                            (Score: {{ aiAnswers[index].score }})
+                                        </span>
+                                    </span>
+                                    <span v-else-if="index < currentQuestionIndex" class="text-gray-500 ml-2">
+                                        Waiting for AI...
+                                    </span>
+                                    <span v-else class="text-gray-500 ml-2">
+                                        Not answered yet
+                                    </span>
+                                </div>
                               </div>
 
                               <!-- Debug info (remove in production) -->
-                              <div v-if="playWithAI" class="mt-4 text-xs text-gray-500">
-                                  <p>Debug: playWithAI = {{ playWithAI }}</p>
-                                  <p>Debug: AI answers count = {{ Object.keys(aiAnswers).length }}</p>
-                              </div>
+                              <div v-if="playWithAI" class="mt-4 text-xs text-gray-500 bg-gray-900 p-2 rounded">
+                                <p><strong>Debug AI Answers:</strong></p>
+                                <pre>{{ JSON.stringify(debugAIAnswers, null, 2) }}</pre>
+                            </div>
                           </div>
 
                           <div class="flex-1 min-w-[300px] p-4 bg-gray-800 rounded shadow">

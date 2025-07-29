@@ -1,10 +1,10 @@
-import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue'; // Remove 'watch' import
 import axios from 'axios';
 
 // Factory function that creates AI composable with dependencies
 export function createAI(gameId, getDependencies) {
   // Reactive state
-  const aiAnswers = ref([]);
+  const aiAnswers = ref({});
   const aiLoading = ref(false);
   const aiError = ref(null);
   const playWithAI = ref(false);
@@ -49,14 +49,8 @@ export function createAI(gameId, getDependencies) {
     return answeredCount >= totalPlayers && totalPlayers > 0;
   });
 
-  // Watch for when all players have answered and AI should respond
-  watch(allPlayersAnswered, async (newValue) => {
-    if (newValue && playWithAI.value) {
-      await getAIAnswer();
-    }
-  });
 
-  // Get AI answer for current question
+  // Get AI answer for current question (kept for backward compatibility)
   const getAIAnswer = async () => {
     if (!playWithAI.value || aiLoading.value) return;
     
@@ -94,7 +88,7 @@ export function createAI(gameId, getDependencies) {
     }
   };
 
-  // Get AI answer for a specific question index - updated to match backend API
+  // Get AI answer for a specific question index
   const getAIAnswerForQuestion = async (questionText, gameId, questionIndex) => {
     if (!playWithAI.value || aiLoading.value) return;
     
@@ -132,16 +126,17 @@ export function createAI(gameId, getDependencies) {
 
   // Check if AI has answered a specific question
   const hasAIAnswered = (questionIndex) => {
-    return aiAnswers.value[questionIndex] !== undefined;
-  };
+    const answer = aiAnswers.value[questionIndex];
+    return answer && answer.answer !== undefined && answer.answer !== null && answer.answer !== '';
+};
 
   // Reset AI state (for new games)
   const resetAI = () => {
-    aiAnswers.value = [];
+    aiAnswers.value = {}; // Reset to empty object
     aiError.value = null;
     aiLoading.value = false;
     console.log('AI state reset');
-  };
+};
 
   return {
     // State

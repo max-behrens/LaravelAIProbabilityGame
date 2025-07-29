@@ -412,7 +412,7 @@ watch(
                       </div>
                   </transition>
 
-                  <div class="space-y-8 theme-bg-primary p-6 rounded-lg shadow-lg">
+                  <div class="space-y-8 p-6 rounded-lg shadow-lg">
                       <section>
                           <div class="w-full">
                               <transition name="chart-fade" mode="out-in">
