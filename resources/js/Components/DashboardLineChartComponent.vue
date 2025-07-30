@@ -245,6 +245,7 @@ const getChartOptions = (seriesData, isExponentialScale) => {
         let displayPlayerName = playerName;
         let aiDetails = '';
         let displayAITitle = '';
+        let sessionId = point.meta.session_id;
         
         if (props.showAiScores && point.meta && point.meta.ai_score !== null) {
             displayAITitle = '<div style="background-color: #065f46; color: #10b981; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-top: 2px;">AI Model - Normal</div>';
@@ -263,6 +264,7 @@ const getChartOptions = (seriesData, isExponentialScale) => {
             <div class="text-white text-sm">${gameName}</div>
             <div class="text-white text-sm">${date}</div>
             <div class="text-white font-medium">${value} points</div>
+            <div class="text-white text-xs" style="font-size: 8pt !important;">Game Session: ${sessionId}</div>
             ${rateChange}
             ${groupedPointsInfo}
           </div>

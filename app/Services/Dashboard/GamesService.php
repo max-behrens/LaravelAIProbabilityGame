@@ -246,7 +246,6 @@ class GamesService
                 'game_scores.session_id',
                 'ai_scores.created_at as ai_created_at',
                 'ai_scores.score as ai_score',
-                'ai_scores.session_id',
                 'users.name as player_name',
                 'games.id as game_id',
                 'game_types.id as game_type_id',
@@ -318,6 +317,8 @@ class GamesService
             foreach ($playerInfo['scores'] as $scoreData) {
                 $timestamp = Carbon::parse($scoreData['date'])->timestamp * 1000;
 
+                $truncatedSessionId = substr($scoreData['session_id'], 0, 10) . '...';
+
                 $seriesData[] = [
                     'x' => $timestamp,
                     'y' => $scoreData['score'],
@@ -325,7 +326,8 @@ class GamesService
                         'game_id' => $scoreData['game_id'],
                         'game_type_id' => $scoreData['game_type_id'],
                         'game_name' => $scoreData['game_name'],
-                        'ai_score' => $scoreData['ai_score']
+                        'ai_score' => $scoreData['ai_score'],
+                        'session_id' => $truncatedSessionId
                     ]
                 ];
             }
