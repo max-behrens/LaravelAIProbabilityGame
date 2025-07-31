@@ -85,9 +85,9 @@ const fetchHeatmapData = async () => {
       const firstSession = heatmapData.value[0];
       selectedSession.value = {
         sessionId: firstSession.session_id,
-        playerName: firstSession.player_name,
+        players: firstSession.players,
         gameName: firstSession.game_name,
-        score: firstSession.total_score
+        score: firstSession.combined_score
       };
       await fetchSessionDetails(firstSession.session_id);
     } else {
@@ -216,7 +216,7 @@ const heatmapSeries = computed(() => {
     );
   });
 
-  // Find the maximum number of sessions in any single day (across ALL dates, not just current window)
+  // Find the maximum number of sessions in any single day
   const maxSessionsPerDay = Math.max(1, ...Object.values(sessionsByDate).map(sessions => sessions.length));
 
   // Create series - one row for each potential session slot
@@ -228,9 +228,9 @@ const heatmapSeries = computed(() => {
 
       return {
         x: date,
-        y: session?.total_score ?? null,
+        y: session?.combined_score ?? null, // Use combined_score instead of individual player score
         sessionId: session?.session_id ?? null,
-        playerName: session?.player_name ?? null,
+        players: session?.players ?? [], // Array of all players in this session
         gameName: session?.game_name ?? null,
         session: session,
         createdAt: session?.created_at ?? null
@@ -309,7 +309,7 @@ const heatmapOptions = ref({
         if (selected?.sessionId) {
           selectedSession.value = {
             sessionId: selected.sessionId,
-            playerName: selected.playerName,
+            players: selected.players,
             gameName: selected.gameName,
             score: selected.y
           };
@@ -366,14 +366,24 @@ const heatmapOptions = ref({
         second: '2-digit'
       });
 
+      // Build players list for tooltip
+      const playersHtml = session.players.map(player => 
+        `<div style="margin-left: 10px; font-size: 11px;">
+          ${player.player_name}: ${player.total_score} pts
+        </div>`
+      ).join('');
+
       return `
         <div style="padding:8px; background-color:#1e1e1e; color:#cccccc; border-radius:4px; max-width:300px;">
-          <strong>Player:</strong> ${session.player_name}<br/>
           <strong>Game:</strong> ${session.game_name}<br/>
           <strong>Date:</strong> ${cellData.x}<br/>
           <strong>Time:</strong> ${time}<br/>
-          <strong>Score:</strong> ${session.total_score} pts
-          <div class="text-white text-xs" style="font-size: 8pt !important;">Game Session:</strong> ${session.truncated_session_id}<br/>
+          <strong>Total Score:</strong> ${session.combined_score} pts<br/>
+          <strong>Players:</strong><br/>
+          ${playersHtml}
+          <div style="margin-top: 4px; font-size: 8pt; color: #888;">
+            Session: ${session.truncated_session_id}
+          </div>
         </div>
       `;
     }
