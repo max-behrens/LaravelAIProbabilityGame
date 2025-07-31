@@ -3,6 +3,7 @@
 namespace App\Services\Dashboard;
 
 use App\Models\GameScore;
+use App\Models\AIScore;
 use App\Models\Games;
 use App\Models\GameType;
 use App\Models\GameQuestion;
@@ -479,34 +480,39 @@ class GamesService
      */
     public function getSessionDetails(string $sessionId)
     {
-        // Get the main game score record (including answers from game_scores and ai_scores)
-        $gameScore = GameScore::query()
+        // Fetch all game scores (player answers) and joined info
+        $gameScores = GameScore::query()
             ->select(
                 'game_scores.*',
                 'users.name as player_name',
                 'games.id as game_id',
-                'game_scores.answer_json as game_answer_json', // New field: player answers
+                'game_scores.answer_json as game_answer_json',
                 'game_types.id as game_type_id',
                 'game_types.name as game_name',
-                'ai_scores.score as ai_score',
-                'ai_scores.answer_json as ai_answer_json' // AI answers
+                'ai_scores.score as ai_score'
             )
             ->join('users', 'game_scores.player_id', '=', 'users.id')
             ->join('games', 'game_scores.game_id', '=', 'games.id')
             ->join('game_types', 'games.game_type_id', '=', 'game_types.id')
             ->leftJoin('ai_scores', function($join) {
-                $join->on('game_scores.session_id', '=', 'ai_scores.session_id')
-                    ->on('game_scores.game_id', '=', 'ai_scores.game_id');
+                $join->on('ai_scores.session_id', '=', 'game_scores.session_id')
+                    ->on('ai_scores.game_id', '=', 'game_scores.game_id');
             })
             ->where('game_scores.session_id', $sessionId)
-            ->first();
+            ->get();
 
-        if (!$gameScore) {
+        if ($gameScores->isEmpty()) {
             return null;
         }
 
+        $first = $gameScores->first();
 
-        // Get all players who played in the same session
+        if (!$first) {
+            Log::warning('Empty result when accessing first game score', ['session_id' => $sessionId]);
+            return null;
+        }
+
+        // Get list of all players
         $allPlayers = GameScore::where('session_id', $sessionId)
             ->join('users', 'game_scores.player_id', '=', 'users.id')
             ->select(
@@ -516,133 +522,101 @@ class GamesService
             )
             ->get();
 
-        // Parse player answers from game_answer_json with enhanced debugging
-        $playerAnswers = [];
-        if ($gameScore->game_answer_json) {
-            try {
-                $answerData = $gameScore->game_answer_json;
+        // Group player answers per question
+        $playerAnswersByQuestion = [];
 
-                if (is_string($answerData)) {
-                    $decodedOnce = json_decode($answerData, true);
+        foreach ($gameScores as $score) {
+            $playerName = $score->player_name;
+            $decodedOnce = json_decode($score->game_answer_json, true);
+            $answerData = is_string($decodedOnce) ? json_decode($decodedOnce, true) : $decodedOnce;
 
-                    // If decode returns a string, it means it was double-encoded
-                    if (is_string($decodedOnce)) {
-                        $decodedTwice = json_decode($decodedOnce, true);
-                        $answerData = is_array($decodedTwice) ? $decodedTwice : [];
-                    } else {
-                        $answerData = is_array($decodedOnce) ? $decodedOnce : [];
-                    }
+            if (is_array($answerData)) {
+                foreach ($answerData as $qNum => $answer) {
+                    $questionNumber = $answer['question_number'] ?? $answer['question_id'] ?? $qNum;
+
+                    $playerAnswersByQuestion[$questionNumber]['question'] = $answer['question'] ?? $answer['question_text'] ?? 'Unknown Question';
+
+                    $playerAnswersByQuestion[$questionNumber]['answers'][] = [
+                        'player_name' => $playerName,
+                        'submitted' => $answer['submitted'] ?? $answer['user_answer'] ?? $answer['selected_answer'] ?? null,
+                        'is_correct' => $answer['is_correct'] ?? $answer['correct'] ?? false,
+                        'score_awarded' => $answer['score_awarded'] ?? $answer['points'] ?? $answer['score'] ?? 0
+                    ];
                 }
-
-                if (is_array($answerData)) {
-                    foreach ($answerData as $qNum => $answer) {
-                        // Try different possible structures
-                        if (is_array($answer)) {
-                            $questionNumber = $answer['question_number'] ?? $answer['question_id'] ?? $qNum;
-                            $playerAnswers[$questionNumber] = $answer;
-                        } else {
-                            Log::warning('Unexpected answer format', [
-                                'session_id' => $sessionId,
-                                'question_num' => $qNum,
-                                'answer_type' => gettype($answer),
-                                'answer_content' => $answer
-                            ]);
-                        }
-                    }
-                }
-            } catch (\Exception $e) {
-                Log::error('Error parsing player answers', [
+            } else {
+                Log::warning('Player answer JSON could not be decoded into array', [
                     'session_id' => $sessionId,
-                    'error' => $e->getMessage(),
-                    'raw_data' => $gameScore->game_answer_json
+                    'player_name' => $playerName,
+                    'raw' => $score->game_answer_json,
+                    'decoded' => $answerData
+                ]);
+            }
+
+        }
+
+        // Get AI answer data
+        $aiScore = AiScore::where('session_id', $first->session_id)
+            ->where('game_id', $first->game_id)
+            ->first();
+
+        if ($aiScore && $aiScore->answer_json) {
+            $aiAnswerData = json_decode($aiScore->answer_json, true);
+
+            if (is_array($aiAnswerData)) {
+                foreach ($aiAnswerData as $qNum => $answer) {
+                    $questionNumber = $answer['question_number'] ?? $answer['question_id'] ?? $qNum;
+
+                    $playerAnswersByQuestion[$questionNumber]['ai'] = [
+                        'submitted' => $answer['submitted'] ?? $answer['selected_answer'] ?? $answer['ai_answer'] ?? null,
+                        'is_correct' => $answer['is_correct'] ?? $answer['correct'] ?? null,
+                        'score_awarded' => $answer['score_awarded'] ?? $answer['points'] ?? $answer['score'] ?? null
+                    ];
+                }
+            } else {
+                Log::warning('AI answer JSON could not be decoded into array', [
+                    'session_id' => $sessionId,
+                    'raw' => $aiScore->answer_json,
+                    'decoded' => $aiAnswerData
                 ]);
             }
         }
 
-        // Parse AI answers from ai_answer_json with enhanced debugging
-        $aiAnswers = [];
-        if ($gameScore->ai_answer_json) {
-            try {
-                $aiAnswerData = is_string($gameScore->ai_answer_json)
-                    ? json_decode($gameScore->ai_answer_json, true)
-                    : $gameScore->ai_answer_json;
-
-                if (is_array($aiAnswerData)) {
-                    foreach ($aiAnswerData as $qNum => $answer) {
-                        if (is_array($answer)) {
-                            $questionNumber = $answer['question_number'] ?? $answer['question_id'] ?? $qNum;
-                            $aiAnswers[$questionNumber] = $answer;
-                        }
-                    }
-                }
-            } catch (\Exception $e) {
-                Log::error('Error parsing AI answers', [
-                    'session_id' => $sessionId,
-                    'error' => $e->getMessage(),
-                    'raw_data' => $gameScore->ai_answer_json
-                ]);
-            }
-        }
-
-        // Combine player and AI answers into unified question list
-        $allQuestionNumbers = array_unique(array_merge(
-            array_keys($playerAnswers),
-            array_keys($aiAnswers)
-        ));
-
+        // Build final question list
         $questions = [];
-        foreach ($allQuestionNumbers as $questionNumber) {
-            $player = $playerAnswers[$questionNumber] ?? [];
-            $ai = $aiAnswers[$questionNumber] ?? [];
-
-            // Try multiple possible field names for flexibility
+        foreach ($playerAnswersByQuestion as $qNum => $data) {
             $questions[] = [
-                'question_number' => $questionNumber,
-                'question_text' => $player['question'] ?? $player['question_text'] ?? $ai['question'] ?? $ai['question_text'] ?? 'Question not found',
-                'correct_answer' => $player['correct_answer'] ?? $player['answer'] ?? $ai['correct_answer'] ?? $ai['answer'] ?? null,
-
-                // Player response - try multiple field names
-                'player_answer' => $player['submitted'] ?? $player['user_answer'] ?? $player['selected_answer'] ?? null,
-                'is_correct' => $player['is_correct'] ?? $player['correct'] ?? false,
-                'score_awarded' => $player['score_awarded'] ?? $player['points'] ?? $player['score'] ?? 0,
-
-                // AI response - try multiple field names
-                'ai_answer' => $ai['submitted'] ?? $ai['selected_answer'] ?? $ai['ai_answer'] ?? null,
-                'ai_is_correct' => $ai['is_correct'] ?? $ai['correct'] ?? null,
-                'ai_score' => $ai['score_awarded'] ?? $ai['points'] ?? $ai['score'] ?? null,
+                'question_number' => $qNum,
+                'question_text' => $data['question'],
+                'player_answers' => $data['answers'],
+                'ai_answer' => $data['ai']['submitted'] ?? null,
+                'ai_is_correct' => $data['ai']['is_correct'] ?? null,
+                'ai_score' => $data['ai']['score_awarded'] ?? null,
             ];
         }
 
-        // Sort questions by number
+        // Sort by question number
         usort($questions, fn($a, $b) => ($a['question_number'] ?? 0) - ($b['question_number'] ?? 0));
+        
 
-        $truncatedSessionId = substr($gameScore->session_id, 0, 10) . '...';
-
-        $result = [
-            'session_id' => $truncatedSessionId,
-            'player_name' => $gameScore->player_name,
-            'game_name' => $gameScore->game_name,
-            'total_score' => $this->totalScoreByGameType($gameScore->game_type_id),
-            'ai_score' => $gameScore->ai_score,
-            'created_at' => $gameScore->created_at,
+        return [
+            'session_id' => substr($first->session_id, 0, 10) . '...',
+            'player_name' => $first->player_name,
+            'game_name' => $first->game_name,
+            'total_score' => $this->totalScoreByGameType($first->game_type_id),
+            'ai_score' => $aiScore->score ?? null,
+            'created_at' => $first->created_at,
             'players' => $allPlayers,
             'questions' => $questions,
-            // DEBUG: Add debug info to response
             'debug_info' => [
-                'player_answers_count' => count($playerAnswers),
-                'ai_answers_count' => count($aiAnswers),
+                'player_answers_count' => count($playerAnswersByQuestion),
+                'ai_answers_count' => isset($aiAnswerData) ? count($aiAnswerData) : 0,
                 'total_questions' => count($questions),
-                'has_game_answer_json' => !empty($gameScore->game_answer_json),
-                'has_ai_answer_json' => !empty($gameScore->ai_answer_json),
             ]
         ];
-
-
-        return $result;
     }
-    
 
-        public function getCumulativeBarGraphData(): array
+
+    public function getCumulativeBarGraphData(): array
     {
         Log::info('Fetching cumulative scores by player across all games');
 

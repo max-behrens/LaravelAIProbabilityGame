@@ -191,49 +191,74 @@ const currentWindowDates = computed(() => {
   return allDates.value.slice(start, end);
 });
 
+// Base color ranges for non-AI scores
+const baseHeatmapColorRanges = [
+  { from: 0, to: 0, color: '#1f2937', name: 'No Activity' },
+  { from: 1, to: 25, color: '#1a346e', name: '1-25 pts' },
+  { from: 26, to: 50, color: '#3b82f6', name: '26-50 pts' },
+  { from: 51, to: 75, color: '#60a5fa', name: '51-75 pts' },
+  { from: 76, to: 100, color: '#1e40af', name: '76-100 pts' },
+  { from: 101, to: 1000, color: '#1e3a8a', name: '100+ pts' }
+];
+
+// AI specific color ranges
+const aiHeatmapColorRanges = [
+  { from: 0, to: 0, color: '#1f2937', name: 'No Activity' },
+  { from: 1, to: 25, color: '#14532d', name: 'AI 1-25 pts' },   // Green-900
+  { from: 26, to: 50, color: '#166534', name: 'AI 26-50 pts' }, // Green-800
+  { from: 51, to: 75, color: '#15803d', name: 'AI 51-75 pts' }, // Green-700
+  { from: 76, to: 100, color: '#16a34a', name: 'AI 76-100 pts' },// Green-600
+  { from: 101, to: 1000, color: '#22c55e', name: 'AI 100+ pts' }// Green-500
+];
+
+// Computed property for heatmap color ranges
+const activeHeatmapColorRanges = computed(() => {
+  if (props.showAiScores) {
+    return aiHeatmapColorRanges;
+  }
+  return baseHeatmapColorRanges;
+});
+
 /**
  * Transform heatmapData into series with sessions stacked by date (windowed)
  */
 const heatmapSeries = computed(() => {
   const dates = currentWindowDates.value;
   
-  // Group sessions by date and sort by time
+  // Group and sort sessions by date
   const sessionsByDate = {};
   heatmapData.value.forEach(session => {
     if (!session.created_at) return;
-    
     const date = dayjs(session.created_at).format('YYYY-MM-DD');
-    if (!sessionsByDate[date]) {
-      sessionsByDate[date] = [];
-    }
+    if (!sessionsByDate[date]) sessionsByDate[date] = [];
     sessionsByDate[date].push(session);
   });
-
-  // Sort sessions within each date by creation time
   Object.keys(sessionsByDate).forEach(date => {
-    sessionsByDate[date].sort((a, b) => 
-      new Date(a.created_at) - new Date(b.created_at)
-    );
+    sessionsByDate[date].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   });
-
-  // Find the maximum number of sessions in any single day
+  
   const maxSessionsPerDay = Math.max(1, ...Object.values(sessionsByDate).map(sessions => sessions.length));
-
-  // Create series - one row for each potential session slot
+  
   const series = [];
   for (let sessionIndex = 0; sessionIndex < maxSessionsPerDay; sessionIndex++) {
     const rowData = dates.map(date => {
       const sessionsForDate = sessionsByDate[date] || [];
       const session = sessionsForDate[sessionIndex] || null;
+      const scoreValue = session?.combined_score ?? null;
 
+      // Note: We are no longer setting fillColor directly here because ApexCharts' colorScale.ranges takes precedence.
+      // The logic for coloring will now be entirely driven by `activeHeatmapColorRanges`.
+      
       return {
         x: date,
-        y: session?.combined_score ?? null, // Use combined_score instead of individual player score
+        y: scoreValue,
         sessionId: session?.session_id ?? null,
-        players: session?.players ?? [], // Array of all players in this session
+        players: session?.players ?? [],
         gameName: session?.game_name ?? null,
         session: session,
-        createdAt: session?.created_at ?? null
+        createdAt: session?.created_at ?? null,
+        hasAiScore: session?.ai_score !== null && session?.ai_score !== undefined,
+        // fillColor: fillColor // This line is no longer effectively used for coloring
       };
     });
 
@@ -242,9 +267,9 @@ const heatmapSeries = computed(() => {
       data: rowData
     });
   }
-
   return series;
 });
+
 
 /**
  * X-axis categories (current window dates)
@@ -323,14 +348,7 @@ const heatmapOptions = ref({
       enableShades: true,
       distributed: false,
       colorScale: {
-        ranges: [
-          { from: 0, to: 0, color: '#1f2937', name: 'No Activity' },
-          { from: 1, to: 25, color: '#1a346e', name: '1-25 pts' },
-          { from: 26, to: 50, color: '#3b82f6', name: '26-50 pts' },
-          { from: 51, to: 75, color: '#60a5fa', name: '51-75 pts' },
-          { from: 76, to: 100, color: '#1e40af', name: '76-100 pts' },
-          { from: 101, to: 1000, color: '#1e3a8a', name: '100+ pts' }
-        ]
+        ranges: activeHeatmapColorRanges.value // Use the computed color ranges here
       }
     }
   },
@@ -349,6 +367,9 @@ const heatmapOptions = ref({
       style: { colors: '#9CA3AF', fontSize: '11px' },
       rotate: -45
     }
+  },
+  fill: {
+    opacity: 1
   },
   tooltip: {
     custom({ series, seriesIndex, dataPointIndex, w }) {
@@ -373,12 +394,16 @@ const heatmapOptions = ref({
         </div>`
       ).join('');
 
+      const aiIndicator = cellData.hasAiScore 
+        ? '<span style="color: #10b981; font-size: 10px;">🤖 AI Present</span><br/>'
+        : '';
+
       return `
         <div style="padding:8px; background-color:#1e1e1e; color:#cccccc; border-radius:4px; max-width:300px;">
+          ${aiIndicator}
           <strong>Game:</strong> ${session.game_name}<br/>
           <strong>Date:</strong> ${cellData.x}<br/>
           <strong>Time:</strong> ${time}<br/>
-          <strong>Total Score:</strong> ${session.combined_score} pts<br/>
           <strong>Players:</strong><br/>
           ${playersHtml}
           <div style="margin-top: 4px; font-size: 8pt; color: #888;">
@@ -396,15 +421,31 @@ const heatmapOptions = ref({
 });
 
 // Update chart options on data change
-watch(heatmapSeries, () => {
+watch([heatmapSeries, activeHeatmapColorRanges], () => { // Watch activeHeatmapColorRanges
   heatmapOptions.value = {
     ...heatmapOptions.value,
     xaxis: {
       ...heatmapOptions.value.xaxis,
       categories: heatmapXAxisCategories.value
+    },
+    plotOptions: {
+      heatmap: {
+        ...heatmapOptions.value.plotOptions.heatmap,
+        colorScale: {
+          ranges: activeHeatmapColorRanges.value // Ensure color ranges are updated
+        }
+      }
     }
   };
+  
+  // Force chart re-render when data or color ranges change
+  chartKey.value++;
 }, { deep: true });
+
+// Separate watcher for showAiScores to trigger re-render
+watch(() => props.showAiScores, () => {
+  chartKey.value++;
+});
 
 // Radial chart setup (unchanged from original)
 const radialChartData = computed(() => {
@@ -600,6 +641,8 @@ watch(selectedSessionDetails, () => {
   hoveredPlayerIndex.value = null;
 }, { deep: true });
 
+
+
 // Watch filters props to refetch heatmap data
 watch(
   [() => props.gameTypeId, () => props.startDate, () => props.endDate, () => props.userId, () => props.showAiScores],
@@ -615,10 +658,8 @@ onMounted(() => {
 
 <template>
   <div class="flex h-full text-white">
-    <!-- Left: Heatmap with Navigation (50%) -->
     <div class="w-1/2 p-4 border-r border-gray-700">
       <div class="h-full flex flex-col">
-        <!-- Navigation Controls -->
         <div class="mb-4 text-sm text-center">
           <div class=" space-x-2">
             <button 
@@ -672,7 +713,6 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Heatmap Chart -->
         <div class="flex-1">
           <div v-if="heatmapLoading" class="flex items-center justify-center h-full text-gray-400">
             Loading heatmap data...
@@ -695,9 +735,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Right: Split into two sections (25% each) -->
     <div class="w-1/2 flex flex-col">
-      <!-- Top Right: Radial Chart (25% of total width) -->
       <div class="p-4 border-b border-gray-600">
         <div class="w-full h-48 flex flex-row items-center justify-center">
           <VueApexCharts
@@ -734,31 +772,26 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Bottom Right: Session Details (25% of total width) -->
       <div class="p-4 overflow-auto">
         <div v-if="selectedSessionDetails">
           <div class="space-y-2 text-sm">
             
-            <!-- Enhanced Questions and Answers Section with Debug Info -->
             <div class="mt-4">
-              <div v-if="selectedSessionDetails.questions && selectedSessionDetails.questions.length > 0" class="max-h-40 overflow-y-auto space-y-2">
-                <div 
-                  v-for="question in selectedSessionDetails.questions" 
-                  :key="question.question_number || question.id"
-                  class="bg-gray-700 p-2 rounded text-xs"
-                >
+
+              <template v-if="selectedSessionDetails.questions && selectedSessionDetails.questions.length > 0">
+                <div v-for="question in selectedSessionDetails.questions" :key="question.question_number">
                   <div class="font-medium">
-                    Q{{ question.question_number || question.id }}: 
-                    {{ question.question_text?.substring(0, 100) || question.question?.substring(0, 100) || 'No question text' }}
-                    {{ (question.question_text?.length > 100 || question.question?.length > 100) ? '...' : '' }}
+                    Q{{ question.question_number }}: {{ question.question_text }}
                   </div>
-                  <div class="mt-1">
-                    <span class="text-blue-300">Player: {{ question.player_answer || question.user_answer || 'No answer' }}</span>
-                    <span :class="question.is_correct ? 'text-green-400' : 'text-red-400'" class="ml-2">
-                      {{ question.is_correct ? '✓' : '✗' }}
+
+                  <div v-for="answer in question.player_answers" :key="answer.player_name" class="mt-1">
+                    <span class="text-blue-300">{{ answer.player_name }}: {{ answer.submitted || 'No answer' }}</span>
+                    <span :class="answer.is_correct ? 'text-green-400' : 'text-red-400'" class="ml-2">
+                      {{ answer.is_correct ? '✓' : '✗' }}
                     </span>
-                    <span class="ml-2 text-gray-300">({{ question.score_awarded || question.points || 0 }} pts)</span>
+                    <span class="ml-2 text-gray-300">({{ answer.score_awarded || 0 }} pts)</span>
                   </div>
+
                   <div v-if="props.showAiScores && question.ai_answer" class="mt-1">
                     <span class="text-green-300">AI: {{ question.ai_answer }}</span>
                     <span :class="question.ai_is_correct ? 'text-green-400' : 'text-red-400'" class="ml-2">
@@ -766,26 +799,29 @@ onMounted(() => {
                     </span>
                     <span class="ml-2 text-gray-300">({{ question.ai_score || 0 }} pts)</span>
                   </div>
-                  <div class="text-yellow-300 text-xs mt-1">
-                    Correct: {{ question.correct_answer || question.answer || 'N/A' }}
-                  </div>
                 </div>
-              </div>
+              </template>
+
+              <template v-else>
+                <div class="text-gray-400 text-sm">
+                  No detailed questions found for this session. This might be due to:
+                  <ul class="list-disc list-inside mt-1 text-xs">
+                    <li>Backend API not returning question details for this game type</li>
+                    <li>Session data structure differences</li>
+                    <li>Data not stored for this particular session</li>
+                  </ul>
+                </div>
+              </template>
               
-              <!-- Show message when no questions found -->
-              <div v-else class="text-gray-400 text-sm">
-                No detailed questions found for this session. This might be due to:
-                <ul class="list-disc list-inside mt-1 text-xs">
-                  <li>Backend API not returning question details for this game type</li>
-                  <li>Session data structure differences</li>
-                  <li>Data not stored for this particular session</li>
-                </ul>
-              </div>
             </div>
           </div>
         </div>
-        <div v-else class="text-gray-400">Click a heatmap cell to view session details.</div>
+
+        <div v-else class="text-gray-400">
+          Click a heatmap cell to view session details.
+        </div>
       </div>
+
     </div>
   </div>
 </template>
