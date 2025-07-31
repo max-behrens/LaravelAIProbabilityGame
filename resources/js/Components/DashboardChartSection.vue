@@ -35,11 +35,6 @@ const chartConfigs = [
     description: 'View your gaming activity patterns and frequency',
     component: 'DashboardHeatmapComponent'
   },
-  {
-    title: 'Score Distribution',
-    description: 'Analyze your score distribution and performance metrics',
-    component: 'DashboardBarChartComponent'
-  }
 ];
 
 // **FIXED**: AI Feature States - Default to true (ON)
@@ -249,6 +244,17 @@ const filteredUsers = computed(() => {
 
     return nameMatch || emailMatch;
   });
+});
+
+const datepickerRef = ref(null);
+
+watch(showDateModal, async (newVal) => {
+  if (newVal) {
+    await nextTick(); // wait for DOM to render
+    if (datepickerRef.value && typeof datepickerRef.value.openMenu === 'function') {
+      datepickerRef.value.openMenu();
+    }
+  }
 });
 
 watch(
@@ -483,12 +489,14 @@ onUnmounted(() => {
                                           :user-id="activeUserId"
                                           :show-ai-scores="showAiScores" 
                                           @pointClicked="handleChartPointClick" />
-                                      <DashboardHeatmapComponent
-                                          v-else-if="currentChart.component === 'DashboardHeatmapComponent'"
-                                      />
-                                      <DashboardBarChartComponent
-                                          v-else-if="currentChart.component === 'DashboardBarChartComponent'"
-                                      />
+                                          <DashboardHeatmapComponent
+                                              v-else-if="currentChart.component === 'DashboardHeatmapComponent'"
+                                              :game-type-id="activeGameId"
+                                              :start-date="dateRange[0]"
+                                              :end-date="dateRange[1]"
+                                              :user-id="activeUserId"
+                                              :show-ai-scores="showAiScores"
+                                          />
                                   </div>
                               </transition>
                           </div>
@@ -500,7 +508,7 @@ onUnmounted(() => {
   </section>
 
     <div v-if="showDateModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div class="bg-gray-800 rounded-lg shadow-xl p-6 relative max-w-md w-full min-h-[500px] flex flex-col">
+      <div class="bg-gray-800 rounded-lg shadow-xl p-4 relative max-w-md w-full min-h-[500px] flex flex-col">
           <h3 class="text-xl font-semibold text-white mb-4">Select Date Range</h3>
           <button
               @click="showDateModal = false"
@@ -512,18 +520,20 @@ onUnmounted(() => {
           </button>
 
           <div class="flex-1 mb-4">
-              <Datepicker
-                  v-model="datepickerModel"
-                  range
-                  :enable-time-picker="false"
-                  :dark="true"
-                  :teleport="false"
-                  placeholder="Select Date Range"
-                  :min-date="new Date('2024-01-01')"
-                  :max-date="new Date()"
-                  class="my-4"
-                  @update:model-value="handleDateSelection"
-              />
+            <Datepicker
+              ref="datepickerRef"
+              v-model="datepickerModel"
+              range
+              :enable-time-picker="false"
+              :dark="true"
+              :teleport="false"
+              placeholder="Select Date Range"
+              :min-date="new Date('2024-01-01')"
+              :max-date="new Date()"
+              class="my-4"
+              @update:model-value="handleDateSelection"
+            />
+
           </div>
 
           <div class="flex justify-end space-x-2 mt-auto">

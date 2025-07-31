@@ -152,6 +152,21 @@ class GamesService
         return $totalScore;
     }
 
+    public function totalScoreByGameType($gameTypeId)
+    {
+        $gameType = GameType::findOrFail($gameTypeId);
+        $gameQuestions = $gameType->gameQuestions()->get();
+
+        $totalScore = 0;
+
+        foreach ($gameQuestions as $question) {
+            $totalScore += $question->score_awarded;
+
+        }
+
+        return $totalScore;
+    }
+
     public function getAllGameScores($gameId)
     {
         Log::debug('Fetching all game scores', ['gameId' => $gameId]);
@@ -342,55 +357,198 @@ class GamesService
     }
 
 
-    public function getCumulativeHeatMapData(): array
+    /**
+     * Get game sessions data for heatmap display - removed pagination
+     * Returns all sessions with time and session info for heatmap visualization
+     */
+    public function getGameSessionsHeatmapData(?int $gameTypeId = null, ?string $startDate = null, ?string $endDate = null, ?int $userId = null)
     {
-        Log::info('Fetching cumulative scores by player across all games');
-
-        $gameScores = GameScore::query()
+        $query = GameScore::query()
+            ->select(
+                'game_scores.session_id',
+                'game_scores.created_at',
+                'game_scores.player_id',
+                'game_scores.score as total_score',
+                'game_scores.answer_json',
+                'users.name as player_name',
+                'games.id as game_id',
+                'game_types.name as game_name',
+                'ai_scores.score as ai_score'
+            )
             ->join('users', 'game_scores.player_id', '=', 'users.id')
-            ->orderBy('game_scores.created_at', 'asc')
+            ->join('games', 'game_scores.game_id', '=', 'games.id')
+            ->join('game_types', 'games.game_type_id', '=', 'game_types.id')
+            ->leftJoin('ai_scores', function($join) {
+                $join->on('game_scores.session_id', '=', 'ai_scores.session_id')
+                    ->on('game_scores.game_id', '=', 'ai_scores.game_id');
+            })
+            ->orderBy('game_scores.created_at', 'desc');
+
+        // Apply filters
+        if ($gameTypeId !== null) {
+            $query->where('games.game_type_id', $gameTypeId);
+        }
+        if ($startDate) {
+            $query->whereDate('game_scores.created_at', '>=', Carbon::parse($startDate));
+        }
+        if ($endDate) {
+            $query->whereDate('game_scores.created_at', '<=', Carbon::parse($endDate));
+        }
+        if ($userId !== null) {
+            $query->where('game_scores.player_id', $userId);
+        }
+
+        // Get all results instead of paginating
+        $results = $query->get();
+
+        $data = $results->map(function ($session) {
+            $questionsCount = 0;
+            $correctAnswers = 0;
+            $truncatedSessionId = substr($session->session_id, 0, 10) . '...';
+
+            if ($session->answer_json) {
+                $answers = is_string($session->answer_json)
+                    ? json_decode($session->answer_json, true)
+                    : $session->answer_json;
+
+                if (is_array($answers)) {
+                    $questionsCount = count($answers);
+                    $correctAnswers = collect($answers)->where('is_correct', true)->count();
+                }
+            }
+
+            return [
+                'session_id' => $session->session_id,
+                'truncated_session_id' => $truncatedSessionId,
+                'created_at' => $session->created_at,
+                'player_id' => $session->player_id,
+                'total_score' => $session->total_score,
+                'player_name' => $session->player_name,
+                'game_id' => $session->game_id,
+                'game_name' => $session->game_name,
+                'ai_score' => $session->ai_score,
+                'questions_count' => $questionsCount,
+                'correct_answers' => $correctAnswers,
+            ];
+        });
+
+        // Return all data without pagination meta
+        return [
+            'data' => $data,
+            'total' => $data->count(),
+        ];
+    }
+
+    /**
+     * Get detailed session information including questions and answers
+     */
+    public function getSessionDetails(string $sessionId)
+    {
+        // Get the main game score record (including answers from game_scores and ai_scores)
+        $gameScore = GameScore::query()
+            ->select(
+                'game_scores.*',
+                'users.name as player_name',
+                'games.id as game_id',
+                'game_scores.answer_json as game_answer_json', // New field: player answers
+                'game_types.id as game_type_id',
+                'game_types.name as game_name',
+                'ai_scores.score as ai_score',
+                'ai_scores.answer_json as ai_answer_json' // AI answers
+            )
+            ->join('users', 'game_scores.player_id', '=', 'users.id')
+            ->join('games', 'game_scores.game_id', '=', 'games.id')
+            ->join('game_types', 'games.game_type_id', '=', 'game_types.id')
+            ->leftJoin('ai_scores', function($join) {
+                $join->on('game_scores.session_id', '=', 'ai_scores.session_id')
+                    ->on('game_scores.game_id', '=', 'ai_scores.game_id');
+            })
+            ->where('game_scores.session_id', $sessionId)
+            ->first();
+    
+        if (!$gameScore) {
+            return null;
+        }
+    
+        // Get all players who played in the same session
+        $allPlayers = GameScore::where('session_id', $sessionId)
+            ->join('users', 'game_scores.player_id', '=', 'users.id')
             ->select(
                 'users.name as player_name',
-                'game_scores.score',
-                'game_scores.created_at'
+                'game_scores.player_id',
+                'game_scores.score as total_score'
             )
             ->get();
-
-        $playerCumulativeScores = [];
-        $playerCurrentScores = [];
-
-        foreach ($gameScores as $score) {
-            $playerName = $score->player_name;
-            $currentScore = $score->score;
-            $timestamp = $score->created_at->timestamp * 1000; // ApexCharts expects milliseconds
-
-            // Initialize if player not seen before
-            if (!isset($playerCurrentScores[$playerName])) {
-                $playerCurrentScores[$playerName] = 0;
+    
+        // Parse player answers from game_answer_json
+        $playerAnswers = [];
+        if ($gameScore->game_answer_json) {
+            $answerData = json_decode($gameScore->game_answer_json, true);
+            if (is_array($answerData)) {
+                foreach ($answerData as $qNum => $answer) {
+                    $questionNumber = $answer['question_number'] ?? $qNum;
+                    $playerAnswers[$questionNumber] = $answer;
+                }
             }
-            if (!isset($playerCumulativeScores[$playerName])) {
-                $playerCumulativeScores[$playerName] = [];
+        }
+    
+        // Parse AI answers from ai_answer_json
+        $aiAnswers = [];
+        if ($gameScore->ai_answer_json) {
+            $aiAnswerData = json_decode($gameScore->ai_answer_json, true);
+            if (is_array($aiAnswerData)) {
+                foreach ($aiAnswerData as $qNum => $answer) {
+                    $questionNumber = $answer['question_number'] ?? $qNum;
+                    $aiAnswers[$questionNumber] = $answer;
+                }
             }
-
-            $playerCurrentScores[$playerName] += $currentScore;
-            $playerCumulativeScores[$playerName][] = [
-                'x' => $timestamp,
-                'y' => $playerCurrentScores[$playerName],
+        }
+    
+        // Combine player and AI answers into unified question list
+        $allQuestionNumbers = array_unique(array_merge(
+            array_keys($playerAnswers),
+            array_keys($aiAnswers)
+        ));
+    
+        $questions = [];
+        foreach ($allQuestionNumbers as $questionNumber) {
+            $player = $playerAnswers[$questionNumber] ?? [];
+            $ai = $aiAnswers[$questionNumber] ?? [];
+    
+            $questions[] = [
+                'question_number' => $questionNumber,
+                'question_text' => $player['question'] ?? $ai['question'] ?? 'Question not found',
+                'correct_answer' => $player['correct_answer'] ?? $ai['correct_answer'] ?? null,
+    
+                // Player response
+                'player_answer' => $player['submitted'] ?? null,
+                'is_correct' => $player['is_correct'] ?? false,
+                'score_awarded' => $player['score_awarded'] ?? 0,
+    
+                // AI response
+                'ai_answer' => $ai['submitted'] ?? null,
+                'ai_is_correct' => $ai['is_correct'] ?? null,
+                'ai_score' => $ai['score_awarded'] ?? null,
             ];
         }
+    
+        // Sort questions by number
+        usort($questions, fn($a, $b) => ($a['question_number'] ?? 0) - ($b['question_number'] ?? 0));
 
-        $series = [];
-        foreach ($playerCumulativeScores as $playerName => $data) {
-            $series[] = [
-                'name' => $playerName,
-                'data' => $data,
-            ];
-        }
-
-        Log::info('Cumulative scores by player generated', ['series' => $series]);
-
-        return $series;
+        $truncatedSessionId = substr($gameScore->session_id, 0, 10) . '...';
+    
+        return [
+            'session_id' => $truncatedSessionId,
+            'player_name' => $gameScore->player_name,
+            'game_name' => $gameScore->game_name,
+            'total_score' => $this->totalScoreByGameType($gameScore->game_type_id),
+            'ai_score' => $gameScore->ai_score,
+            'created_at' => $gameScore->created_at,
+            'players' => $allPlayers,
+            'questions' => $questions
+        ];
     }
+    
 
         public function getCumulativeBarGraphData(): array
     {

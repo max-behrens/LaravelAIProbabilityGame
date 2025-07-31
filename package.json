@@ -38,6 +38,7 @@
         "apexcharts": "^4.7.0",
         "chart.js": "^4.4.8",
         "daisyui": "^2.24.0",
+        "dayjs": "^1.11.13",
         "laravel-echo": "^2.0.2",
         "lucide-vue-next": "^0.525.0",
         "pusher-js": "^8.4.0",

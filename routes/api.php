@@ -72,6 +72,7 @@ Route::get('/games/{gameId}/ai-scores', [AIGameController::class, 'getAIScores']
 Route::get('/dashboard/cumulative-linegraph', [IndexController::class, 'getCumulativeLineGraph']);
 
 Route::get('/dashboard/cumulative-heatmap', [IndexController::class, 'getCumulativeHeatMap']);
+Route::get('/dashboard/session-details/{sessionId}', [IndexController::class, 'getGameSessionDetails']);
 
 Route::get('/dashboard/cumulative-bargraph', [IndexController::class, 'getCumulativeBarGraph']);
 

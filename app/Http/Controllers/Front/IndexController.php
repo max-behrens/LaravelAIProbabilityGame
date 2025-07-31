@@ -130,15 +130,49 @@ class IndexController extends Controller
         }
     }
 
-    public function getCumulativeHeatMap()
+    /**
+     * Get cumulative heatmap data - removed pagination
+     */
+    public function getCumulativeHeatMap(Request $request)
     {
-        Log::info('Fetching cumulative scores for all players across all games');
+        Log::info('Fetching game sessions heatmap data with filters', [
+            'game_type_id' => $request->get('game_type_id'),
+            'start_date' => $request->get('start_date'),
+            'end_date' => $request->get('end_date'),
+            'user_id' => $request->get('user_id')
+        ]);
 
-        $cumulativeScores = $this->gamesService->getCumulativeHeatMapData();
+        $gameTypeId = $request->get('game_type_id') ? (int) $request->get('game_type_id') : null;
+        $startDate = $request->get('start_date');
+        $endDate = $request->get('end_date');
+        $userId = $request->get('user_id') ? (int) $request->get('user_id') : null;
+
+        $heatmapData = $this->gamesService->getGameSessionsHeatmapData($gameTypeId, $startDate, $endDate, $userId);
         
-        Log::info('Cumulative scores retrieved', ['cumulativeScores' => $cumulativeScores]);
-
-        return response()->json($cumulativeScores);
+        Log::info('Game sessions heatmap data retrieved', ['count' => count($heatmapData['data'])]);
+        return response()->json($heatmapData);
+    }
+        
+    public function getGameSessionDetails(Request $request, string $sessionId)
+    {
+        Log::info('Fetching session details', ['session_id' => $sessionId]);
+    
+        try {
+            $sessionDetails = $this->gamesService->getSessionDetails($sessionId);
+            
+            if (!$sessionDetails) {
+                return response()->json(['error' => 'Session not found'], 404);
+            }
+    
+            Log::info('Session details retrieved', ['session_id' => $sessionId]);
+            return response()->json($sessionDetails);
+        } catch (\Exception $e) {
+            Log::error('Error fetching session details', [
+                'session_id' => $sessionId,
+                'error' => $e->getMessage()
+            ]);
+            return response()->json(['error' => 'Failed to fetch session details'], 500);
+        }
     }
 
 

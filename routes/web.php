@@ -88,6 +88,7 @@ Route::prefix('dashboard')
 
         // Dashboard Stats Routes
         Route::get('/cumulative-linegraph', [IndexController::class, 'getCumulativeLineGraph']);
+        Route::get('/session-details/{sessionId}', [IndexController::class, 'getGameSessionDetails']);
         Route::get('/cumulative-heatmap', [IndexController::class, 'getCumulativeHeatMap']);
         Route::get('/cumulative-bargraph', [IndexController::class, 'getCumulativeBarGraph']);
         Route::get('/users', [IndexController::class, 'getAllUsers']);
