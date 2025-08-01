@@ -223,10 +223,10 @@ const activeHeatmapColorRanges = computed(() => {
 /**
  * Transform heatmapData into series with sessions stacked by date (windowed)
  */
+// NEW: Updated heatmapSeries computed property
 const heatmapSeries = computed(() => {
   const dates = currentWindowDates.value;
   
-  // Group and sort sessions by date
   const sessionsByDate = {};
   heatmapData.value.forEach(session => {
     if (!session.created_at) return;
@@ -247,34 +247,31 @@ const heatmapSeries = computed(() => {
       const session = sessionsForDate[sessionIndex] || null;
       const hasAiScore = session?.ai_score !== null && session?.ai_score !== undefined;
 
-      const scoreValue = props.showAiScores && hasAiScore
-        ? session?.ai_score ?? null
-        : session?.combined_score ?? null;
-
-      const shouldUseAiColors = props.showAiScores && hasAiScore;
+      let scoreValue = null;
       
-      // Choose appropriate color ranges
-      const colorRanges = shouldUseAiColors ? aiHeatmapColorRanges : baseHeatmapColorRanges;
-      
-      // Calculate fillColor based on score and color ranges
-      let fillColor = '#1f2937'; // Default no activity color
-      if (scoreValue !== null && scoreValue > 0) {
-        const range = colorRanges.find(r => scoreValue >= r.from && scoreValue <= r.to);
-        if (range) {
-          fillColor = range.color;
+      // Use conditional logic to determine the score, or set it to null
+      if (session) {
+        if (props.showAiScores && hasAiScore) {
+          // AI Scores are ON and the session has an AI score
+          scoreValue = session.ai_score;
+        } else if (!props.showAiScores && session.combined_score !== null) {
+          // AI Scores are OFF and the session has a human score
+          scoreValue = session.combined_score;
         }
       }
+      
+      // The y value needs to be a small negative number to distinguish 0 from null
+      const yValue = scoreValue === 0 ? -1 : scoreValue;
 
       return {
         x: date,
-        y: scoreValue,
+        y: yValue, // This value is now either a score, -1, or null
         sessionId: session?.session_id ?? null,
         players: session?.players ?? [],
         gameName: session?.game_name ?? null,
         session: session,
         createdAt: session?.created_at ?? null,
         hasAiScore: hasAiScore,
-        fillColor: fillColor,
         customdata: {
           sessionId: session?.session_id
         }
@@ -371,7 +368,7 @@ const heatmapOptions = ref({
   plotOptions: {
     heatmap: {
       enableShades: false,
-      distributed: true,
+      distributed: false,
       dataLabels: {
         enabled: false,
         formatter: function (val, opts) {
