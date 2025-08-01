@@ -26,6 +26,7 @@ class DatabaseSeeder extends Seeder
             GameQuestionSeeder::class,
             GameSeeder::class,
             GameScoreSeeder::class,
+            AIScoreSeeder::class,
             GameUserSeeder::class,
         ]);
     }

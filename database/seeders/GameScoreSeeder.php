@@ -17,21 +17,37 @@ class GameScoreSeeder extends Seeder
         $users = User::inRandomOrder()->take(5)->get();
         $gameTypes = GameType::with('games.gameQuestions')->get();
 
-        foreach ($gameTypes as $type) {
-            // Choose one game per type (you could randomize or take all if needed)
-            $game = $type->games->first();
+        $popularDays = collect();
+        for ($i = 0; $i < 5; $i++) {
+            $popularDays->push(Carbon::now()->subDays(rand(5, 40))->startOfDay());
+        }
 
-            // Skip if no game or no questions
-            if (!$game || $game->gameQuestions->isEmpty()) {
-                continue;
-            }
+        foreach ($gameTypes as $type) {
+            $game = $type->games->first();
+            if (!$game || $game->gameQuestions->isEmpty()) continue;
 
             $questions = $game->gameType->gameQuestions;
 
-            foreach ($users as $user) {
-                $attempts = 3; // Exactly 3 attempts per user per game
+            // Create random sessions
+            $numSessions = rand(8, 16); // More sessions overall
 
-                for ($attempt = 0; $attempt < $attempts; $attempt++) {
+            for ($i = 0; $i < $numSessions; $i++) {
+                $sessionId = Str::uuid()->toString();
+
+                // Randomly pick 1–2 users to be in the same session
+                $sessionPlayers = $users->random(rand(1, 2));
+
+                // Randomly decide session time
+                $roll = rand(1, 10);
+                if ($roll <= 3) {
+                    $createdAt = Carbon::now()->subDays(rand(0, 3))->setHour(rand(8, 22))->setMinute(rand(0, 59));
+                } elseif ($roll <= 5) {
+                    $createdAt = $popularDays->random()->copy()->addHours(rand(0, 23))->addMinutes(rand(0, 59));
+                } else {
+                    $createdAt = Carbon::now()->subDays(rand(0, 60))->subHours(rand(0, 23))->subMinutes(rand(0, 59));
+                }
+
+                foreach ($sessionPlayers as $user) {
                     $answerJson = [];
                     $score = 0;
 
@@ -56,8 +72,8 @@ class GameScoreSeeder extends Seeder
                         'player_id' => $user->id,
                         'answer_json' => $answerJson,
                         'score' => $score,
-                        'session_id' => Str::uuid()->toString(),
-                        'created_at' => Carbon::now()->subDays(rand(0, 60))->subHours(rand(0, 23))->subMinutes(rand(0, 59)),
+                        'session_id' => $sessionId,
+                        'created_at' => $createdAt,
                     ]);
                 }
             }
