@@ -223,7 +223,7 @@ const activeHeatmapColorRanges = computed(() => {
 /**
  * Transform heatmapData into series with sessions stacked by date (windowed)
  */
-// NEW: Updated heatmapSeries computed property
+// NEW: Updated heatmapSeries computed property with mixed color support
 const heatmapSeries = computed(() => {
   const dates = currentWindowDates.value;
   
@@ -248,32 +248,42 @@ const heatmapSeries = computed(() => {
       const hasAiScore = session?.ai_score !== null && session?.ai_score !== undefined;
 
       let scoreValue = null;
+      let useAiColors = false; // New flag to determine which color scheme to use
       
-      // Use conditional logic to determine the score, or set it to null
       if (session) {
         if (props.showAiScores && hasAiScore) {
-          // AI Scores are ON and the session has an AI score
+          // AI Scores are ON and the session has an AI score - show AI score with AI colors
           scoreValue = session.ai_score;
-        } else if (!props.showAiScores && session.combined_score !== null) {
-          // AI Scores are OFF and the session has a human score
+          useAiColors = true;
+        } else if (session.combined_score !== null) {
+          // Show human score with human colors (whether AI mode is on or off)
           scoreValue = session.combined_score;
+          useAiColors = false;
         }
       }
       
       // The y value needs to be a small negative number to distinguish 0 from null
-      const yValue = scoreValue === 0 ? -1 : scoreValue;
+      let yValue = scoreValue === 0 ? -1 : scoreValue;
+      
+      // Offset AI scores by 1000 to use different color ranges
+      if (useAiColors && yValue > 0) {
+        yValue = yValue + 1000;
+      }
 
       return {
         x: date,
-        y: yValue, // This value is now either a score, -1, or null
+        y: yValue,
         sessionId: session?.session_id ?? null,
         players: session?.players ?? [],
         gameName: session?.game_name ?? null,
         session: session,
         createdAt: session?.created_at ?? null,
         hasAiScore: hasAiScore,
+        useAiColors: useAiColors,
+        originalScore: scoreValue, // Keep original score for display
         customdata: {
-          sessionId: session?.session_id
+          sessionId: session?.session_id,
+          useAiColors: useAiColors
         }
       };
     });
@@ -285,7 +295,6 @@ const heatmapSeries = computed(() => {
   }
   return series;
 });
-
 
 /**
  * X-axis categories (current window dates)
@@ -338,7 +347,7 @@ const totalDaysInfo = computed(() => {
 
 const selectedHeatmapPoint = ref({ seriesIndex: null, dataPointIndex: null });
 
-// Heatmap chart options
+// Heatmap chart options with mixed color support
 const heatmapOptions = ref({
   chart: {
     type: 'heatmap',
@@ -346,14 +355,14 @@ const heatmapOptions = ref({
     foreColor: '#ccc',
     toolbar: { show: false },
     animations: { enabled: false },
-  events: {
+    events: {
       dataPointSelection: async (event, chartContext, config) => {
         const selected = heatmapSeries.value[config.seriesIndex].data[config.dataPointIndex];
         if (selected?.sessionId) {
           selectedSession.value = {
             sessionId: selected.sessionId,
             players: selected.players,
-            score: selected.y,
+            score: selected.originalScore, // Use original score for display
             gameName: selected.gameName
           };
           selectedHeatmapPoint.value = {
@@ -369,6 +378,26 @@ const heatmapOptions = ref({
     heatmap: {
       enableShades: false,
       distributed: false,
+      colorScale: {
+        ranges: [
+          // No activity
+          { from: 0, to: 0, color: '#1f2937', name: 'No Activity' },
+          
+          // Human scores (blue) - ranges 1-1000
+          { from: 1, to: 25, color: '#bcddf7', name: '1-25 pts' },
+          { from: 26, to: 50, color: '#64B5F6', name: '26-50 pts' },
+          { from: 51, to: 75, color: '#42A5F5', name: '51-75 pts' },
+          { from: 76, to: 100, color: '#2196F3', name: '76-100 pts' },
+          { from: 101, to: 1000, color: '#1976D2', name: '100+ pts' },
+          
+          // AI scores (green) - ranges 1001-2000
+          { from: 1001, to: 1025, color: '#14532d', name: 'AI 1-25 pts' },
+          { from: 1026, to: 1050, color: '#166534', name: 'AI 26-50 pts' },
+          { from: 1051, to: 1075, color: '#15803d', name: 'AI 51-75 pts' },
+          { from: 1076, to: 1100, color: '#16a34a', name: 'AI 76-100 pts' },
+          { from: 1101, to: 2000, color: '#22c55e', name: 'AI 100+ pts' }
+        ]
+      },
       dataLabels: {
         enabled: false,
         formatter: function (val, opts) {
@@ -465,11 +494,6 @@ const heatmapOptions = ref({
   },
 });
 
-
-
-
-
-
 // Update chart options on data change
 watch([heatmapSeries, activeHeatmapColorRanges], () => {
   heatmapOptions.value = {
@@ -477,21 +501,11 @@ watch([heatmapSeries, activeHeatmapColorRanges], () => {
     xaxis: {
       ...heatmapOptions.value.xaxis,
       categories: heatmapXAxisCategories.value
-    },
-    plotOptions: {
-      heatmap: {
-        ...heatmapOptions.value.plotOptions.heatmap,
-        colorScale: {
-          ranges: activeHeatmapColorRanges.value // Ensure color ranges are updated
-        }
-      }
     }
   };
   
   // Force chart re-render when data changes
   chartKey.value++;
-  
-  // Apply selection styling after chart re-renders
   
 }, { deep: true });
 
@@ -500,13 +514,10 @@ watch(selectedSession, () => {
   
 }, { deep: true });
 
-
 // Separate watcher for showAiScores that only triggers re-render
 watch(() => props.showAiScores, () => {
   // Only trigger chart re-render, don't fetch new data or reset selection
   chartKey.value++;
-  // Apply selection styling after re-render
-  
 });
 
 // Watch chartKey to apply styling after any re-render
@@ -711,10 +722,7 @@ watch(selectedSessionDetails, () => {
 watch(() => props.showAiScores, () => {
   // Only trigger chart re-render, don't fetch new data or reset selection
   chartKey.value++;
-  // Apply selection styling after re-render
-  
 });
-
 
 // Watch filters props to refetch heatmap data
 watch(
