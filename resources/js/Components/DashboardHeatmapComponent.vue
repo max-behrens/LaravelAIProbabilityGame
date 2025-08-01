@@ -193,12 +193,13 @@ const currentWindowDates = computed(() => {
 
 // Base color ranges for non-AI scores
 const baseHeatmapColorRanges = [
-  { from: 0, to: 0, color: '#1f2937', name: 'No Activity' },
-  { from: 1, to: 25, color: '#1a346e', name: '1-25 pts' },
-  { from: 26, to: 50, color: '#3b82f6', name: '26-50 pts' },
-  { from: 51, to: 75, color: '#60a5fa', name: '51-75 pts' },
-  { from: 76, to: 100, color: '#1e40af', name: '76-100 pts' },
-  { from: 101, to: 1000, color: '#1e3a8a', name: '100+ pts' }
+  { from: 0, to: 0, color: '#1f293700', name: 'No Activity' }, // Keep this for the background/no activity
+  // Progressively darker blues
+  { from: 1, to: 25, color: '#bcddf7', name: '1-25 pts' },  // Lightest blue
+  { from: 26, to: 50, color: '#64B5F6', name: '26-50 pts' },
+  { from: 51, to: 75, color: '#42A5F5', name: '51-75 pts' },
+  { from: 76, to: 100, color: '#2196F3', name: '76-100 pts' },
+  { from: 101, to: 1000, color: '#1976D2', name: '100+ pts' } // Darkest blue
 ];
 
 // AI specific color ranges
@@ -244,10 +245,12 @@ const heatmapSeries = computed(() => {
     const rowData = dates.map(date => {
       const sessionsForDate = sessionsByDate[date] || [];
       const session = sessionsForDate[sessionIndex] || null;
-      const scoreValue = session?.combined_score ?? null;
-
-      // Determine if this cell has AI and should use AI colors
       const hasAiScore = session?.ai_score !== null && session?.ai_score !== undefined;
+
+      const scoreValue = props.showAiScores && hasAiScore
+        ? session?.ai_score ?? null
+        : session?.combined_score ?? null;
+
       const shouldUseAiColors = props.showAiScores && hasAiScore;
       
       // Choose appropriate color ranges
@@ -336,6 +339,8 @@ const totalDaysInfo = computed(() => {
   return `${allDates.value.length} total days`;
 });
 
+const selectedHeatmapPoint = ref({ seriesIndex: null, dataPointIndex: null });
+
 // Heatmap chart options
 const heatmapOptions = ref({
   chart: {
@@ -344,7 +349,7 @@ const heatmapOptions = ref({
     foreColor: '#ccc',
     toolbar: { show: false },
     animations: { enabled: false },
-    events: {
+  events: {
       dataPointSelection: async (event, chartContext, config) => {
         const selected = heatmapSeries.value[config.seriesIndex].data[config.dataPointIndex];
         if (selected?.sessionId) {
@@ -354,9 +359,11 @@ const heatmapOptions = ref({
             score: selected.y,
             gameName: selected.gameName
           };
+          selectedHeatmapPoint.value = {
+            seriesIndex: config.seriesIndex,
+            dataPointIndex: config.dataPointIndex
+          };
           await fetchSessionDetails(selected.sessionId);
-          // Apply selection styling after selection
-          setTimeout(() => applySelectionStyling(), 100);
         }
       }
     }
@@ -376,7 +383,7 @@ const heatmapOptions = ref({
           }
           return ''; // no label
         }
-    }
+      }
     }
   },
   dataLabels: { enabled: false },
@@ -397,6 +404,26 @@ const heatmapOptions = ref({
   },
   fill: {
     opacity: 1
+  },
+  states: {
+    active: {
+      filter: {
+        type: 'darken',
+        value: 1,
+      }
+    },
+    normal: {
+      filter: {
+        type: 'darken',
+        value: 1,
+      }
+    },
+    hover: {
+      filter: {
+        type: 'darken',
+        value: 1,
+      }
+    },
   },
   tooltip: {
     custom({ series, seriesIndex, dataPointIndex, w }) {
@@ -439,33 +466,8 @@ const heatmapOptions = ref({
       `;
     }
   },
-  states: {
-    normal: { filter: { type: 'none' } },
-    hover: { filter: { type: 'none' } },
-    active: { filter: { type: 'none' } }
-  }
 });
 
-
-const applySelectionStyling = () => {
-  nextTick(() => {
-    setTimeout(() => {
-      // Clear existing highlights
-      document.querySelectorAll('.apexcharts-heatmap-rect.selected-cell').forEach(el => {
-        el.classList.remove('selected-cell');
-      });
-
-      const selectedId = selectedSession.value?.sessionId;
-      if (!selectedId) return;
-
-      // Match by custom DOM attribute
-      const matchingCell = document.querySelector(`.apexcharts-heatmap-rect[data-sessionid="${selectedId}"]`);
-      if (matchingCell) {
-        matchingCell.classList.add('selected-cell');
-      }
-    }, 50);
-  });
-};
 
 
 
@@ -493,12 +495,12 @@ watch([heatmapSeries, activeHeatmapColorRanges], () => {
   chartKey.value++;
   
   // Apply selection styling after chart re-renders
-  applySelectionStyling();
+  
 }, { deep: true });
 
 // Watch for selection changes to apply styling
 watch(selectedSession, () => {
-  applySelectionStyling();
+  
 }, { deep: true });
 
 
@@ -507,12 +509,12 @@ watch(() => props.showAiScores, () => {
   // Only trigger chart re-render, don't fetch new data or reset selection
   chartKey.value++;
   // Apply selection styling after re-render
-  applySelectionStyling();
+  
 });
 
 // Watch chartKey to apply styling after any re-render
 watch(chartKey, () => {
-  applySelectionStyling();
+  
 });
 
 // Radial chart setup (unchanged from original)
@@ -580,7 +582,7 @@ const radialOptions = ref({
           show: true,
           fontSize: '12px',
           fontWeight: 400,
-          color: '#ffffff',
+          color: 'black',
           offsetY: 0,
           formatter: function() {
             if (selectedPlayerIndex.value !== null || hoveredPlayerIndex.value !== null) {
@@ -713,7 +715,7 @@ watch(() => props.showAiScores, () => {
   // Only trigger chart re-render, don't fetch new data or reset selection
   chartKey.value++;
   // Apply selection styling after re-render
-  applySelectionStyling();
+  
 });
 
 
@@ -743,7 +745,7 @@ onMounted(() => {
                 'px-2 py-1 rounded text-xs',
                 canNavigateLeft 
                   ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                  : 'bg-gray-600 text-gray-400'
+                  : 'bg-gray-300 text-gray-500'
               ]"
             >
               ⟪ Start
@@ -755,7 +757,7 @@ onMounted(() => {
                 'px-3 py-1 rounded text-xs',
                 canNavigateLeft 
                   ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                  : 'bg-gray-600 text-gray-400'
+                  : 'bg-gray-300 text-gray-500'
               ]"
             >
               ← Prev
@@ -767,7 +769,7 @@ onMounted(() => {
                 'px-3 py-1 rounded text-xs',
                 canNavigateRight 
                   ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                  : 'bg-gray-600 text-gray-400'
+                  : 'bg-gray-300 text-gray-500'
               ]"
             >
               Next →
@@ -779,7 +781,7 @@ onMounted(() => {
                 'px-2 py-1 rounded text-xs',
                 canNavigateRight 
                   ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                  : 'bg-gray-600 text-gray-400'
+                  : 'bg-gray-300 text-gray-500'
               ]"
             >
               End ⟫
