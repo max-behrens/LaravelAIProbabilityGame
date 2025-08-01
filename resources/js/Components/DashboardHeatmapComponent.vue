@@ -246,9 +246,22 @@ const heatmapSeries = computed(() => {
       const session = sessionsForDate[sessionIndex] || null;
       const scoreValue = session?.combined_score ?? null;
 
-      // Note: We are no longer setting fillColor directly here because ApexCharts' colorScale.ranges takes precedence.
-      // The logic for coloring will now be entirely driven by `activeHeatmapColorRanges`.
+      // Determine if this cell has AI and should use AI colors
+      const hasAiScore = session?.ai_score !== null && session?.ai_score !== undefined;
+      const shouldUseAiColors = props.showAiScores && hasAiScore;
       
+      // Choose appropriate color ranges
+      const colorRanges = shouldUseAiColors ? aiHeatmapColorRanges : baseHeatmapColorRanges;
+      
+      // Calculate fillColor based on score and color ranges
+      let fillColor = '#1f2937'; // Default no activity color
+      if (scoreValue !== null && scoreValue > 0) {
+        const range = colorRanges.find(r => scoreValue >= r.from && scoreValue <= r.to);
+        if (range) {
+          fillColor = range.color;
+        }
+      }
+
       return {
         x: date,
         y: scoreValue,
@@ -257,8 +270,11 @@ const heatmapSeries = computed(() => {
         gameName: session?.game_name ?? null,
         session: session,
         createdAt: session?.created_at ?? null,
-        hasAiScore: session?.ai_score !== null && session?.ai_score !== undefined,
-        // fillColor: fillColor // This line is no longer effectively used for coloring
+        hasAiScore: hasAiScore,
+        fillColor: fillColor,
+        customdata: {
+          sessionId: session?.session_id
+        }
       };
     });
 
@@ -335,21 +351,32 @@ const heatmapOptions = ref({
           selectedSession.value = {
             sessionId: selected.sessionId,
             players: selected.players,
-            gameName: selected.gameName,
-            score: selected.y
+            score: selected.y,
+            gameName: selected.gameName
           };
           await fetchSessionDetails(selected.sessionId);
+          // Apply selection styling after selection
+          setTimeout(() => applySelectionStyling(), 100);
         }
       }
     }
   },
   plotOptions: {
     heatmap: {
-      enableShades: true,
-      distributed: false,
-      colorScale: {
-        ranges: activeHeatmapColorRanges.value // Use the computed color ranges here
-      }
+      enableShades: false,
+      distributed: true,
+      dataLabels: {
+        enabled: false,
+        formatter: function (val, opts) {
+          // Attach sessionId to DOM rect via data attribute
+          const sessionId = opts.w.config.series[opts.seriesIndex].data[opts.dataPointIndex]?.customdata?.sessionId;
+          const el = opts.el;
+          if (el && sessionId) {
+            el.setAttribute('data-sessionid', sessionId);
+          }
+          return ''; // no label
+        }
+    }
     }
   },
   dataLabels: { enabled: false },
@@ -387,7 +414,6 @@ const heatmapOptions = ref({
         second: '2-digit'
       });
 
-      // Build players list for tooltip
       const playersHtml = session.players.map(player => 
         `<div style="margin-left: 10px; font-size: 11px;">
           ${player.player_name}: ${player.total_score} pts
@@ -420,8 +446,33 @@ const heatmapOptions = ref({
   }
 });
 
+
+const applySelectionStyling = () => {
+  nextTick(() => {
+    setTimeout(() => {
+      // Clear existing highlights
+      document.querySelectorAll('.apexcharts-heatmap-rect.selected-cell').forEach(el => {
+        el.classList.remove('selected-cell');
+      });
+
+      const selectedId = selectedSession.value?.sessionId;
+      if (!selectedId) return;
+
+      // Match by custom DOM attribute
+      const matchingCell = document.querySelector(`.apexcharts-heatmap-rect[data-sessionid="${selectedId}"]`);
+      if (matchingCell) {
+        matchingCell.classList.add('selected-cell');
+      }
+    }, 50);
+  });
+};
+
+
+
+
+
 // Update chart options on data change
-watch([heatmapSeries, activeHeatmapColorRanges], () => { // Watch activeHeatmapColorRanges
+watch([heatmapSeries, activeHeatmapColorRanges], () => {
   heatmapOptions.value = {
     ...heatmapOptions.value,
     xaxis: {
@@ -438,13 +489,30 @@ watch([heatmapSeries, activeHeatmapColorRanges], () => { // Watch activeHeatmapC
     }
   };
   
-  // Force chart re-render when data or color ranges change
+  // Force chart re-render when data changes
   chartKey.value++;
+  
+  // Apply selection styling after chart re-renders
+  applySelectionStyling();
 }, { deep: true });
 
-// Separate watcher for showAiScores to trigger re-render
+// Watch for selection changes to apply styling
+watch(selectedSession, () => {
+  applySelectionStyling();
+}, { deep: true });
+
+
+// Separate watcher for showAiScores that only triggers re-render
 watch(() => props.showAiScores, () => {
+  // Only trigger chart re-render, don't fetch new data or reset selection
   chartKey.value++;
+  // Apply selection styling after re-render
+  applySelectionStyling();
+});
+
+// Watch chartKey to apply styling after any re-render
+watch(chartKey, () => {
+  applySelectionStyling();
 });
 
 // Radial chart setup (unchanged from original)
@@ -641,11 +709,17 @@ watch(selectedSessionDetails, () => {
   hoveredPlayerIndex.value = null;
 }, { deep: true });
 
+watch(() => props.showAiScores, () => {
+  // Only trigger chart re-render, don't fetch new data or reset selection
+  chartKey.value++;
+  // Apply selection styling after re-render
+  applySelectionStyling();
+});
 
 
 // Watch filters props to refetch heatmap data
 watch(
-  [() => props.gameTypeId, () => props.startDate, () => props.endDate, () => props.userId, () => props.showAiScores],
+  [() => props.gameTypeId, () => props.startDate, () => props.endDate, () => props.userId],
   () => fetchHeatmapData(),
   { immediate: false }
 );
@@ -827,6 +901,39 @@ onMounted(() => {
 </template>
 
 <style scoped>
+
+.selected-cell {
+  stroke: #facc15 !important; /* yellow-400 */
+  stroke-width: 3 !important;
+}
+
+/* Selection stroke for heatmap cells - multiple approaches for better compatibility */
+:deep(.apexcharts-heatmap-rect.selected-cell) {
+  stroke: #ffffff !important;
+  stroke-width: 3px !important;
+  stroke-opacity: 1 !important;
+  filter: drop-shadow(0 0 0 2px #ffffff) !important;
+}
+
+/* Alternative approach with box-shadow effect */
+:deep(.apexcharts-series .apexcharts-heatmap-rect.selected-cell) {
+  stroke: #ffffff !important;
+  stroke-width: 3px !important;
+  stroke-opacity: 1 !important;
+  box-shadow: 0 0 0 2px #ffffff !important;
+}
+
+/* Ensure the stroke is visible over other elements */
+:deep(.selected-cell) {
+  z-index: 1000 !important;
+}
+
+/* Alternative visual indicator using outline if stroke doesn't work */
+:deep(.apexcharts-heatmap-rect.selected-cell) {
+  outline: 3px solid #ffffff !important;
+  outline-offset: -1px !important;
+}
+
 /* Custom scrollbar for session details */
 .overflow-y-auto::-webkit-scrollbar {
   width: 4px;
