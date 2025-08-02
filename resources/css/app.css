@@ -10,7 +10,7 @@ input {
 
 /* Override all font sizes globally */
 * {
-  font-size: 14px !important; /* Change 18px to your desired size */
+  font-size: 12px !important; /* Change 18px to your desired size */
 }
 
 html {

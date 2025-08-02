@@ -85,13 +85,29 @@ class IndexController extends Controller
         $gameTypeId = $request->query('game_type_id'); // Changed from game_id
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
-        $userId = $request->query('user_id');
+
+        // Handle both single user_id and multiple user_ids
+        $userId = $request->get('user_id') ? (int) $request->get('user_id') : null;
+        $userIds = [];
+        
+        if ($request->get('user_ids')) {
+
+
+            // Parse comma-separated user IDs
+            $userIds = array_map('intval', explode(',', $request->get('user_ids')));
+
+            $userIds = array_filter($userIds); // Remove any invalid values
+
+        } elseif ($userId) {
+            // Fallback to single user ID for backward compatibility
+            $userIds = [$userId];
+        }
 
         Log::info('getCumulativeLineGraph called', [
             'requested_game_type_id' => $gameTypeId, // Updated logging
             'start_date' => $startDate,
             'end_date' => $endDate,
-            'user_id' => $userId
+            'user_id' => $userIds
         ]);
 
         // Validate date formats if provided
@@ -111,7 +127,7 @@ class IndexController extends Controller
                 $gameTypeId, // Changed parameter name
                 $startDate,
                 $endDate,
-                $userId
+                $userIds
             );
 
             Log::info('Cumulative scores retrieved', [
@@ -139,15 +155,33 @@ class IndexController extends Controller
             'game_type_id' => $request->get('game_type_id'),
             'start_date' => $request->get('start_date'),
             'end_date' => $request->get('end_date'),
-            'user_id' => $request->get('user_id')
+            'user_id' => $request->get('user_id'),
+            'user_ids' => $request->get('user_ids') // Add logging for multiple users
         ]);
 
         $gameTypeId = $request->get('game_type_id') ? (int) $request->get('game_type_id') : null;
         $startDate = $request->get('start_date');
         $endDate = $request->get('end_date');
+        
+        // Handle both single user_id and multiple user_ids
         $userId = $request->get('user_id') ? (int) $request->get('user_id') : null;
+        $userIds = [];
+        
+        if ($request->get('user_ids')) {
 
-        $heatmapData = $this->gamesService->getGameSessionsHeatmapData($gameTypeId, $startDate, $endDate, $userId);
+
+            // Parse comma-separated user IDs
+            $userIds = array_map('intval', explode(',', $request->get('user_ids')));
+
+            $userIds = array_filter($userIds); // Remove any invalid values
+
+        } elseif ($userId) {
+            // Fallback to single user ID for backward compatibility
+            $userIds = [$userId];
+        }
+        
+
+        $heatmapData = $this->gamesService->getGameSessionsHeatmapData($gameTypeId, $startDate, $endDate, $userIds);
         
         Log::info('Game sessions heatmap data retrieved', ['count' => count($heatmapData['data'])]);
         return response()->json($heatmapData);

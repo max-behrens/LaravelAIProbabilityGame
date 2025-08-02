@@ -90,7 +90,6 @@ onMounted(async () => {
 const isExponentialScale = ref(initialExponentialScale);
 
 // User Filter States
-const activeUserId = ref(initialUserId);
 const userSearchTerm = ref('');
 const allUsers = ref([]);
 const userFilterColor = 'bg-teal-600/50';
@@ -130,16 +129,10 @@ const dateFilterTitle = computed(() => {
   return `${start} - ${end}`;
 });
 
-// Computed property for the dynamic user filter title
-const userFilterTitle = computed(() => {
-  if (activeUserId.value === null) {
-    return 'User Filter - All Users';
-  }
-  const selectedUser = allUsers.value.find(user => user.id === activeUserId.value);
-  return selectedUser ? `User Filter - ${selectedUser.name}` : 'User Filter';
-});
-
 // --- Filter Action Functions ---
+
+const activeUserIds = ref(initialUserId ? [initialUserId] : []);
+
 
 // Function to handle game filter button click
 const selectGameFilter = (gameId) => {
@@ -152,11 +145,32 @@ const selectGameFilter = (gameId) => {
 
 // Function to handle user filter button click
 const selectUserFilter = (userId) => {
-  if (activeUserId.value === userId) {
-    activeUserId.value = null; // Deselect
+  const currentIndex = activeUserIds.value.indexOf(userId);
+  if (currentIndex > -1) {
+    // User is already selected, remove them
+    activeUserIds.value.splice(currentIndex, 1);
   } else {
-    activeUserId.value = userId; // Select
+    // User is not selected, add them
+    activeUserIds.value.push(userId);
   }
+};
+
+
+// Computed property for the dynamic user filter title
+const userFilterTitle = computed(() => {
+  if (activeUserIds.value.length === 0) {
+    return 'User Filter - All Users';
+  } else if (activeUserIds.value.length === 1) {
+    const selectedUser = allUsers.value.find(user => user.id === activeUserIds.value[0]);
+    return selectedUser ? `User Filter - ${selectedUser.name}` : 'User Filter';
+  } else {
+    return `User Filter - ${activeUserIds.value.length} Users Selected`;
+  }
+});
+
+
+const clearAllUserSelections = () => {
+  activeUserIds.value = [];
 };
 
 // Function to toggle exponential scale
@@ -257,9 +271,15 @@ watch(showDateModal, async (newVal) => {
   }
 });
 
+watch(activeUserIds, (newIds, oldIds) => {
+  console.log('activeUserIds changed from:', oldIds, 'to:', newIds);
+}, { deep: true });
+
 watch(
-  [activeGameId, dateRange, isExponentialScale, activeUserId, showAiScores],
-  ([newGameId, newDateRange, newIsExponentialScale, newUserId, newShowAiScores]) => {
+  [activeGameId, dateRange, isExponentialScale, activeUserIds, showAiScores],
+  ([newGameId, newDateRange, newIsExponentialScale, newUserIds, newShowAiScores]) => {
+    console.log('Watcher triggered with userIds:', newUserIds); // Debug log
+    
     const params = new URLSearchParams();
 
     if (newGameId !== null) {
@@ -280,22 +300,32 @@ watch(
       params.set('exponential_scale', 'true');
     }
 
-    if (newUserId !== null) {
-      params.set('user_id', newUserId);
+    console.log('USER IDS: ' + newUserIds);
+
+    // FIXED: Ensure user IDs are properly handled
+    if (newUserIds && Array.isArray(newUserIds) && newUserIds.length > 0) {
+      // Filter out any null/undefined values and ensure they're numbers
+      const validUserIds = newUserIds.filter(id => id !== null && id !== undefined && !isNaN(id));
+      if (validUserIds.length > 0) {
+        params.set('user_ids', validUserIds.join(','));
+        console.log('Setting user_ids in URL:', validUserIds.join(',')); // Debug log
+      }
+
     }
 
-    // **FIXED**: Only add show_ai_scores=false when it's actually false (since true is default)
     if (newShowAiScores) {
-        params.set('show_ai_scores', 'true');
+      params.set('show_ai_scores', 'true');
     }
 
     // Construct new URL with updated query string
     const newRelativePathQuery = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
 
+    console.log('New URL will be:', newRelativePathQuery); // Debug log
+
     // Use pushState to update the URL without reloading the page
     window.history.pushState(null, '', newRelativePathQuery);
   },
-  { immediate: false }
+  { immediate: false, deep: true } // Added deep: true to watch array changes properly
 );
 
 // Close AI tooltip on outside click
@@ -327,6 +357,18 @@ onUnmounted(() => {
                       <div class="text-center mb-4">
                           <h3 class="text-xl font-bold text-white ">{{ currentChart.title }}</h3>
                           <p class="text-white !text-sm">{{ currentChart.description }}</p>
+
+                          <div class="flex justify-center space-x-2 mt-3">
+                            <button
+                                v-for="(chart, index) in chartConfigs"
+                                :key="index"
+                                @click="currentChartIndex = index"
+                                :class="[
+                                    'w-2 h-2 rounded-full transition-all duration-300',
+                                    index === currentChartIndex ? 'bg-blue-500' : 'bg-gray-600 hover:bg-gray-500'
+                                ]"
+                            ></button>
+                        </div>
                       </div>
 
                       <button
@@ -337,19 +379,7 @@ onUnmounted(() => {
                       </button>
                   </div>
 
-                  <div class="flex justify-center space-x-2 mb-5">
-                      <button
-                          v-for="(chart, index) in chartConfigs"
-                          :key="index"
-                          @click="currentChartIndex = index"
-                          :class="[
-                              'w-2 h-2 rounded-full transition-all duration-300',
-                              index === currentChartIndex ? 'bg-blue-500' : 'bg-gray-600 hover:bg-gray-500'
-                          ]"
-                      ></button>
-                  </div>
-
-                  <div class="flex flex-wrap justify-center gap-4 mb-3">
+                  <div class="flex flex-wrap justify-center gap-4">
                     <div class="flex flex-col space-y-2 flex-grow min-w-[180px] max-w-xs">
                         <button
                             v-for="(filter, index) in gameFilters"
@@ -438,31 +468,63 @@ onUnmounted(() => {
                   <transition name="fade-slide-y">
                       <div v-if="showAdvancedFilters" class="mb-6">
                           <div class="bg-gray-800 p-6 rounded-lg shadow-md">
-                              <h4 class="text-white font-semibold text-lg mb-4 text-center">{{ userFilterTitle }}</h4>
+                              <div class="flex items-center justify-between mb-4">
+                                  <h4 class="text-white font-semibold text-lg">{{ userFilterTitle }}</h4>
+                                  <button
+                                      v-if="activeUserIds.length > 0"
+                                      @click="clearAllUserSelections"
+                                      class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded-md transition-colors"
+                                  >
+                                      Clear All ({{ activeUserIds.length }})
+                                  </button>
+                              </div>
+                              
                               <div class="flex flex-col space-y-2">
                                   <input
                                       type="text"
                                       v-model="userSearchTerm"
                                       placeholder="Search users..."
-                                      class="w-full p-2 rounded-md bg-gray-700 text-white placeholder-gray-400 mt-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                      class="w-full p-2 rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
                                   />
+                                  
+                                  <!-- Selected users chips -->
+                                  <div v-if="activeUserIds.length > 0" class="flex flex-wrap gap-1 p-2 bg-gray-700 rounded-md min-h-[2rem]">
+                                      <span
+                                          v-for="userId in activeUserIds"
+                                          :key="userId"
+                                          class="inline-flex items-center px-2 py-1 bg-teal-600 text-white text-xs rounded-md"
+                                      >
+                                          {{ allUsers.find(u => u.id === userId)?.name || 'Unknown User' }}
+                                          <button
+                                              @click="selectUserFilter(userId)"
+                                              class="ml-1 text-teal-200 hover:text-white font-bold"
+                                              title="Remove user"
+                                          >
+                                              ×
+                                          </button>
+                                      </span>
+                                  </div>
+                                  
+                                  <!-- User list -->
                                   <div class="max-h-48 overflow-y-auto custom-scrollbar rounded-md">
                                       <button
                                           v-for="user in filteredUsers"
                                           :key="user.id"
                                           :class="[
                                               'flex items-center space-x-2 px-3 py-1.5 rounded-md mt-2 text-white cursor-pointer w-full text-left',
-                                              'transition-all duration-100 ease-in-out',
+                                              'transition-all duration-100 ease-in-out hover:brightness-110',
                                               userFilterColor,
-                                              activeUserId === user.id ? 'bg-teal-700 ring-1 ring-teal-400' : ''
+                                              activeUserIds.includes(user.id) ? 'bg-teal-700 ring-1 ring-teal-400' : ''
                                           ]"
                                           @click="selectUserFilter(user.id)"
                                       >
                                           <span class="text-base">
-                                              <UserIcon />
+                                              <UserIcon class="w-4 h-4" />
                                           </span>
-                                          <span class="font-normal text-sm">{{ user.name }}</span>
+                                          <span class="font-normal text-sm flex-grow">{{ user.name }}</span>
+                                          <span v-if="activeUserIds.includes(user.id)" class="text-teal-200 font-bold">✓</span>
                                       </button>
+                                      
                                       <p v-if="filteredUsers.length === 0 && userSearchTerm.trim()" class="text-gray-400 text-center text-sm py-2">
                                           No users found matching "{{ userSearchTerm }}"
                                       </p>
@@ -475,7 +537,7 @@ onUnmounted(() => {
                       </div>
                   </transition>
 
-                  <div class="space-y-8 p-6 rounded-lg shadow-lg relative">
+                  <div class="space-y-8 p-8 rounded-lg shadow-lg relative">
                       <section>
                           <div class="w-full">
                               <transition name="chart-fade" mode="out-in">
@@ -486,7 +548,7 @@ onUnmounted(() => {
                                           :start-date="dateRange[0]"
                                           :end-date="dateRange[1]"
                                           :is-exponential-scale="isExponentialScale"
-                                          :user-id="activeUserId"
+                                          :user-ids="activeUserIds"
                                           :show-ai-scores="showAiScores" 
                                           @pointClicked="handleChartPointClick" />
                                           <DashboardHeatmapComponent
@@ -494,7 +556,7 @@ onUnmounted(() => {
                                               :game-type-id="activeGameId"
                                               :start-date="dateRange[0]"
                                               :end-date="dateRange[1]"
-                                              :user-id="activeUserId"
+                                              :user-ids="activeUserIds"
                                               :show-ai-scores="showAiScores"
                                           />
                                   </div>

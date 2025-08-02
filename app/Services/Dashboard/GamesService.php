@@ -252,7 +252,7 @@ class GamesService
     /**
      * Methods to retrieve cumulative scores for each player across all games to the dashboard.
      */
-    public function getCumulativeLineGraphData(?int $gameTypeId = null, ?string $startDate = null, ?string $endDate = null, ?int $userId = null)
+    public function getCumulativeLineGraphData(?int $gameTypeId = null, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null)
     {
         $query = GameScore::query()
             ->select(
@@ -291,8 +291,9 @@ class GamesService
             $query->whereDate('game_scores.created_at', '<=', Carbon::parse($endDate));
         }
 
-        if ($userId !== null) {
-            $query->where('game_scores.player_id', $userId);
+        // Handle multiple user IDs filtering - we want sessions that contain ANY of these users
+        if (!empty($userIds)) {
+            $query->whereIn('game_scores.player_id', $userIds);
         }
 
         $results = $query->get();
@@ -357,12 +358,7 @@ class GamesService
         return $series;
     }
 
-
-    /**
-     * Get game sessions data for heatmap display - grouped by session_id
-     * Returns sessions grouped by session_id with all players and AI data combined
-     */
-public function getGameSessionsHeatmapData(?int $gameTypeId = null, ?string $startDate = null, ?string $endDate = null, ?int $userId = null)
+    public function getGameSessionsHeatmapData(?int $gameTypeId = null, ?string $startDate = null, ?string $endDate = null, array $userIds = null)
     {
         // Define the main query without the game_questions join to avoid redundant data
         $query = GameScore::query()
@@ -383,7 +379,7 @@ public function getGameSessionsHeatmapData(?int $gameTypeId = null, ?string $sta
             ->join('game_types', 'games.game_type_id', '=', 'game_types.id')
             ->leftJoin('ai_scores', function($join) {
                 $join->on('game_scores.session_id', '=', 'ai_scores.session_id')
-                     ->on('game_scores.game_id', '=', 'ai_scores.game_id');
+                    ->on('game_scores.game_id', '=', 'ai_scores.game_id');
             })
             ->orderBy('game_scores.created_at', 'desc');
 
@@ -397,9 +393,12 @@ public function getGameSessionsHeatmapData(?int $gameTypeId = null, ?string $sta
         if ($endDate) {
             $query->whereDate('game_scores.created_at', '<=', Carbon::parse($endDate));
         }
-        if ($userId !== null) {
-            $query->where('game_scores.player_id', $userId);
+        
+        // Handle multiple user IDs filtering - we want sessions that contain ANY of these users
+        if (!empty($userIds)) {
+            $query->whereIn('game_scores.player_id', $userIds);
         }
+
 
         // Get all results
         $results = $query->get();
@@ -457,7 +456,6 @@ public function getGameSessionsHeatmapData(?int $gameTypeId = null, ?string $sta
             // Get AI score (should be the same across all records in the group)
             $aiScore = $firstRecord->ai_score;
             
-
             $truncatedSessionId = substr($sessionId, 0, 10) . '...';
 
             return [

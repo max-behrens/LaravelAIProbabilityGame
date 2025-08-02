@@ -30,9 +30,9 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
-  userId: {
-    type: [String, Number],
-    default: null
+  userIds: {
+    type: [Array],
+    default: () => []
   },
   showAiScores: { // New prop for AI toggle
     type: Boolean,
@@ -365,13 +365,20 @@ const updateChart = (seriesData, isExponentialScale) => {
   chart.updateSeries(seriesData, true);
 };
 
-const fetchCumulativeLineGraphScores = async (gameTypeId = null, startDate = null, endDate = null, userId = null) => {
+const fetchCumulativeLineGraphScores = async (gameTypeId = null, startDate = null, endDate = null, userIds = null) => {
   try {
     const params = {};
     if (gameTypeId !== null) params.game_type_id = gameTypeId;
     if (startDate) params.start_date = startDate.toISOString().split('T')[0];
     if (endDate) params.end_date = endDate.toISOString().split('T')[0];
-    if (userId !== null) params.user_id = userId;
+
+    if (userIds && Array.isArray(userIds) && userIds.length > 0) {
+      const validUserIds = userIds.filter(id => id !== null && id !== undefined && !isNaN(id));
+      if (validUserIds.length > 0) {
+        params.user_ids = validUserIds.join(',');
+        console.log('Line Chart: Setting user_ids parameter:', params.user_ids);
+      }
+    }
 
     const response = await axios.get(`/dashboard/cumulative-linegraph`, { params });
     return response.data;
@@ -387,7 +394,7 @@ const initOrUpdateChart = async () => {
       props.gameTypeId,
       props.startDate,
       props.endDate,
-      props.userId
+      props.userIds
     );
     currentData.value = seriesData;
 
@@ -419,11 +426,11 @@ onUnmounted(() => {
 });
 
 watch(
-  [() => props.gameTypeId, () => props.startDate, () => props.endDate, () => props.userId, () => props.showAiScores], // Add showAiScores to watch
+  [() => props.gameTypeId, () => props.startDate, () => props.endDate, () => props.userIds, () => props.showAiScores], // Add showAiScores to watch
   () => {
     initOrUpdateChart();
   },
-  { immediate: false }
+  { immediate: false, deep: true }
 );
 
 watch(

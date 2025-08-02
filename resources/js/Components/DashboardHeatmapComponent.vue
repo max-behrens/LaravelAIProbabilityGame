@@ -17,9 +17,9 @@ const props = defineProps({
     type: [Date, null],
     default: null
   },
-  userId: {
-    type: [String, Number],
-    default: null
+  userIds: {  // Changed from userId to userIds
+    type: [Array],
+    default: () => []
   },
   showAiScores: {
     type: Boolean,
@@ -60,16 +60,21 @@ const fetchHeatmapData = async () => {
     
     if (props.startDate) params.start_date = dayjs(props.startDate).format('YYYY-MM-DD');
     if (props.endDate) params.end_date = dayjs(props.endDate).format('YYYY-MM-DD');
-    if (props.userId !== null && props.userId !== undefined) {
-      params.user_id = props.userId;
-    }
     
+    console.log('USER IDS HEATMAP: ' + props.userIds);
+    // Handle multiple user IDs - this was the main issue
+    if (props.userIds) {      
+        params.user_ids = props.userIds.join(',');
+        console.log('🔴 Setting user_ids parameter:', params.user_ids);
+    }
     // Fetch a large number to get all data
     params.per_page = 1000;
 
     console.log('Fetching heatmap with params:', params);
 
     const response = await axios.get('/dashboard/cumulative-heatmap', { params });
+
+    // The backend now handles filtering, so we can use the data directly
     heatmapData.value = response.data.data || [];
 
     console.log('Received heatmap data:', heatmapData.value.length, 'sessions');
@@ -106,6 +111,7 @@ const fetchHeatmapData = async () => {
     heatmapLoading.value = false;
   }
 };
+
 
 /**
  * Fetch session details by sessionId - with better error handling
@@ -434,7 +440,7 @@ const heatmapOptions = ref({
   },
   dataLabels: { enabled: false },
   grid: { 
-    padding: { right: 40, left: 40, top: 10, bottom: 10 },
+    padding: { right: 40, left: 40, top: 0, bottom: 10 },
     borderColor: '#374151'
   },
   yaxis: {
@@ -494,11 +500,16 @@ const heatmapOptions = ref({
         playersToShow = selectedSessionDetails.value.players;
       }
 
-      const playersHtml = playersToShow.map(player => 
-        `<div style="margin-left: 10px; font-size: 11px;">
-          ${player.player_name || player.name}: ${player.total_score} pts
-        </div>`
-      ).join('');
+      const playersHtml = playersToShow.map(player => {
+        const isFilteredUser = props.userIds.length > 0 && 
+          props.userIds.includes(player.user_id || player.id);
+        const highlightStyle = isFilteredUser ? 
+          'color: #10b981; font-weight: bold;' : '';
+        
+        return `<div style="margin-left: 10px; font-size: 11px; ${highlightStyle}">
+          ${isFilteredUser ? '👤 ' : ''}${player.player_name || player.name}: ${player.total_score} pts
+        </div>`;
+      }).join('');
       
       const aiIndicator = cellData.hasAiScore 
         ? '<span style="color: #10b981; font-size: 10px;">🤖 AI Present</span><br/>'
@@ -760,11 +771,14 @@ watch(() => props.showAiScores, () => {
 
 // Watch filters props to refetch heatmap data
 watch(
-  [() => props.gameTypeId, () => props.startDate, () => props.endDate, () => props.userId],
-  () => fetchHeatmapData(),
-  { immediate: false }
+  [() => props.gameTypeId, () => props.startDate, () => props.endDate, () => props.userIds],
+  ([newGameTypeId, newStartDate, newEndDate, newUserIds], [oldGameTypeId, oldStartDate, oldEndDate, oldUserIds]) => {
+    console.log('🟣 Heatmap watcher triggered');
+    console.log('🟣 userIds changed from:', oldUserIds, 'to:', newUserIds);
+    fetchHeatmapData();
+  },
+  { immediate: true, deep: true } // Added deep: true to watch array changes
 );
-
 // Initial load
 onMounted(() => {
   fetchHeatmapData();
@@ -773,8 +787,31 @@ onMounted(() => {
 
 <template>
   <div class="flex h-full text-white">
-    <div class="w-1/2 p-4 border-r border-gray-700">
+    <div class="w-1/2 px-4 border-r border-gray-700">
       <div class="h-full flex flex-col">
+
+        <div class="text-white !text-center">Percentage Scores</div>
+
+        <div class="flex-1">
+          <div v-if="heatmapLoading" class="flex items-center justify-center h-full text-gray-400">
+            Loading heatmap data...
+          </div>
+
+          <VueApexCharts
+            v-else-if="heatmapSeries.length > 0"
+            :key="chartKey"
+            type="heatmap"
+            width="100%"
+            height="400"
+            :options="heatmapOptions"
+            :series="heatmapSeries"
+          />
+
+          <div v-else class="flex items-center justify-center h-full text-gray-400">
+            No session data available for the selected filters.
+          </div>
+        </div>
+
         <div class="mb-4 text-sm text-center">
           <div class=" space-x-2">
             <button 
@@ -825,28 +862,6 @@ onMounted(() => {
             >
               End ⟫
             </button>
-          </div>
-        </div>
-
-        <div class="text-white !text-center">Percentage Scores</div>
-
-        <div class="flex-1">
-          <div v-if="heatmapLoading" class="flex items-center justify-center h-full text-gray-400">
-            Loading heatmap data...
-          </div>
-
-          <VueApexCharts
-            v-else-if="heatmapSeries.length > 0"
-            :key="chartKey"
-            type="heatmap"
-            width="100%"
-            height="400"
-            :options="heatmapOptions"
-            :series="heatmapSeries"
-          />
-
-          <div v-else class="flex items-center justify-center h-full text-gray-400">
-            No session data available for the selected filters.
           </div>
         </div>
       </div>
