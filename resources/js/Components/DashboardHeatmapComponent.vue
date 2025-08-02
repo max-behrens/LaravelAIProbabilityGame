@@ -195,7 +195,7 @@ const currentWindowDates = computed(() => {
 const baseHeatmapColorRanges = [
   { from: 0, to: 0, color: '#1f293700', name: 'No Activity' }, // Keep this for the background/no activity
   // Progressively darker blues
-  { from: 1, to: 25, color: '#bcddf7', name: '1-25 pts' },  // Lightest blue
+  { from: 1, to: 25, color: '#bcddf7', name: '1-25 pts' },   // Lightest blue
   { from: 26, to: 50, color: '#64B5F6', name: '26-50 pts' },
   { from: 51, to: 75, color: '#42A5F5', name: '51-75 pts' },
   { from: 76, to: 100, color: '#2196F3', name: '76-100 pts' },
@@ -211,6 +211,7 @@ const aiHeatmapColorRanges = [
   { from: 76, to: 100, color: '#16a34a', name: 'AI 76-100 pts' },// Green-600
   { from: 101, to: 1000, color: '#22c55e', name: 'AI 100+ pts' }// Green-500
 ];
+
 
 // Computed property for heatmap color ranges
 const activeHeatmapColorRanges = computed(() => {
@@ -249,7 +250,10 @@ const heatmapSeries = computed(() => {
 
       let scoreValue = null;
       let useAiColors = false; // New flag to determine which color scheme to use
-      
+      let percentageScore = 0;
+      let aiPercentageScore = 0;
+      let yValue;
+            
       if (session) {
         if (props.showAiScores && hasAiScore) {
           // AI Scores are ON and the session has an AI score - show AI score with AI colors
@@ -261,9 +265,23 @@ const heatmapSeries = computed(() => {
           useAiColors = false;
         }
       }
-      
+
+      // Calculate Percentage Score
+      if (scoreValue !== null) {
+        percentageScore = ((session.combined_score / (session.total_game_score * session.player_count)) * 100).toFixed(2);;
+        aiPercentageScore = (session.ai_score / session.total_game_score) * 100;
+      }
+
       // The y value needs to be a small negative number to distinguish 0 from null
-      let yValue = scoreValue === 0 ? -1 : scoreValue;
+      if (scoreValue === 0) {
+        yValue = -100; // Use a distinct negative value for sessions with a score of 0
+      } else {
+        if (props.showAiScores && hasAiScore) {
+          yValue = aiPercentageScore;
+        } else {
+          yValue = percentageScore;
+        }
+      }
       
       // Offset AI scores by 1000 to use different color ranges
       if (useAiColors && yValue > 0) {
@@ -279,6 +297,8 @@ const heatmapSeries = computed(() => {
         session: session,
         createdAt: session?.created_at ?? null,
         hasAiScore: hasAiScore,
+        aiPercentageScore: aiPercentageScore,
+        percentageScore: percentageScore,
         useAiColors: useAiColors,
         originalScore: scoreValue, // Keep original score for display
         customdata: {
@@ -380,22 +400,22 @@ const heatmapOptions = ref({
       distributed: false,
       colorScale: {
         ranges: [
+
+        { from: -100, to: -100, color: '#c96565', name: '0 pts' },
           // No activity
           { from: 0, to: 0, color: '#1f2937', name: 'No Activity' },
           
           // Human scores (blue) - ranges 1-1000
-          { from: 1, to: 25, color: '#bcddf7', name: '1-25 pts' },
-          { from: 26, to: 50, color: '#64B5F6', name: '26-50 pts' },
-          { from: 51, to: 75, color: '#42A5F5', name: '51-75 pts' },
-          { from: 76, to: 100, color: '#2196F3', name: '76-100 pts' },
-          { from: 101, to: 1000, color: '#1976D2', name: '100+ pts' },
+          { from: 1, to: 25, color: '#96b9d4', name: '1-25' },
+          { from: 26, to: 50, color: '#64B5F6', name: '26-50' },
+          { from: 51, to: 75, color: '#42A5F5', name: '51-75' },
+          { from: 76, to: 100, color: '#1776c2', name: '76-100' },
           
           // AI scores (green) - ranges 1001-2000
-          { from: 1001, to: 1025, color: '#14532d', name: 'AI 1-25 pts' },
-          { from: 1026, to: 1050, color: '#166534', name: 'AI 26-50 pts' },
-          { from: 1051, to: 1075, color: '#15803d', name: 'AI 51-75 pts' },
-          { from: 1076, to: 1100, color: '#16a34a', name: 'AI 76-100 pts' },
-          { from: 1101, to: 2000, color: '#22c55e', name: 'AI 100+ pts' }
+          { from: 1001, to: 1025, color: '#97c2a7', name: 'AI 1-25' },
+          { from: 1026, to: 1050, color: '#86dba6', name: 'AI 26-50' },
+          { from: 1051, to: 1075, color: '#4dc97b', name: 'AI 51-75' },
+          { from: 1076, to: 1100, color: '#16a34a', name: 'AI 76-100' },
         ]
       },
       dataLabels: {
@@ -467,27 +487,41 @@ const heatmapOptions = ref({
         second: '2-digit'
       });
 
-      const playersHtml = session.players.map(player => 
+      let playersToShow = session.players;
+      if (selectedSessionDetails.value && 
+          selectedSessionDetails.value.session_id === session.truncated_session_id && 
+          selectedSessionDetails.value.players) {
+        playersToShow = selectedSessionDetails.value.players;
+      }
+
+      const playersHtml = playersToShow.map(player => 
         `<div style="margin-left: 10px; font-size: 11px;">
-          ${player.player_name}: ${player.total_score} pts
+          ${player.player_name || player.name}: ${player.total_score} pts
         </div>`
       ).join('');
-
+      
       const aiIndicator = cellData.hasAiScore 
         ? '<span style="color: #10b981; font-size: 10px;">🤖 AI Present</span><br/>'
         : '';
+        
+      const aiPercentageScoreDisplay = (cellData.hasAiScore && props.showAiScores)
+        ? `<span style="font-size: 10px;">AI % Score:</span> <span style="color: #10b981;">${cellData.aiPercentageScore}</span><br/>`
+        : '';
+
 
       return `
         <div style="padding:8px; background-color:#1e1e1e; color:#cccccc; border-radius:4px; max-width:300px;">
-          ${aiIndicator}
           <strong>Game:</strong> ${session.game_name}<br/>
           <strong>Date:</strong> ${cellData.x}<br/>
           <strong>Time:</strong> ${time}<br/>
+          <strong>% Score:</strong> ${cellData.percentageScore}<br/>
           <strong>Players:</strong><br/>
           ${playersHtml}
           <div style="margin-top: 4px; font-size: 8pt; color: #888;">
             Session: ${session.truncated_session_id}
           </div>
+          ${aiIndicator}
+          ${aiPercentageScoreDisplay}
         </div>
       `;
     }
@@ -590,7 +624,7 @@ const radialOptions = ref({
           show: true,
           fontSize: '12px',
           fontWeight: 400,
-          color: 'black',
+          color: '#969696',
           offsetY: 0,
           formatter: function() {
             if (selectedPlayerIndex.value !== null || hoveredPlayerIndex.value !== null) {
@@ -793,6 +827,8 @@ onMounted(() => {
             </button>
           </div>
         </div>
+
+        <div class="text-white !text-center">Percentage Scores</div>
 
         <div class="flex-1">
           <div v-if="heatmapLoading" class="flex items-center justify-center h-full text-gray-400">

@@ -362,8 +362,9 @@ class GamesService
      * Get game sessions data for heatmap display - grouped by session_id
      * Returns sessions grouped by session_id with all players and AI data combined
      */
-    public function getGameSessionsHeatmapData(?int $gameTypeId = null, ?string $startDate = null, ?string $endDate = null, ?int $userId = null)
+public function getGameSessionsHeatmapData(?int $gameTypeId = null, ?string $startDate = null, ?string $endDate = null, ?int $userId = null)
     {
+        // Define the main query without the game_questions join to avoid redundant data
         $query = GameScore::query()
             ->select(
                 'game_scores.session_id',
@@ -373,6 +374,7 @@ class GamesService
                 'game_scores.answer_json',
                 'users.name as player_name',
                 'games.id as game_id',
+                'game_types.id as game_type_id', // Select game_type_id to use in the second query
                 'game_types.name as game_name',
                 'ai_scores.score as ai_score'
             )
@@ -381,7 +383,7 @@ class GamesService
             ->join('game_types', 'games.game_type_id', '=', 'game_types.id')
             ->leftJoin('ai_scores', function($join) {
                 $join->on('game_scores.session_id', '=', 'ai_scores.session_id')
-                    ->on('game_scores.game_id', '=', 'ai_scores.game_id');
+                     ->on('game_scores.game_id', '=', 'ai_scores.game_id');
             })
             ->orderBy('game_scores.created_at', 'desc');
 
@@ -404,11 +406,26 @@ class GamesService
 
         // Group by session_id to combine all players and AI data
         $groupedSessions = $results->groupBy('session_id');
+
+        // Cache for total game scores to avoid repeated queries for the same game type
+        $gameScoresCache = [];
         
-        $data = $groupedSessions->map(function ($sessionGroup, $sessionId) {
+        $data = $groupedSessions->map(function ($sessionGroup, $sessionId) use (&$gameScoresCache) {
             // Get the first record for session-level data
             $firstRecord = $sessionGroup->first();
             
+            // Get the game_type_id to find the total possible score
+            $gameTypeId = $firstRecord->game_type_id;
+
+            // Check the cache first to avoid re-querying the same game type
+            if (!isset($gameScoresCache[$gameTypeId])) {
+                // *** THIS IS THE SECOND QUERY TO GET THE TOTAL GAME SCORE ***
+                $totalGameScore = GameQuestion::where('game_type_id', $gameTypeId)->sum('score_awarded');
+                $gameScoresCache[$gameTypeId] = $totalGameScore;
+            } else {
+                $totalGameScore = $gameScoresCache[$gameTypeId];
+            }
+
             // Collect all players in this session
             $players = $sessionGroup->map(function ($record) {
                 $questionsCount = 0;
@@ -440,17 +457,6 @@ class GamesService
             // Get AI score (should be the same across all records in the group)
             $aiScore = $firstRecord->ai_score;
             
-            // Add AI to players list if AI score exists
-            if ($aiScore !== null) {
-                $players[] = [
-                    'player_id' => 'ai',
-                    'player_name' => 'AI',
-                    'total_score' => $aiScore,
-                    'questions_count' => 0, // AI questions count would need separate logic if needed
-                    'correct_answers' => 0,
-                ];
-                $combinedScore += $aiScore;
-            }
 
             $truncatedSessionId = substr($sessionId, 0, 10) . '...';
 
@@ -460,7 +466,9 @@ class GamesService
                 'created_at' => $firstRecord->created_at,
                 'game_id' => $firstRecord->game_id,
                 'game_name' => $firstRecord->game_name,
-                'combined_score' => $combinedScore, // Total score for the entire session
+                'combined_score' => $combinedScore,
+                // Now returning the total possible score from the second query
+                'total_game_score' => $totalGameScore, 
                 'ai_score' => $aiScore,
                 'players' => $players, // Array of all players in this session
                 'player_count' => count($players),
