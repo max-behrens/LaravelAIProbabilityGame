@@ -21,6 +21,10 @@ const props = defineProps({
     type: [Array],
     default: () => []
   },
+  andUsers: {
+    type: Boolean,
+    default: false
+  },
   showAiScores: {
     type: Boolean,
     default: false
@@ -61,11 +65,14 @@ const fetchHeatmapData = async () => {
     if (props.startDate) params.start_date = dayjs(props.startDate).format('YYYY-MM-DD');
     if (props.endDate) params.end_date = dayjs(props.endDate).format('YYYY-MM-DD');
     
-    console.log('USER IDS HEATMAP: ' + props.userIds);
     // Handle multiple user IDs - this was the main issue
     if (props.userIds) {      
         params.user_ids = props.userIds.join(',');
         console.log('🔴 Setting user_ids parameter:', params.user_ids);
+    }
+
+    if (props.andUsers) {
+      params.and_users = 'true';
     }
     // Fetch a large number to get all data
     params.per_page = 1000;
@@ -771,14 +778,15 @@ watch(() => props.showAiScores, () => {
 
 // Watch filters props to refetch heatmap data
 watch(
-  [() => props.gameTypeId, () => props.startDate, () => props.endDate, () => props.userIds],
-  ([newGameTypeId, newStartDate, newEndDate, newUserIds], [oldGameTypeId, oldStartDate, oldEndDate, oldUserIds]) => {
+  [() => props.gameTypeId, () => props.startDate, () => props.endDate, () => props.userIds, () => props.andUsers], // Fixed: andUsers not andOrUsers
+  ([newGameTypeId, newStartDate, newEndDate, newUserIds, newAndUsers], [oldGameTypeId, oldStartDate, oldEndDate, oldUserIds, oldAndUsers]) => {
     console.log('🟣 Heatmap watcher triggered');
     console.log('🟣 userIds changed from:', oldUserIds, 'to:', newUserIds);
     fetchHeatmapData();
   },
-  { immediate: true, deep: true } // Added deep: true to watch array changes
+  { immediate: true, deep: true }
 );
+
 // Initial load
 onMounted(() => {
   fetchHeatmapData();

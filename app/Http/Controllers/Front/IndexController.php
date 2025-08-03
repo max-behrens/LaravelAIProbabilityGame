@@ -179,9 +179,11 @@ class IndexController extends Controller
             // Fallback to single user ID for backward compatibility
             $userIds = [$userId];
         }
+
+        $andOrUsers = (bool) $request->get('and_users') ?? false;
         
 
-        $heatmapData = $this->gamesService->getGameSessionsHeatmapData($gameTypeId, $startDate, $endDate, $userIds);
+        $heatmapData = $this->gamesService->getGameSessionsHeatmapData($gameTypeId, $startDate, $endDate, $userIds, $andOrUsers);
         
         Log::info('Game sessions heatmap data retrieved', ['count' => count($heatmapData['data'])]);
         return response()->json($heatmapData);

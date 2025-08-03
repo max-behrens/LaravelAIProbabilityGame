@@ -358,7 +358,7 @@ class GamesService
         return $series;
     }
 
-    public function getGameSessionsHeatmapData(?int $gameTypeId = null, ?string $startDate = null, ?string $endDate = null, array $userIds = null)
+  public function getGameSessionsHeatmapData(?int $gameTypeId = null, ?string $startDate = null, ?string $endDate = null, array $userIds = null, bool $andOrUsers = false)
     {
         // Define the main query without the game_questions join to avoid redundant data
         $query = GameScore::query()
@@ -370,7 +370,7 @@ class GamesService
                 'game_scores.answer_json',
                 'users.name as player_name',
                 'games.id as game_id',
-                'game_types.id as game_type_id', // Select game_type_id to use in the second query
+                'game_types.id as game_type_id',
                 'game_types.name as game_name',
                 'ai_scores.score as ai_score'
             )
@@ -394,17 +394,28 @@ class GamesService
             $query->whereDate('game_scores.created_at', '<=', Carbon::parse($endDate));
         }
         
-        // Handle multiple user IDs filtering - we want sessions that contain ANY of these users
+        // Handle multiple user IDs filtering
         if (!empty($userIds)) {
             $query->whereIn('game_scores.player_id', $userIds);
         }
-
 
         // Get all results
         $results = $query->get();
 
         // Group by session_id to combine all players and AI data
         $groupedSessions = $results->groupBy('session_id');
+
+        // Additional filtering for AND logic (double-check, though the above query should handle it)
+        if (!empty($userIds) && $andOrUsers) {
+            $groupedSessions = $groupedSessions->filter(function ($sessionGroup) use ($userIds) {
+                $playerIdsInSession = $sessionGroup->pluck('player_id')->unique()->sort()->values();
+                $requiredUserIds = collect($userIds)->unique()->sort()->values();
+                
+                // Check if the session contains ALL required users
+                // The session must have at least all the required users (can have more)
+                return $requiredUserIds->diff($playerIdsInSession)->isEmpty();
+            });
+        }
 
         // Cache for total game scores to avoid repeated queries for the same game type
         $gameScoresCache = [];
@@ -418,7 +429,6 @@ class GamesService
 
             // Check the cache first to avoid re-querying the same game type
             if (!isset($gameScoresCache[$gameTypeId])) {
-                // *** THIS IS THE SECOND QUERY TO GET THE TOTAL GAME SCORE ***
                 $totalGameScore = GameQuestion::where('game_type_id', $gameTypeId)->sum('score_awarded');
                 $gameScoresCache[$gameTypeId] = $totalGameScore;
             } else {
@@ -465,15 +475,13 @@ class GamesService
                 'game_id' => $firstRecord->game_id,
                 'game_name' => $firstRecord->game_name,
                 'combined_score' => $combinedScore,
-                // Now returning the total possible score from the second query
                 'total_game_score' => $totalGameScore, 
                 'ai_score' => $aiScore,
-                'players' => $players, // Array of all players in this session
+                'players' => $players,
                 'player_count' => count($players),
             ];
         })->values();
 
-        // Return all data without pagination
         return [
             'data' => $data,
             'total' => $data->count(),

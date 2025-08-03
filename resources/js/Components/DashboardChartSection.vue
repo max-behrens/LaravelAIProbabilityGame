@@ -39,6 +39,7 @@ const chartConfigs = [
 
 // **FIXED**: AI Feature States - Default to true (ON)
 const showAiScores = ref(true); // Changed default to true
+const andUsers = ref(false);
 const showAiTooltip = ref(false);
 const currentChartPointAiData = ref(null);
 
@@ -83,6 +84,7 @@ const datepickerModel = computed({
 onMounted(async () => {
   // **FIXED**: Initialize showAiScores from URL param, but default to true if not set
   showAiScores.value = page.props.current_show_ai_scores === 'true';  
+  andUsers.value = page.props.current_and_users === 'true';  
   // Fetch users on mount
   await fetchUsers();
 });
@@ -188,6 +190,12 @@ const toggleAiScores = () => {
   }
 };
 
+const toggleAndUsers = () => {
+  andUsers.value = !andUsers.value;
+};
+
+
+
 // Function to handle chart point click and show AI tooltip
 const handleChartPointClick = (data) => {
   // Only show tooltip if AI scores are enabled
@@ -276,8 +284,8 @@ watch(activeUserIds, (newIds, oldIds) => {
 }, { deep: true });
 
 watch(
-  [activeGameId, dateRange, isExponentialScale, activeUserIds, showAiScores],
-  ([newGameId, newDateRange, newIsExponentialScale, newUserIds, newShowAiScores]) => {
+  [activeGameId, dateRange, isExponentialScale, activeUserIds, andUsers, showAiScores],
+  ([newGameId, newDateRange, newIsExponentialScale, newUserIds, newAndUsers, newShowAiScores]) => {
     console.log('Watcher triggered with userIds:', newUserIds); // Debug log
     
     const params = new URLSearchParams();
@@ -311,6 +319,10 @@ watch(
         console.log('Setting user_ids in URL:', validUserIds.join(',')); // Debug log
       }
 
+    }
+
+    if (newAndUsers) {
+      params.set('and_users', 'true');
     }
 
     if (newShowAiScores) {
@@ -471,9 +483,19 @@ onUnmounted(() => {
                               <div class="flex items-center justify-between mb-4">
                                   <h4 class="text-white font-semibold text-lg">{{ userFilterTitle }}</h4>
                                   <button
+                                    v-if="activeUserIds.length > 1"
+                                    @click="toggleAndUsers"
+                                    :class="[
+                                      'px-3 py-1 text-white text-xs rounded-md transition-colors',
+                                      andUsers ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
+                                    ]"
+                                  >
+                                    {{ andUsers ? 'AND Users' : 'OR Users' }}
+                                  </button>
+                                  <button
                                       v-if="activeUserIds.length > 0"
                                       @click="clearAllUserSelections"
-                                      class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded-md transition-colors"
+                                      class="px-3 py-1 bg-red-600 hover:bg-blu-e700 text-white text-xs rounded-md transition-colors"
                                   >
                                       Clear All ({{ activeUserIds.length }})
                                   </button>
@@ -557,6 +579,7 @@ onUnmounted(() => {
                                               :start-date="dateRange[0]"
                                               :end-date="dateRange[1]"
                                               :user-ids="activeUserIds"
+                                              :and-users="andUsers"
                                               :show-ai-scores="showAiScores"
                                           />
                                   </div>
