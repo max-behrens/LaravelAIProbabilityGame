@@ -212,7 +212,7 @@ onUnmounted(() => {
             </div>
         </transition>
 
-        <div class="py-2 mx-auto px-20 lg:px-20">
+        <div class="py-2 mx-auto px-100 lg:px-100">
 
             <section id="stats">
               <DashboardChartSection />
