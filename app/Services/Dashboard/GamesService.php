@@ -48,21 +48,6 @@ class GamesService
         return $scores;
     }
 
-    public function playerAverages(int $gameId)
-    {
-        Log::debug('Calculating player averages', ['gameId' => $gameId]);
-
-        $averages = DB::table('users')
-            ->join('game_scores', 'users.id', '=', 'game_scores.player_id')
-            ->where('game_scores.game_id', $gameId)
-            ->select('users.name', DB::raw('AVG(game_scores.score) as average_score'))
-            ->groupBy('users.id', 'users.name')
-            ->get();
-
-        Log::debug('Player averages result', ['averages' => $averages]);
-
-        return $averages;
-    }
 
     public function getGameQuestions(Games $game)
     {
@@ -136,6 +121,44 @@ class GamesService
         return $sessionId;
     }
 
+
+    // Game Room Charts methods:
+
+    public function playerAverages(int $gameId)
+    {
+        Log::debug('Calculating player averages', ['gameId' => $gameId]);
+
+        $userAverages = DB::table('users')
+            ->join('game_scores', 'users.id', '=', 'game_scores.player_id')
+            ->where('game_scores.game_id', $gameId)
+            ->select('users.id', 'users.name', DB::raw('AVG(game_scores.score) as average_score'))
+            ->groupBy('users.id', 'users.name')
+            ->get()
+            ->map(function ($item) {
+                return (array) $item; // Convert stdClass to array
+            })
+            ->toArray();
+
+        // AI scores
+        $aiAverage = DB::table('ai_scores')
+            ->where('game_id', $gameId)
+            ->select(DB::raw("'AI' as name"), DB::raw('AVG(score) as average_score'))
+            ->first();
+
+        if ($aiAverage) {
+            $userAverages[] = [
+                'id' => 'ai',
+                'name' => 'AI',
+                'average_score' => $aiAverage->average_score,
+            ];
+        }
+
+        Log::debug('Player averages result', ['averages' => $userAverages]);
+
+        return $userAverages;
+    }
+
+
     public function totalScore($gameId)
     {
         Log::debug('Calculating total score for game', ['gameId' => $gameId]);
@@ -152,27 +175,14 @@ class GamesService
 
         return $totalScore;
     }
-
-    public function totalScoreByGameType($gameTypeId)
-    {
-        $gameType = GameType::findOrFail($gameTypeId);
-        $gameQuestions = $gameType->gameQuestions()->get();
-
-        $totalScore = 0;
-
-        foreach ($gameQuestions as $question) {
-            $totalScore += $question->score_awarded;
-
-        }
-
-        return $totalScore;
-    }
+    
 
     public function getAllGameScores($gameId)
     {
-        Log::debug('Fetching all game scores', ['gameId' => $gameId]);
+        Log::debug('Fetching all AI game scores', ['gameId' => $gameId]);
 
-        $scores = GameScore::query()
+        // User scores as arrays
+        $userScores = GameScore::query()
             ->join('users', 'game_scores.player_id', '=', 'users.id')
             ->where('game_scores.game_id', $gameId)
             ->orderBy('game_scores.created_at', 'desc')
@@ -188,16 +198,73 @@ class GamesService
             )
             ->get()
             ->map(function ($score) {
-                $score->user = [
-                    'id' => $score->user_id,
-                    'name' => $score->user_name,
+                return [
+                    'id' => $score->id,
+                    'session_id' => $score->session_id,
+                    'user_id' => $score->user_id,
+                    'game_id' => $score->game_id,
+                    'score' => $score->score,
+                    'answer_json' => $score->answer_json,
+                    'created_at' => $score->created_at,
+                    'user' => [
+                        'id' => $score->user_id,
+                        'name' => $score->user_name,
+                    ]
                 ];
-                unset($score->user_name);
-                return $score;
             });
 
-        return $scores;
+        // AI scores as arrays
+        $aiScores = DB::table('ai_scores')
+            ->where('game_id', $gameId)
+            ->select(
+                DB::raw('NULL as id'),
+                'session_id',
+                DB::raw('0 as user_id'),
+                'game_id',
+                'score',
+                'answer_json',
+                'created_at'
+            )
+            ->get()
+            ->map(function ($score) {
+                return [
+                    'id' => null,
+                    'session_id' => $score->session_id,
+                    'user_id' => 0,
+                    'game_id' => $score->game_id,
+                    'score' => $score->score,
+                    'answer_json' => $score->answer_json,
+                    'created_at' => $score->created_at,
+                    'user' => [
+                        'id' => 0,
+                        'name' => 'AI',
+                    ]
+                ];
+            });
+
+            Log::debug('AI SCORES', ['aiScores' => $aiScores]);
+
+
+        // Merge as arrays
+        return $userScores->merge($aiScores);
     }
+
+
+    public function totalScoreByGameType($gameTypeId)
+    {
+        $gameType = GameType::findOrFail($gameTypeId);
+        $gameQuestions = $gameType->gameQuestions()->get();
+
+        $totalScore = 0;
+
+        foreach ($gameQuestions as $question) {
+            $totalScore += $question->score_awarded;
+
+        }
+
+        return $totalScore;
+    }
+    
 
     public function getScoreTrends($gameId)
     {

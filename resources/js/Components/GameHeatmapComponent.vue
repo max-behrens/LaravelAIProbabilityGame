@@ -35,13 +35,15 @@ const calculateQuestionTotals = () => {
   allGameScores.value.forEach(score => {
     let answers = score.answer_json;
     if (!answers) return;
-    if (typeof answers === 'string') {
-      try {
+  if (typeof answers === 'string') {
+    try {
+      while (typeof answers === 'string') {
         answers = JSON.parse(answers);
-      } catch {
-        return;
       }
+    } catch {
+      return;
     }
+  }
 
     Object.values(answers).forEach(answer => {
       const qNum = answer?.question_number;
@@ -85,7 +87,9 @@ const getQuestionAveragesByUser = () => {
 
     if (typeof answers === 'string') {
       try {
-        answers = JSON.parse(answers);
+        while (typeof answers === 'string') {
+          answers = JSON.parse(answers);
+        }
       } catch {
         return;
       }
@@ -131,6 +135,7 @@ const getQuestionAveragesByUser = () => {
       data: Object.entries(questions)
         .sort(([a], [b]) => parseInt(a.replace('Q', '')) - parseInt(b.replace('Q', '')))
         .map(([label, { totalPlayerScore, count }]) => {
+
           const correctCount = questionCorrectCounts[playerName][label] || 0;
           const successRate = playerAttempts > 0 ? (correctCount / playerAttempts) * 100 : 0;
           
