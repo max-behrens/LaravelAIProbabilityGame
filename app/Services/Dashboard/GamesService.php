@@ -731,6 +731,18 @@ class GamesService
         ];
     }
 
+    public function totalScoreByGameType($gameTypeId)
+    {
+        $gameType = GameType::findOrFail($gameTypeId);
+        $gameQuestions = $gameType->gameQuestions()->get();
+        $totalScore = 0;
+
+        foreach ($gameQuestions as $question) {
+            $totalScore += $question->score_awarded;
+        }
+        return $totalScore;
+    }
+
 
     public function getCumulativeBarGraphData(): array
     {
