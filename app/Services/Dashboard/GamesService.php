@@ -718,7 +718,7 @@ class GamesService
             'session_id' => substr($first->session_id, 0, 10) . '...',
             'player_name' => $first->player_name,
             'game_name' => $first->game_name,
-            'total_score' => $this->totalScoreByGameType($first->game_type_id),
+            'total_score' => $this->getTotalScoreByGameType($first->game_type_id),
             'ai_score' => $aiScore->score ?? null,
             'created_at' => $first->created_at,
             'players' => $allPlayers,
@@ -731,7 +731,7 @@ class GamesService
         ];
     }
 
-    public function totalScoreByGameType($gameTypeId)
+    public function getTotalScoreByGameType($gameTypeId)
     {
         $gameType = GameType::findOrFail($gameTypeId);
         $gameQuestions = $gameType->gameQuestions()->get();
