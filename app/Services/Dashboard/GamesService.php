@@ -14,11 +14,11 @@ use Illuminate\Support\Facades\Log;
 
 class GamesService
 {
-    public function getGameScores($gameId, $page = 1, $perPage = 5)
+    public function getGameScores($gameId, $page = 1, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null, bool $andUsers = false, $perPage = 5)
     {
         Log::debug('Fetching paginated game scores', ['gameId' => $gameId, 'page' => $page, 'perPage' => $perPage]);
 
-        $scores = GameScore::query()
+        $query = GameScore::query()
             ->join('users', 'game_scores.player_id', '=', 'users.id')
             ->where('game_scores.game_id', $gameId)
             ->orderBy('game_scores.created_at', 'desc')
@@ -30,8 +30,33 @@ class GamesService
                 'game_scores.game_id',
                 'game_scores.score',
                 'game_scores.created_at'
-            )
-            ->paginate($perPage, ['*'], 'page', $page);
+            );
+
+        // Apply date range filter BEFORE pagination
+        if ($startDate && $endDate) {
+            $query->whereBetween('game_scores.created_at', [$startDate, $endDate]);
+        }
+
+        // Apply user ID filter (OR logic) BEFORE pagination
+        if (!empty($userIds) && !$andUsers) {
+            $query->whereIn('game_scores.player_id', $userIds);
+        }
+
+        // Handle AND logic BEFORE pagination
+        if (!empty($userIds) && $andUsers) {
+            $sessionsWithAllUsers = GameScore::query()
+                ->where('game_id', $gameId)
+                ->whereIn('player_id', $userIds)
+                ->select('session_id')
+                ->groupBy('session_id')
+                ->havingRaw('COUNT(DISTINCT player_id) = ?', [count($userIds)])
+                ->pluck('session_id');
+
+            $query->whereIn('game_scores.session_id', $sessionsWithAllUsers);
+        }
+
+        // NOW paginate after all filters are applied
+        $scores = $query->paginate($perPage, ['*'], 'page', $page);
 
         Log::debug('Fetched scores', ['scores' => $scores->items()]);
 

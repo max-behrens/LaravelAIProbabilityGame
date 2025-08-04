@@ -26,9 +26,13 @@ class AIGameController extends Controller
      {
          $gameId = $request->gameId;
          $page = $request->query('page', 1);
+
+        // Get filter parameters from the request
+        $startDate = $request->get('start_date');
+        $endDate = $request->get('end_date');
+
  
-         Log::info('Fetching game scores', ['gameId' => $gameId, 'page' => $page]);
-         $aiScores = $this->aiGameService->getAIGameScores($gameId, $page);
+         $aiScores = $this->aiGameService->getAIGameScores($gameId, $page, $startDate, $endDate);
          Log::info('AI Game scores retrieved', ['scores' => $aiScores]);
  
          return response()->json($aiScores);

@@ -13,12 +13,11 @@ use Illuminate\Support\Facades\DB;
 class AIGameService
 {
 
-
-    public function getAIGameScores($gameId, $page = 1, $perPage = 5)
+    public function getAIGameScores($gameId, $page = 1, ?string $startDate = null, ?string $endDate = null, $perPage = 5)
     {
-        Log::debug('Fetching paginated game scores', ['gameId' => $gameId, 'page' => $page, 'perPage' => $perPage]);
+        Log::debug('Fetching paginated AI game scores', ['gameId' => $gameId, 'page' => $page, 'perPage' => $perPage]);
 
-        $scores = AIScore::query()
+        $query = AIScore::query()
             ->where('ai_scores.game_id', $gameId)
             ->orderBy('ai_scores.created_at', 'desc')
             ->select(
@@ -27,16 +26,21 @@ class AIGameService
                 'ai_scores.game_id',
                 'ai_scores.score',
                 'ai_scores.created_at'
-            )
-            ->paginate($perPage, ['*'], 'page', $page);
+            );
 
-        Log::debug('Fetched scores', ['scores' => $scores->items()]);
+        // Apply date range filter BEFORE pagination
+        if ($startDate && $endDate) {
+            $query->whereBetween('ai_scores.created_at', [$startDate, $endDate]); // Fixed: was game_scores.created_at
+        }
+
+        // NOW paginate after all filters are applied
+        $scores = $query->paginate($perPage, ['*'], 'page', $page);
+
+        Log::debug('Fetched AI scores', ['scores' => $scores->items()]);
 
         $scores->getCollection()->transform(function ($score) {
-            $score->user = [
-                'id' => $score->user_id,
-            ];
-            Log::debug('Transformed score', ['score' => $score]);
+            // Remove this user transformation for AI scores since there's no user_id
+            Log::debug('Transformed AI score', ['score' => $score]);
             return $score;
         });
 

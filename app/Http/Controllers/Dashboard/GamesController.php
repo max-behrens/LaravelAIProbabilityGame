@@ -69,8 +69,17 @@ class GamesController extends Controller
         $gameId = $request->gameId;
         $page = $request->query('page', 1);
 
-        Log::info('Fetching game scores', ['gameId' => $gameId, 'page' => $page]);
-        $gameScores = $this->gamesService->getGameScores($gameId, $page);
+        // Get filter parameters from the request
+        $startDate = $request->get('start_date');
+        $endDate = $request->get('end_date');
+        $userIds = $request->get('user_ids');
+        $andUsers = $request->get('and_users', 'false') === 'true';
+
+        // The user IDs come as a comma-separated string, convert them to an array
+        $userIds = $userIds ? explode(',', $userIds) : null;
+
+        $gameScores = $this->gamesService->getGameScores($gameId, $page, $startDate, $endDate, $userIds, $andUsers);
+
         Log::info('Game scores retrieved', ['scores' => $gameScores]);
 
         return response()->json($gameScores);
