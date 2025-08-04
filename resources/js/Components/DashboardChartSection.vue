@@ -352,17 +352,17 @@ onUnmounted(() => {
 
 <template>
   <section class="py-3 bg-gray-800 rounded-lg">
-      <div class="container mx-auto px-6">
+      <div class="container mx-auto px-20">
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-2">
               <div class="lg:col-span-3">
-                  <div class="flex flex-wrap justify-center gap-4 mb-6">
+                  <div class="flex flex-wrap justify-center gap-4 mb-6 px-6">
 
                     
                       <div class="flex items-center gap-2 min-w-[180px] max-w-xs mr-20">
                           <button
                               @click="toggleChart"
                               :class="[
-                                  'flex items-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full w-full',
+                                  'flex items-center space-x-2 p-3 rounded-lg text-white cursor-pointer text-sm md:text-base h-full w-full',
                                   'transition-all duration-300 ease-in-out',
                                   chartToggleColor + ' hover:brightness-90'
                               ]"
@@ -566,7 +566,7 @@ onUnmounted(() => {
                       </div>
                   </transition>
 
-                  <div class="space-y-8 p-8 rounded-lg shadow-lg relative">
+                  <div class="space-y-8 p-8 rounded-lg relative">
                       <section>
                           <div class="w-full">
                               <transition name="chart-fade" mode="out-in">
