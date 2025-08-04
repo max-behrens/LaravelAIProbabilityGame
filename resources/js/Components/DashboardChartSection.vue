@@ -1,5 +1,5 @@
 <script setup>
-import { ChartBarIcon, PuzzleIcon, Gamepad2Icon, ClockIcon, TrendingUpIcon, EyeIcon, CalendarDaysIcon, ScalingIcon, UserIcon, ChevronLeftIcon, ChevronRightIcon, BrainCircuitIcon, LineChartIcon, BarChart3Icon } from 'lucide-vue-next';
+import { ChartBarIcon, PuzzleIcon, Gamepad2Icon, ClockIcon, TrendingUpIcon, EyeIcon, CalendarDaysIcon, ScalingIcon, UserIcon, ChevronLeftIcon, ChevronRightIcon, BrainCircuitIcon, LineChartIcon, ChartColumnStacked } from 'lucide-vue-next';
 import DashboardHeatmapComponent from '@/Components/DashboardHeatmapComponent.vue';
 import DashboardBarChartComponent from '@/Components/DashboardBarChartComponent.vue';
 import DashboardLineChartComponent from '@/Components/DashboardLineChartComponent.vue';
@@ -29,7 +29,7 @@ const chartConfigs = [
     title: 'Activity Heatmap',
     description: 'View your gaming activity patterns and frequency',
     component: 'DashboardHeatmapComponent',
-    icon: BarChart3Icon
+    icon: ChartColumnStacked
   },  
   {
     title: 'Performance Over Time',

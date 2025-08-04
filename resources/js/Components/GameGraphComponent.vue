@@ -1,9 +1,7 @@
-
-
 <script setup>
-import { onMounted, ref, watch } from 'vue';
-import axios from 'axios';
+import { ref, defineProps, onMounted, watch, onUnmounted } from 'vue';
 import { Chart } from 'chart.js/auto';
+import axios from 'axios';
 
 const props = defineProps({
   gameId: {
@@ -14,29 +12,75 @@ const props = defineProps({
 
 const chartCanvas = ref(null);
 let chartInstance = null;
-
 const playersData = ref([]);
 const totalGameScore = ref(null);
 
-// Fetch player averages
+// Filter states - will be updated by event listener
+const dateRange = ref([null, null]);
+const userIds = ref([]);
+const andUsers = ref(false);
+
+// Get initial filter values from URL
+const getInitialFilters = () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  
+  // Date range
+  const startDate = urlParams.get('start_date');
+  const endDate = urlParams.get('end_date');
+  if (startDate && endDate) {
+    dateRange.value = [new Date(startDate), new Date(endDate)];
+  }
+  
+  // User IDs
+  const userIdsParam = urlParams.get('user_ids');
+  if (userIdsParam) {
+    userIds.value = userIdsParam.split(',').map(id => parseInt(id)).filter(id => !isNaN(id));
+  }
+  
+  // AND users
+  andUsers.value = urlParams.get('and_users') === 'true';
+};
+
+// Fetch player averages with filters
 const fetchScoreTrendStats = async () => {
   try {
-    const response = await axios.get(`/api/games/${props.gameId}/score-trends`);
+    const params = new URLSearchParams();
+    
+    // Add date range
+    if (dateRange.value[0] && dateRange.value[1]) {
+      params.set('start_date', dateRange.value[0].toISOString().split('T')[0]);
+      params.set('end_date', dateRange.value[1].toISOString().split('T')[0]);
+    }
+    
+    // Add user IDs
+    if (userIds.value.length > 0) {
+      params.set('user_ids', userIds.value.join(','));
+      params.set('and_users', andUsers.value.toString());
+    }
+
+    const url = `/api/games/${props.gameId}/score-trends${params.toString() ? '?' + params.toString() : ''}`;
+    const response = await axios.get(url);
+    
     playersData.value = response.data.players;
     totalGameScore.value = response.data.totalScore;
   } catch (error) {
     console.error('Error fetching player averages:', error);
+    playersData.value = [];
+    totalGameScore.value = null;
   }
 };
 
 // Draw or update the chart
 const drawChart = () => {
   if (!chartCanvas.value) return;
-
   const ctx = chartCanvas.value.getContext('2d');
-
+  
   if (chartInstance) {
     chartInstance.destroy();
+  }
+
+  if (playersData.value.length === 0) {
+    return; // Don't create chart if no data
   }
 
   chartInstance = new Chart(ctx, {
@@ -70,7 +114,7 @@ const drawChart = () => {
           grid: { color: 'rgba(54, 162, 235, 0.15)' }
         },
         x: {
-          ticks: { color: '#758096', padding: 10, },
+          ticks: { color: '#758096', padding: 10 },
           grid: { color: 'rgba(54, 162, 235, 0.15)' }
         }
       },
@@ -86,7 +130,6 @@ const drawChart = () => {
                 ? Number(player.average_score).toFixed(2)
                 : 'N/A';
               const total = player.total_score ?? 'N/A';
-
               return [
                 `Average Score: ${avg}`,
                 '',
@@ -97,6 +140,20 @@ const drawChart = () => {
         }
       }
     },
+  });
+};
+
+// Listen for filter changes from GameAuthenticated layout
+const handleFilterChange = (event) => {
+  const { dateRange: newDateRange, userIds: newUserIds, andUsers: newAndUsers } = event.detail;
+  
+  dateRange.value = newDateRange;
+  userIds.value = newUserIds;
+  andUsers.value = newAndUsers;
+  
+  // Refresh data and chart
+  fetchScoreTrendStats().then(() => {
+    drawChart();
   });
 };
 
@@ -111,8 +168,22 @@ watch(
 
 // Initial chart render
 onMounted(async () => {
+  getInitialFilters();
+  
+  // Add event listener for filter changes
+  window.addEventListener('gameFiltersChanged', handleFilterChange);
+  
   await fetchScoreTrendStats();
   drawChart();
+});
+
+onUnmounted(() => {
+  // Clean up event listener
+  window.removeEventListener('gameFiltersChanged', handleFilterChange);
+  
+  if (chartInstance) {
+    chartInstance.destroy();
+  }
 });
 
 // Expose method to refresh chart externally
@@ -124,13 +195,12 @@ defineExpose({
 });
 </script>
 
-
 <template>
   <div class="p-4 bg-gray-800 rounded shadow flex flex-col">
     <h3 class="font-semibold text-lg mb-2">Score Trends</h3>
     <div class="flex-1 flex items-center justify-center">
       <div v-if="playersData.length === 0" class="text-center text-gray-400">
-        No player data available.
+        No player data available for the selected filters.
       </div>
       <canvas
         v-else

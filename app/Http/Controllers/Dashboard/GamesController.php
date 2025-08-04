@@ -209,39 +209,6 @@ class GamesController extends Controller
 
 
 
-    public function getScoreTrends($gameId)
-    {
-        try {
-            Log::info('Fetching score trends', ['gameId' => $gameId]);
-            $scores = GameScore::where('game_id', $gameId)
-                ->with('user')
-                ->orderBy('created_at', 'asc')
-                ->get();
-
-            $trends = [];
-            foreach ($scores as $score) {
-                $userName = $score->user->name ?? 'Anonymous';
-                $trends[$userName][] = [
-                    'x' => $score->created_at->timestamp * 1000,
-                    'y' => $score->score
-                ];
-            }
-
-            $series = [];
-            foreach ($trends as $userName => $data) {
-                $series[] = [
-                    'name' => $userName,
-                    'data' => $data
-                ];
-            }
-
-            return response()->json($series);
-        } catch (\Exception $e) {
-            Log::error('Failed to fetch score trends', ['error' => $e->getMessage()]);
-            return response()->json(['error' => 'Failed to fetch score trends'], 500);
-        }
-    }
-
     public function getQuestionAverages($gameId)
     {
         try {
@@ -266,17 +233,40 @@ class GamesController extends Controller
 
     // Game Room Stats Methods:
 
-    public function getAllScores($gameId)
+    public function getAllScores(Request $request, $gameId)
     {
-        Log::info('Fetching all game scores', ['gameId' => $gameId]);
-        $allScores = $this->gamesService->getAllGameScores($gameId);
+        Log::info('Fetching all game scores', ['gameId' => $gameId, 'filters' => $request->all()]);
+
+        // Get filter parameters from the request
+        $startDate = $request->get('start_date');
+        $endDate = $request->get('end_date');
+        $userIds = $request->get('user_ids');
+        $andUsers = $request->get('and_users', 'false') === 'true';
+
+        // The user IDs come as a comma-separated string, convert them to an array
+        $userIds = $userIds ? explode(',', $userIds) : null;
+        
+        // Pass all filter parameters to the service method
+        $allScores = $this->gamesService->getAllGameScores($gameId, $startDate, $endDate, $userIds, $andUsers);
+
         return response()->json($allScores);
     }
 
-    public function getScoreTrendStats(int $gameId)
+    public function getScoreTrendStats(Request $request, int $gameId)
     {
-        Log::info('Fetching score trend stats', ['gameId' => $gameId]);
-        $players = $this->gamesService->playerAverages($gameId);
+        Log::info('Fetching score trend stats', ['gameId' => $gameId, 'filters' => $request->all()]);
+
+        // Get filter parameters from the request
+        $startDate = $request->get('start_date');
+        $endDate = $request->get('end_date');
+        $userIds = $request->get('user_ids');
+        $andUsers = $request->get('and_users', 'false') === 'true';
+
+        // The user IDs come as a comma-separated string, convert them to an array
+        $userIds = $userIds ? explode(',', $userIds) : null;
+
+        // Pass all filter parameters to the service methods
+        $players = $this->gamesService->playerAverages($gameId, $startDate, $endDate, $userIds, $andUsers);
         $totalGameScore = $this->gamesService->totalScore($gameId);
 
         return response()->json([

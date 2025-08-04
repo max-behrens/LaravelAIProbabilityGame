@@ -1,23 +1,72 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed, watch, nextTick } from 'vue';
 import BreezeApplicationLogo from '@/Components/ApplicationLogo.vue';
 import BreezeDropdownLink from '@/Components/DropdownLink.vue';
 import { Link } from '@inertiajs/inertia-vue3';
+import { CalendarDaysIcon, UserIcon, FilterIcon } from 'lucide-vue-next';
+import Datepicker from '@vuepic/vue-datepicker';
+import '@vuepic/vue-datepicker/dist/main.css';
+import axios from 'axios';
 
+// Props
+const props = defineProps({
+  currentGameId: {
+    type: [String, Number],
+    required: true
+  }
+});
+
+// State
 const showingNavigation = ref(false);
 const showLogoutModal = ref(false);
+const showFiltersSection = ref(false);
+const showDateModal = ref(false);
 const isDark = ref(false);
+
+// Filter states
+const dateRange = ref([new Date(), new Date()]);
+const activeUserIds = ref([]);
+const allUsers = ref([]);
+const userSearchTerm = ref('');
+const andUsers = ref(false);
+
+// Get initial filter values from URL params
+const getInitialFilters = () => {
+  const urlParams = new URLSearchParams(window.location.search);
+
+  // Date range
+const startDate = urlParams.get('start_date');
+const endDate = urlParams.get('end_date');
+
+if (startDate && endDate) {
+  dateRange.value = [new Date(startDate), new Date(endDate)];
+} else {
+  dateRange.value = getDefaultDateRange();
+}
+
+  // User IDs
+  const userIds = urlParams.get('user_ids');
+  if (userIds) {
+    activeUserIds.value = userIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id));
+  }
+
+  // AND users
+  andUsers.value = urlParams.get('and_users') === 'true';
+};
 
 const toggleNavigation = () => {
   showingNavigation.value = !showingNavigation.value;
 };
 
+const toggleFiltersSection = () => {
+  showFiltersSection.value = !showFiltersSection.value;
+};
+
 // Theme management
 const initializeTheme = () => {
-  // Check if user has a saved preference, otherwise use system preference
   const savedTheme = localStorage.getItem('theme');
   const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  
+
   isDark.value = savedTheme ? savedTheme === 'dark' : systemPrefersDark;
   applyTheme();
 };
@@ -37,8 +86,216 @@ const toggleTheme = () => {
   applyTheme();
 };
 
+// Date filter functions
+const getDefaultDateRange = () => {
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(endDate.getDate() - 7); // Default to last 7 days
+  return [startDate, endDate];
+};
+
+const datepickerModel = computed({
+  get() {
+    if (!dateRange.value[0] && !dateRange.value[1]) {
+      return getDefaultDateRange();
+    }
+    return dateRange.value;
+  },
+  set(newValue) {
+    handleDateSelection(newValue);
+  }
+});
+
+const dateFilterTitle = computed(() => {
+  if (!dateRange.value || !dateRange.value[0] || !dateRange.value[1]) {
+    return 'All Time';
+  }
+  const start = dateRange.value[0].toLocaleDateString('en-GB');
+  const end = dateRange.value[1].toLocaleDateString('en-GB');
+  return `${start} - ${end}`;
+});
+
+const handleDateSelection = (modelData) => {
+  if (modelData && Array.isArray(modelData) && modelData.length === 2) {
+    const startDate = modelData[0] instanceof Date ? modelData[0] : new Date(modelData[0]);
+    const endDate = modelData[1] instanceof Date ? modelData[1] : new Date(modelData[1]);
+
+    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+      dateRange.value = [startDate, endDate];
+    } else {
+      dateRange.value = [null, null];
+    }
+  } else {
+    dateRange.value = [null, null];
+  }
+  showDateModal.value = false;
+};
+
+const clearDateFilter = () => {
+  dateRange.value = [null, null];
+  showDateModal.value = false;
+};
+
+// User filter functions
+const fetchUsers = async () => {
+  try {
+    const response = await axios.get(`/dashboard/users`);
+    if (response.data && Array.isArray(response.data)) {
+      allUsers.value = response.data;
+    } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+      allUsers.value = response.data.data;
+    } else {
+      allUsers.value = [];
+    }
+  } catch (error) {
+    console.error('Failed to fetch users:', error);
+    allUsers.value = [];
+  }
+};
+
+const selectUserFilter = (userId) => {
+  const currentIndex = activeUserIds.value.indexOf(userId);
+  if (currentIndex > -1) {
+    activeUserIds.value.splice(currentIndex, 1);
+  } else {
+    activeUserIds.value.push(userId);
+  }
+};
+
+const clearAllUserSelections = () => {
+  activeUserIds.value = [];
+};
+
+const toggleAndUsers = () => {
+  andUsers.value = !andUsers.value;
+};
+
+const userFilterTitle = computed(() => {
+  if (activeUserIds.value.length === 0) {
+    return 'All Users';
+  } else if (activeUserIds.value.length === 1) {
+    const selectedUser = allUsers.value.find(user => user.id === activeUserIds.value[0]);
+    return selectedUser ? selectedUser.name : 'User Filter';
+  } else {
+    return `${activeUserIds.value.length} Users`;
+  }
+});
+
+const filteredUsers = computed(() => {
+  if (!allUsers.value || !Array.isArray(allUsers.value)) {
+    return [];
+  }
+
+  if (!userSearchTerm.value || !userSearchTerm.value.trim()) {
+    return allUsers.value;
+  }
+
+  const lowerCaseSearchTerm = userSearchTerm.value.toLowerCase().trim();
+  return allUsers.value.filter(user => {
+    if (!user) return false;
+    const nameMatch = user.name && user.name.toLowerCase().includes(lowerCaseSearchTerm);
+    const emailMatch = user.email && user.email.toLowerCase().includes(lowerCaseSearchTerm);
+    return nameMatch || emailMatch;
+  });
+});
+
+// Check if user is in room
+const isInRoom = computed(() => {
+  return props.currentGameId !== null && props.currentGameId !== undefined;
+});
+
+// URL parameter management
+const updateUrlParams = () => {
+  const params = new URLSearchParams();
+
+  // Date range
+  if (dateRange.value && dateRange.value[0] && dateRange.value[1]) {
+    const startDate = dateRange.value[0] instanceof Date ? dateRange.value[0] : new Date(dateRange.value[0]);
+    const endDate = dateRange.value[1] instanceof Date ? dateRange.value[1] : new Date(dateRange.value[1]);
+
+    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+      params.set('start_date', startDate.toISOString().split('T')[0]);
+      params.set('end_date', endDate.toISOString().split('T')[0]);
+    }
+  }
+
+  // User IDs
+  if (activeUserIds.value && Array.isArray(activeUserIds.value) && activeUserIds.value.length > 0) {
+    const validUserIds = activeUserIds.value.filter(id => id !== null && id !== undefined && !isNaN(id));
+    if (validUserIds.length > 0) {
+      params.set('user_ids', validUserIds.join(','));
+    }
+  }
+
+  // AND users
+  if (andUsers.value) {
+    params.set('and_users', 'true');
+  }
+
+  // Update URL without reloading
+  const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
+  window.history.pushState(null, '', newUrl);
+
+  // Emit filter change event for components to listen to
+  window.dispatchEvent(new CustomEvent('gameFiltersChanged', {
+    detail: {
+      dateRange: dateRange.value,
+      userIds: activeUserIds.value,
+      andUsers: andUsers.value
+    }
+  }));
+};
+
+
+const activeFiltersDisplay = computed(() => {
+  const filters = [];
+  
+  // Date range filter
+  if (dateRange.value && dateRange.value[0] && dateRange.value[1]) {
+    const start = dateRange.value[0].toLocaleDateString('en-GB');
+    const end = dateRange.value[1].toLocaleDateString('en-GB');
+    filters.push({
+      type: 'date',
+      label: `Date: ${start} - ${end}`,
+      icon: 'calendar'
+    });
+  }
+  
+  // User filters
+  if (activeUserIds.value && activeUserIds.value.length > 0) {
+    if (activeUserIds.value.length === 1) {
+      const user = allUsers.value.find(u => u.id === activeUserIds.value[0]);
+      filters.push({
+        type: 'user',
+        label: `User: ${user?.name || 'Unknown'}`,
+        icon: 'user'
+      });
+    } else {
+      const operator = andUsers.value ? 'AND' : 'OR';
+      filters.push({
+        type: 'user',
+        label: `Users: ${activeUserIds.value.length} selected (${operator})`,
+        icon: 'users'
+      });
+    }
+  }
+  
+  return filters;
+});
+
+const hasActiveFilters = computed(() => {
+  return activeFiltersDisplay.value.length > 0;
+});
+
+// Watch for filter changes
+watch([dateRange, activeUserIds, andUsers], () => {
+  updateUrlParams();
+}, { deep: true });
+
 onMounted(() => {
   initializeTheme();
+  getInitialFilters();
+  fetchUsers();
 });
 </script>
 
@@ -49,7 +306,7 @@ onMounted(() => {
         <transition name="slide">
           <nav
             v-if="showingNavigation"
-            class="fixed top-0 left-0 h-full w-64 bg-gray-800 border-r border-gray-700 z-50 shadow-lg flex-shrink-0"
+            class="fixed top-0 left-0 h-full w-80 bg-gray-800 border-r border-gray-700 z-50 shadow-lg flex-shrink-0 overflow-y-auto"
           >
             <div class="flex flex-col h-full">
               <div class="flex-1 px-4 py-6 space-y-2 mt-16">
@@ -79,6 +336,126 @@ onMounted(() => {
                   </svg>
                   Room
                 </Link>
+
+                <div class="pt-4 border-t border-gray-700">
+                  <button
+                    @click="toggleFiltersSection"
+                    class="flex items-center justify-between w-full px-3 py-2 text-sm font-medium text-white hover:text-gray-300 hover:bg-gray-700 rounded-md transition duration-150 ease-in-out"
+                  >
+                    <div class="flex items-center">
+                      <FilterIcon class="mr-3 h-5 w-5" />
+                      Chart Filters
+                    </div>
+                    <svg
+                      class="h-4 w-4 transition-transform duration-200"
+                      :class="{ 'rotate-180': showFiltersSection }"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  <transition name="filter-expand">
+                    <div v-if="showFiltersSection" class="mt-2 ml-8 space-y-3">
+                      <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-2">Date Range</label>
+                        <button
+                          @click="showDateModal = true"
+                          class="flex items-center justify-between w-full px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded-md transition duration-150 ease-in-out"
+                        >
+                          <div class="flex items-center">
+                            <CalendarDaysIcon class="mr-2 h-4 w-4" />
+                            <span class="truncate">{{ dateFilterTitle }}</span>
+                          </div>
+                        </button>
+                        <button
+                          v-if="dateRange[0] && dateRange[1]"
+                          @click="clearDateFilter"
+                          class="w-full mt-1 px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded-md transition duration-150 ease-in-out"
+                        >
+                          Clear Date Filter
+                        </button>
+                      </div>
+
+                      <div>
+                        <div class="flex items-center justify-between mb-2">
+                          <label class="block text-xs font-medium text-gray-400">Users</label>
+                          <div class="flex space-x-1">
+                            <button
+                              v-if="activeUserIds.length > 0"
+                              @click="toggleAndUsers"
+                              :class="[
+                                'px-2 py-1 text-xs rounded-md transition-colors',
+                                andUsers ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
+                              ]"
+                            >
+                              {{ andUsers ? 'AND' : 'OR' }}
+                            </button>
+                            <button
+                              v-if="activeUserIds.length > 0"
+                              @click="clearAllUserSelections"
+                              class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded-md transition-colors"
+                            >
+                              Clear ({{ activeUserIds.length }})
+                            </button>
+                          </div>
+                        </div>
+
+                        <input
+                          type="text"
+                          v-model="userSearchTerm"
+                          placeholder="Search users..."
+                          class="w-full p-2 mb-2 text-xs rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        />
+
+                        <div v-if="activeUserIds.length > 0" class="flex flex-wrap gap-1 p-2 bg-gray-700 rounded-md mb-2">
+                          <span
+                            v-for="userId in activeUserIds"
+                            :key="userId"
+                            class="inline-flex items-center px-2 py-1 bg-teal-600 text-white text-xs rounded-md"
+                          >
+                            {{ allUsers.find(u => u.id === userId)?.name || 'Unknown' }}
+                            <button
+                              @click="selectUserFilter(userId)"
+                              class="ml-1 text-teal-200 hover:text-white font-bold"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        </div>
+
+                        <div class="max-h-40 overflow-y-auto custom-scrollbar rounded-md">
+                          <button
+                            v-for="user in filteredUsers"
+                            :key="user.id"
+                            :class="[
+                              'flex items-center justify-between w-full px-2 py-1.5 text-xs rounded-md mb-1 text-white cursor-pointer',
+                              'transition-all duration-100 ease-in-out hover:brightness-110',
+                              'bg-teal-600/50',
+                              activeUserIds.includes(user.id) ? 'bg-teal-700 ring-1 ring-teal-400' : ''
+                            ]"
+                            @click="selectUserFilter(user.id)"
+                          >
+                            <div class="flex items-center">
+                              <UserIcon class="w-3 h-3 mr-2" />
+                              <span class="truncate">{{ user.name }}</span>
+                            </div>
+                            <span v-if="activeUserIds.includes(user.id)" class="text-teal-200 font-bold">✓</span>
+                          </button>
+
+                          <p v-if="filteredUsers.length === 0 && userSearchTerm.trim()" class="text-gray-400 text-center text-xs py-2">
+                            No users found
+                          </p>
+                          <p v-else-if="allUsers.length === 0" class="text-gray-400 text-center text-xs py-2">
+                            Loading users...
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </transition>
+                </div>
               </div>
 
               <div class="border-t border-gray-700 p-4">
@@ -100,14 +477,14 @@ onMounted(() => {
                     @click="showLogoutModal = true"
                     class="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-700"
                   >
-                  <svg
-                    class="h-4 w-4 text-gray-400"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M19.14 12.94a7.002 7.002 0 000-1.88l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.6-.22l-2.39.96a6.978 6.978 0 00-1.6-.94l-.36-2.54A.5.5 0 0014 3h-4a.5.5 0 00-.49.42l-.36 2.54a6.978 6.978 0 00-1.6.94l-2.39-.96a.5.5 0 00-.6.22l-1.92 3.32a.5.5 0 00.12.64l2.03 1.58a7.002 7.002 0 000 1.88l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32a.5.5 0 00.6.22l2.39-.96c.5.38 1.04.7 1.6.94l.36 2.54A.5.5 0 0010 21h4a.5.5 0 00.49-.42l.36-2.54c.56-.24 1.1-.56 1.6-.94l2.39.96a.5.5 0 00.6-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z" />
-                  </svg>
+                    <svg
+                      class="h-4 w-4 text-gray-400"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M19.14 12.94a7.002 7.002 0 000-1.88l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.6-.22l-2.39.96a6.978 6.978 0 00-1.6-.94l-.36-2.54A.5.5 0 0014 3h-4a.5.5 0 00-.49.42l-.36 2.54a6.978 6.978 0 00-1.6.94l-2.39-.96a.5.5 0 00-.6.22l-1.92 3.32a.5.5 0 00.12.64l2.03 1.58a7.002 7.002 0 000 1.88l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32a.5.5 0 00.6.22l2.39-.96c.5.38 1.04.7 1.6.94l.36 2.54A.5.5 0 0010 21h4a.5.5 0 00.49-.42l.36-2.54c.56-.24 1.1-.56 1.6-.94l2.39.96a.5.5 0 00.6-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z" />
+                    </svg>
                   </button>
                 </div>
               </div>
@@ -115,24 +492,11 @@ onMounted(() => {
           </nav>
         </transition>
 
-        <!-- Version that moves content when navbar opens. -->
-        <!-- <div
-          class="flex-1 flex flex-col transition-all duration-300 ease-in-out"
-          :class="{ 'ml-64': showingNavigation }"
-        > -->
-        <div
-          class="flex-1 flex flex-col transition-all duration-300 ease-in-out"
-        >
-
-          <div class="flex-1 pt-4">
+        <div class="flex-1 pt-4">
+          <div class="flex items-center mb-4">
             <button
               @click="toggleNavigation"
-              class="game-menu-width 
-                    inline-flex items-center justify-center p-2 
-                    rounded-md text-gray-400 hover:text-white 
-                    hover:bg-gray-700 focus:outline-none 
-                    focus:bg-gray-700 focus:text-white 
-                    transition duration-150 ease-in-out ml-4"
+              class="game-menu-width inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:bg-gray-700 focus:text-white transition duration-150 ease-in-out"
             >
               <svg class="h-6 w-6 mr-2" stroke="currentColor" fill="none" viewBox="0 0 24 24">
                 <path
@@ -153,10 +517,71 @@ onMounted(() => {
               Game Menu
             </button>
 
-            <div> <slot />
+            <!-- Active Filters Display -->
+            <div v-if="hasActiveFilters" class="flex items-center space-x-2 mr-4 ml-10">
+              <span class="text-gray-400 text-sm font-medium">Active Filters:</span>
+              <div class="flex flex-wrap gap-2">
+                <div
+                  v-for="filter in activeFiltersDisplay"
+                  :key="`${filter.type}-${filter.label}`"
+                  class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-teal-600/20 text-teal-300 border border-teal-600/30"
+                >
+                  <!-- Calendar Icon -->
+                  <svg
+                    v-if="filter.icon === 'calendar'"
+                    class="w-3 h-3 mr-1.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <!-- Single User Icon -->
+                  <svg
+                    v-else-if="filter.icon === 'user'"
+                    class="w-3 h-3 mr-1.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                    />
+                  </svg>
+                  <!-- Multiple Users Icon -->
+                  <svg
+                    v-else-if="filter.icon === 'users'"
+                    class="w-3 h-3 mr-1.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a4 4 0 11-8 0 4 4 0 018 0z"
+                    />
+                  </svg>
+                  
+                  <span class="truncate max-w-48">{{ filter.label }}</span>
+                </div>
+              </div>
             </div>
           </div>
+
+          <div><slot /></div>
         </div>
+
+                
 
         <transition name="overlay">
           <div
@@ -177,32 +602,28 @@ onMounted(() => {
             <h2 class="text-lg font-semibold mb-4">User Options</h2>
 
             <div class="flex flex-col space-y-4">
-
-              <!-- Theme Toggle Button -->
               <button
                 type="button"
                 class="w-full px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 text-left text-white flex items-center justify-between"
                 @click="toggleTheme"
               >
                 <span>{{ isDark ? 'Light Mode' : 'Dark Mode' }}</span>
-                <svg 
-                  class="h-5 w-5" 
-                  fill="none" 
-                  stroke="currentColor" 
+                <svg
+                  class="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
                   viewBox="0 0 24 24"
                   v-if="isDark"
                 >
-                  <!-- Sun icon for light mode -->
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
                 </svg>
-                <svg 
-                  class="h-5 w-5" 
-                  fill="none" 
-                  stroke="currentColor" 
+                <svg
+                  class="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
                   viewBox="0 0 24 24"
                   v-else
                 >
-                  <!-- Moon icon for dark mode -->
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
                 </svg>
               </button>
@@ -228,11 +649,67 @@ onMounted(() => {
           </div>
         </div>
       </transition>
+
+      <div
+          v-if="showDateModal"
+          class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          @click.self="showDateModal = false"
+        >
+          <div class="bg-gray-800 rounded-lg shadow-xl p-4 relative max-w-md w-full min-h-[500px] flex flex-col">
+            <h3 class="text-xl font-semibold text-white mb-4">Select Date Range</h3>
+
+            <button
+              @click="showDateModal = false"
+              class="absolute top-4 right-4 text-gray-400 hover:text-gray-200"
+              aria-label="Close"
+            >
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+
+            <div class="flex-1 mb-4">
+              <Datepicker
+                ref="datepickerRef"
+                v-model="datepickerModel"
+                range
+                :enable-time-picker="false"
+                :dark="true"
+                :teleport="false"
+                placeholder="Select Date Range"
+                :min-date="new Date('2024-01-01')"
+                :max-date="new Date()"
+                class="my-4"
+                @update:model-value="handleDateSelection"
+              />
+            </div>
+
+            <div class="flex justify-end space-x-2 mt-auto">
+              <button
+                @click="clearDateFilter"
+                class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md"
+              >
+                Clear
+              </button>
+              <button
+                @click="showDateModal = false"
+                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
     </div>
   </div>
 </template>
 
+
 <style>
+
+.dp__menu {
+  z-index: 9999 !important;
+}
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.25s ease;
@@ -258,5 +735,73 @@ onMounted(() => {
 .slide-enter-from,
 .slide-leave-to {
   transform: translateX(-100%);
+}
+
+.filter-expand-enter-active,
+.filter-expand-leave-active {
+  transition: all 0.3s ease;
+}
+.filter-expand-enter-from,
+.filter-expand-leave-to {
+  opacity: 0;
+  max-height: 0;
+  transform: translateY(-10px);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #374151;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #6b7280;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+@media (max-width: 768px) {
+  .flex.items-center.justify-between {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  
+  .inline-flex.items-center.px-3.py-1 {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.75rem;
+  }
+  
+  .max-w-48 {
+    max-width: 8rem;
+  }
+}
+
+/* Ensure filter chips don't break awkwardly */
+.flex.flex-wrap.gap-2 {
+  max-width: calc(100vw - 16rem);
+}
+
+/* Animation for filter appearance */
+.inline-flex.items-center.px-3.py-1 {
+  transition: all 0.2s ease-in-out;
+  animation: filterFadeIn 0.3s ease-out;
+}
+
+@keyframes filterFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 </style>

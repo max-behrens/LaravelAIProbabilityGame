@@ -124,37 +124,90 @@ class GamesService
 
     // Game Room Charts methods:
 
-    public function playerAverages(int $gameId)
+    public function playerAverages(int $gameId, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null, bool $andUsers = false)
     {
-        Log::debug('Calculating player averages', ['gameId' => $gameId]);
+        Log::debug('Calculating player averages with filters', [
+            'gameId' => $gameId,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'userIds' => $userIds,
+            'andUsers' => $andUsers,
+        ]);
 
-        $userAverages = DB::table('users')
+        // Base query for user averages
+        $userAveragesQuery = DB::table('users')
             ->join('game_scores', 'users.id', '=', 'game_scores.player_id')
-            ->where('game_scores.game_id', $gameId)
+            ->where('game_scores.game_id', $gameId);
+
+        // Apply date range filter
+        if ($startDate && $endDate) {
+            $userAveragesQuery->whereBetween('game_scores.created_at', [$startDate, $endDate]);
+        }
+        
+        // Define the sessions to consider based on user filters
+        $sessionsToConsider = null;
+        
+        // Apply user ID filter (OR logic)
+        if (!empty($userIds) && !$andUsers) {
+            $userAveragesQuery->whereIn('game_scores.player_id', $userIds);
+            $sessionsToConsider = GameScore::query()
+                ->where('game_id', $gameId)
+                ->whereIn('player_id', $userIds)
+                ->select('session_id')
+                ->distinct()
+                ->pluck('session_id');
+        }
+
+        // Handle AND logic for users
+        if (!empty($userIds) && $andUsers) {
+            $sessionsToConsider = GameScore::query()
+                ->where('game_id', $gameId)
+                ->whereIn('player_id', $userIds)
+                ->select('session_id')
+                ->groupBy('session_id')
+                ->havingRaw('COUNT(DISTINCT player_id) = ?', [count($userIds)])
+                ->pluck('session_id');
+                
+            $userAveragesQuery->whereIn('game_scores.session_id', $sessionsToConsider);
+        }
+        
+        $userAverages = $userAveragesQuery
             ->select('users.id', 'users.name', DB::raw('AVG(game_scores.score) as average_score'))
             ->groupBy('users.id', 'users.name')
             ->get()
             ->map(function ($item) {
-                return (array) $item; // Convert stdClass to array
+                return (array) $item;
             })
             ->toArray();
 
         // AI scores
-        $aiAverage = DB::table('ai_scores')
-            ->where('game_id', $gameId)
+        $aiAverageQuery = DB::table('ai_scores')
+            ->where('game_id', $gameId);
+            
+        // Apply filters to AI scores
+        if ($startDate && $endDate) {
+            $aiAverageQuery->whereBetween('created_at', [$startDate, $endDate]);
+        }
+        
+        // Only include AI scores if there are sessions that match the human player filters
+        if ($sessionsToConsider) {
+            $aiAverageQuery->whereIn('session_id', $sessionsToConsider);
+        }
+
+        $aiAverage = $aiAverageQuery
             ->select(DB::raw("'AI' as name"), DB::raw('AVG(score) as average_score'))
             ->first();
-
-        if ($aiAverage) {
+        
+        if ($aiAverage && $aiAverage->average_score !== null) {
             $userAverages[] = [
                 'id' => 'ai',
                 'name' => 'AI',
                 'average_score' => $aiAverage->average_score,
             ];
         }
-
+        
         Log::debug('Player averages result', ['averages' => $userAverages]);
-
+        
         return $userAverages;
     }
 
@@ -177,15 +230,20 @@ class GamesService
     }
     
 
-    public function getAllGameScores($gameId)
+    public function getAllGameScores($gameId, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null, bool $andUsers = false)
     {
-        Log::debug('Fetching all AI game scores', ['gameId' => $gameId]);
+        Log::debug('Fetching all AI game scores with filters', [
+            'gameId' => $gameId,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'userIds' => $userIds,
+            'andUsers' => $andUsers,
+        ]);
 
-        // User scores as arrays
-        $userScores = GameScore::query()
+        // Base query for user scores
+        $userScoresQuery = GameScore::query()
             ->join('users', 'game_scores.player_id', '=', 'users.id')
             ->where('game_scores.game_id', $gameId)
-            ->orderBy('game_scores.created_at', 'desc')
             ->select(
                 'game_scores.id',
                 'game_scores.session_id',
@@ -195,26 +253,50 @@ class GamesService
                 'game_scores.score',
                 'game_scores.answer_json',
                 'game_scores.created_at'
-            )
-            ->get()
-            ->map(function ($score) {
-                return [
-                    'id' => $score->id,
-                    'session_id' => $score->session_id,
-                    'user_id' => $score->user_id,
-                    'game_id' => $score->game_id,
-                    'score' => $score->score,
-                    'answer_json' => $score->answer_json,
-                    'created_at' => $score->created_at,
-                    'user' => [
-                        'id' => $score->user_id,
-                        'name' => $score->user_name,
-                    ]
-                ];
-            });
+            );
 
-        // AI scores as arrays
-        $aiScores = DB::table('ai_scores')
+        // Apply date range filter
+        if ($startDate && $endDate) {
+            $userScoresQuery->whereBetween('game_scores.created_at', [$startDate, $endDate]);
+        }
+
+        // Apply user ID filter (OR logic)
+        if (!empty($userIds) && !$andUsers) {
+            $userScoresQuery->whereIn('game_scores.player_id', $userIds);
+        }
+
+        // Handle AND logic
+        if (!empty($userIds) && $andUsers) {
+            $sessionsWithAllUsers = GameScore::query()
+                ->where('game_id', $gameId)
+                ->whereIn('player_id', $userIds)
+                ->select('session_id')
+                ->groupBy('session_id')
+                ->havingRaw('COUNT(DISTINCT player_id) = ?', [count($userIds)])
+                ->pluck('session_id');
+
+            $userScoresQuery->whereIn('game_scores.session_id', $sessionsWithAllUsers);
+        }
+
+        // Get and map user scores to arrays
+        $userScores = $userScoresQuery->orderBy('game_scores.created_at', 'desc')->get()->map(function ($score) {
+            return [
+                'id' => $score->id,
+                'session_id' => $score->session_id,
+                'user_id' => $score->user_id,
+                'game_id' => $score->game_id,
+                'score' => $score->score,
+                'answer_json' => $score->answer_json,
+                'created_at' => $score->created_at,
+                'user' => [
+                    'id' => $score->user_id,
+                    'name' => $score->user_name,
+                ],
+            ];
+        });
+
+        // AI scores query
+        $aiScoresQuery = DB::table('ai_scores')
             ->where('game_id', $gameId)
             ->select(
                 DB::raw('NULL as id'),
@@ -224,97 +306,50 @@ class GamesService
                 'score',
                 'answer_json',
                 'created_at'
-            )
-            ->get()
-            ->map(function ($score) {
-                return [
-                    'id' => null,
-                    'session_id' => $score->session_id,
-                    'user_id' => 0,
-                    'game_id' => $score->game_id,
-                    'score' => $score->score,
-                    'answer_json' => $score->answer_json,
-                    'created_at' => $score->created_at,
-                    'user' => [
-                        'id' => 0,
-                        'name' => 'AI',
-                    ]
-                ];
-            });
+            );
 
-            Log::debug('AI SCORES', ['aiScores' => $aiScores]);
-
-
-        // Merge as arrays
-        return $userScores->merge($aiScores);
-    }
-
-
-    public function totalScoreByGameType($gameTypeId)
-    {
-        $gameType = GameType::findOrFail($gameTypeId);
-        $gameQuestions = $gameType->gameQuestions()->get();
-
-        $totalScore = 0;
-
-        foreach ($gameQuestions as $question) {
-            $totalScore += $question->score_awarded;
-
+        if ($startDate && $endDate) {
+            $aiScoresQuery->whereBetween('created_at', [$startDate, $endDate]);
         }
 
-        return $totalScore;
-    }
-    
+        if (!empty($userIds)) {
+            if ($andUsers ?? false) {
+                $aiScoresQuery->whereIn('session_id', $sessionsWithAllUsers ?? []);
+            } else {
+                $sessionsWithAnyUser = GameScore::query()
+                    ->where('game_id', $gameId)
+                    ->whereIn('player_id', $userIds)
+                    ->select('session_id')
+                    ->distinct()
+                    ->pluck('session_id');
 
-    public function getScoreTrends($gameId)
-    {
-        Log::debug('Generating score trends', ['gameId' => $gameId]);
-
-        $scores = GameScore::query()
-            ->join('users', 'game_scores.player_id', '=', 'users.id')
-            ->where('game_scores.game_id', $gameId)
-            ->orderBy('game_scores.created_at', 'asc')
-            ->select(
-                'game_scores.score',
-                'game_scores.created_at',
-                'users.name as user_name'
-            )
-            ->get();
-
-        Log::debug('Fetched scores for trends', ['scores' => $scores]);
-
-        $trends = [];
-        foreach ($scores as $score) {
-            $userName = $score->user_name ?? 'Anonymous';
-
-            if (!isset($trends[$userName])) {
-                $trends[$userName] = [];
+                $aiScoresQuery->whereIn('session_id', $sessionsWithAnyUser);
             }
-
-            $trends[$userName][] = [
-                'x' => $score->created_at->timestamp * 1000,
-                'y' => $score->score
-            ];
-
-            Log::debug('Score trend point added', [
-                'user' => $userName,
-                'x' => $score->created_at->timestamp * 1000,
-                'y' => $score->score
-            ]);
         }
 
-        $series = [];
-        foreach ($trends as $userName => $data) {
-            $series[] = [
-                'name' => $userName,
-                'data' => $data
+        $aiScores = $aiScoresQuery->get()->map(function ($score) {
+            return [
+                'id' => null,
+                'session_id' => $score->session_id,
+                'user_id' => 0,
+                'game_id' => $score->game_id,
+                'score' => $score->score,
+                'answer_json' => $score->answer_json,
+                'created_at' => $score->created_at,
+                'user' => [
+                    'id' => 0,
+                    'name' => 'AI',
+                ],
             ];
-        }
+        });
 
-        Log::debug('Score trends generated', ['series' => $series]);
+        // Merge and sort
+        $mergedScores = $userScores->merge($aiScores)->sortByDesc('created_at')->values();
 
-        return $series;
+        return $mergedScores;
     }
+
+
 
     /**
      * Methods to retrieve cumulative scores for each player across all games to the dashboard.

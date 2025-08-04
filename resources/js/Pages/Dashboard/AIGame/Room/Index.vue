@@ -135,10 +135,26 @@ const fetchCurrentGame = async () => {
     }
 };
 
-// Fetch paginated game scores
 const fetchGameScores = async (page = 1) => {
     try {
-        const response = await axios.get(`/api/games/${props.gameId}/scores?page=${page}`);
+        const params = new URLSearchParams({
+            page: page.toString()
+        });
+        
+        // Add filter parameters
+        if (appliedFilters.value.dateRange[0] && appliedFilters.value.dateRange[1]) {
+            params.set('start_date', appliedFilters.value.dateRange[0].toISOString().split('T')[0]);
+            params.set('end_date', appliedFilters.value.dateRange[1].toISOString().split('T')[0]);
+        }
+        
+        if (appliedFilters.value.userIds.length > 0) {
+            params.set('user_ids', appliedFilters.value.userIds.join(','));
+            if (appliedFilters.value.andUsers) {
+                params.set('and_users', 'true');
+            }
+        }
+        
+        const response = await axios.get(`/api/games/${props.gameId}/scores?${params.toString()}`);
         gameScores.value = response.data.data;
         scoresTotalPages.value = response.data.last_page;
         scoresCurrentPage.value = response.data.current_page;
@@ -150,15 +166,27 @@ const fetchGameScores = async (page = 1) => {
 
 const fetchAIScores = async (page = 1) => {
     try {
-        const response = await axios.get(`/api/games/${props.gameId}/ai-scores?page=${page}`);
+        const params = new URLSearchParams({
+            page: page.toString()
+        });
+        
+        // Add date filter parameters (AI scores don't need user filters)
+        if (appliedFilters.value.dateRange[0] && appliedFilters.value.dateRange[1]) {
+            params.set('start_date', appliedFilters.value.dateRange[0].toISOString().split('T')[0]);
+            params.set('end_date', appliedFilters.value.dateRange[1].toISOString().split('T')[0]);
+        }
+        
+        const response = await axios.get(`/api/games/${props.gameId}/ai-scores?${params.toString()}`);
         aiScores.value = response.data.data;
         aiScoresTotalPages.value = response.data.last_page;
         aiScoresCurrentPage.value = response.data.current_page;
     } catch (error) {
-        errorMessage.value = 'Failed to load player scores.';
+        errorMessage.value = 'Failed to load AI scores.';
         console.error(error);
     }
 };
+
+
 
 // Pagination handler
 const changeScoresPage = (page) => {
@@ -453,6 +481,46 @@ const updateNavigation = () => {
     }
 };
 
+
+const appliedFilters = ref({
+    dateRange: [null, null],
+    userIds: [],
+    andUsers: false
+});
+
+// Add this function to parse URL parameters for filters
+const parseFiltersFromUrl = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    // Parse date range
+    const startDate = urlParams.get('start_date');
+    const endDate = urlParams.get('end_date');
+    if (startDate && endDate) {
+        appliedFilters.value.dateRange = [new Date(startDate), new Date(endDate)];
+    }
+    
+    // Parse user IDs
+    const userIds = urlParams.get('user_ids');
+    if (userIds) {
+        appliedFilters.value.userIds = userIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id));
+    }
+    
+    // Parse AND users
+    appliedFilters.value.andUsers = urlParams.get('and_users') === 'true';
+};
+
+const handleFilterChange = (event) => {
+    appliedFilters.value = {
+        dateRange: event.detail.dateRange || [null, null],
+        userIds: event.detail.userIds || [],
+        andUsers: event.detail.andUsers || false
+    };
+    
+    // Refresh scores when filters change
+    fetchGameScores(1);
+    fetchAIScores(1);
+};
+
 watch(() => gameState.value.gameInProgress, (newVal, oldVal) => {
     if (newVal && !oldVal) {
         console.log('Game started - AI answers preserved:', Object.keys(aiAnswers.value));
@@ -468,6 +536,12 @@ onMounted(() => {
 
     // Vertical Nav:
     window.addEventListener('scroll', updateNavigation);
+
+        // Parse initial filters from URL
+    parseFiltersFromUrl();
+    
+    // Listen for filter changes from GameAuthenticated layout
+    window.addEventListener('gameFiltersChanged', handleFilterChange);
     
     // Fetch users on mount (assuming fetchUsers is defined elsewhere in your script)
     // await fetchUsers(); 
@@ -552,6 +626,7 @@ onMounted(() => {
 
 onUnmounted(() => {
     window.removeEventListener('scroll', updateNavigation);
+    window.removeEventListener('gameFiltersChanged', handleFilterChange);
 });
 </script>
 
