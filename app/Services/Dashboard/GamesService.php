@@ -14,6 +14,54 @@ use Illuminate\Support\Facades\Log;
 
 class GamesService
 {
+
+    public function getIndexGames($page = 1, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null, bool $andUsers = false, $perPage = 10)
+    {
+        Log::debug('Fetching paginated games list', ['page' => $page, 'perPage' => $perPage]);
+
+        $query = Games::with(['users', 'gameType'])
+            ->withCount('users as players_count');
+
+        // Apply date range filter on game creation
+        if ($startDate && $endDate) {
+            $query->whereBetween('games.created_at', [$startDate, $endDate]);
+        }
+
+        // Apply user ID filter (OR logic)
+        if (!empty($userIds) && !$andUsers) {
+            $query->whereHas('users', function ($q) use ($userIds) {
+                $q->whereIn('users.id', $userIds);
+            });
+        }
+
+        // Handle AND logic (sessions with ALL userIds)
+        if (!empty($userIds) && $andUsers) {
+            $query->whereHas('users', function ($q) use ($userIds) {
+                $q->whereIn('users.id', $userIds);
+            }, '=', count($userIds));
+        }
+
+        // Apply pagination and get results
+        $games = $query->orderBy('games.created_at', 'desc')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        // Transform the collection items
+        $games->getCollection()->transform(function ($game) {
+            return [
+                'id' => $game->id,
+                'title' => $game->title,
+                'players_count' => $game->players_count,
+                'max_players' => $game->max_players,
+                'users' => $game->users,
+                'game_type_name' => $game->gameType?->name ?? null,
+            ];
+        });
+
+        Log::debug('Fetched games', ['count' => $games->count()]);
+
+        return $games; // Return the paginated result directly
+    }
+
     public function getGameScores($gameId, $page = 1, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null, bool $andUsers = false, $perPage = 5)
     {
         Log::debug('Fetching paginated game scores', ['gameId' => $gameId, 'page' => $page, 'perPage' => $perPage]);

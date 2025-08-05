@@ -28,26 +28,41 @@ class GamesController extends Controller
         $this->aiGameService = $aiGameService;
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        Log::info('Fetching paginated games list...');
-        $games = Games::with(['users', 'gameType'])
-            ->withCount('users as players_count')
-            ->paginate(10);
+        Log::info('Fetching filtered and paginated games list...', $request->all());
 
-        $games->getCollection()->transform(function ($game) {
-            return [
-                'id' => $game->id,
-                'title' => $game->title,
-                'players_count' => $game->players_count,
-                'max_players' => $game->max_players,
-                'users' => $game->users,
-                'game_type_name' => $game->gameType?->name ?? null,
-            ];
-        });
+        $page = $request->query('page', 1);
+        $startDate = $request->get('start_date');
+        $endDate = $request->get('end_date');
+        $userIds = $request->get('user_ids');
+        $andUsers = $request->get('and_users', 'false') === 'true';
+        $perPage = $request->get('per_page', 10); // Allow customizable per page
 
-        Log::info('Games fetched successfully');
-        return $games;
+        // Convert user IDs from comma-separated string to array
+        $userIds = $userIds ? explode(',', $userIds) : null;
+
+        Log::info('Filter parameters', [
+            'page' => $page,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'userIds' => $userIds,
+            'andUsers' => $andUsers,
+            'perPage' => $perPage
+        ]);
+
+        // Get paginated games directly from service
+        $games = $this->gamesService->getIndexGames($page, $startDate, $endDate, $userIds, $andUsers, $perPage);
+
+        Log::info('Games retrieved successfully', [
+            'total' => $games->total(),
+            'current_page' => $games->currentPage(),
+            'last_page' => $games->lastPage(),
+            'per_page' => $games->perPage(),
+            'count' => $games->count()
+        ]);
+
+        return response()->json($games);
     }
 
 

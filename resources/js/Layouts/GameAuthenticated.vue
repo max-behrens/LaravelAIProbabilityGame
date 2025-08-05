@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, watch, nextTick } from 'vue';
+import { ref, onMounted, computed, watch, nextTick, onUnmounted } from 'vue';
 import BreezeApplicationLogo from '@/Components/ApplicationLogo.vue';
 import BreezeDropdownLink from '@/Components/DropdownLink.vue';
 import { Link } from '@inertiajs/inertia-vue3';
@@ -8,11 +8,12 @@ import Datepicker from '@vuepic/vue-datepicker';
 import '@vuepic/vue-datepicker/dist/main.css';
 import axios from 'axios';
 
-// Props
+// Props - Fixed to allow null values and provide better defaults
 const props = defineProps({
   currentGameId: {
-    type: [String, Number],
-    required: true
+    type: [String, Number, null],
+    required: false,
+    default: null
   }
 });
 
@@ -22,9 +23,10 @@ const showLogoutModal = ref(false);
 const showFiltersSection = ref(false);
 const showDateModal = ref(false);
 const isDark = ref(false);
+const isLoading = ref(false);
 
 // Filter states
-const dateRange = ref([new Date(), new Date()]);
+const dateRange = ref([null, null]);
 const activeUserIds = ref([]);
 const allUsers = ref([]);
 const userSearchTerm = ref('');
@@ -32,26 +34,36 @@ const andUsers = ref(false);
 
 // Get initial filter values from URL params
 const getInitialFilters = () => {
-  const urlParams = new URLSearchParams(window.location.search);
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
 
-  // Date range
-const startDate = urlParams.get('start_date');
-const endDate = urlParams.get('end_date');
+    // Date range
+    const startDate = urlParams.get('start_date');
+    const endDate = urlParams.get('end_date');
 
-if (startDate && endDate) {
-  dateRange.value = [new Date(startDate), new Date(endDate)];
-} else {
-  dateRange.value = getDefaultDateRange();
-}
+    if (startDate && endDate) {
+      dateRange.value = [new Date(startDate), new Date(endDate)];
+    } else {
+      dateRange.value = getDefaultDateRange();
+    }
 
-  // User IDs
-  const userIds = urlParams.get('user_ids');
-  if (userIds) {
-    activeUserIds.value = userIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id));
+    // User IDs
+    const userIds = urlParams.get('user_ids');
+    if (userIds) {
+      activeUserIds.value = userIds.split(',')
+        .map(id => parseInt(id))
+        .filter(id => !isNaN(id));
+    }
+
+    // AND users
+    andUsers.value = urlParams.get('and_users') === 'true';
+  } catch (error) {
+    console.error('Error parsing initial filters:', error);
+    // Set safe defaults
+    dateRange.value = getDefaultDateRange();
+    activeUserIds.value = [];
+    andUsers.value = false;
   }
-
-  // AND users
-  andUsers.value = urlParams.get('and_users') === 'true';
 };
 
 const toggleNavigation = () => {
@@ -64,20 +76,30 @@ const toggleFiltersSection = () => {
 
 // Theme management
 const initializeTheme = () => {
-  const savedTheme = localStorage.getItem('theme');
-  const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  try {
+    const savedTheme = localStorage.getItem('theme');
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
-  isDark.value = savedTheme ? savedTheme === 'dark' : systemPrefersDark;
-  applyTheme();
+    isDark.value = savedTheme ? savedTheme === 'dark' : systemPrefersDark;
+    applyTheme();
+  } catch (error) {
+    console.error('Error initializing theme:', error);
+    isDark.value = true; // Default to dark
+    applyTheme();
+  }
 };
 
 const applyTheme = () => {
-  if (isDark.value) {
-    document.documentElement.classList.add('dark');
-    localStorage.setItem('theme', 'dark');
-  } else {
-    document.documentElement.classList.remove('dark');
-    localStorage.setItem('theme', 'light');
+  try {
+    if (isDark.value) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  } catch (error) {
+    console.error('Error applying theme:', error);
   }
 };
 
@@ -88,20 +110,26 @@ const toggleTheme = () => {
 
 // Date filter functions
 const getDefaultDateRange = () => {
-  const endDate = new Date();
-  const startDate = new Date();
-  startDate.setDate(endDate.getDate() - 7); // Default to last 7 days
-  return [startDate, endDate];
+  // const endDate = new Date();
+  // const startDate = new Date();
+  // startDate.setDate(endDate.getDate() - 7); // Default to last 7 days
+  // return [startDate, endDate];
+  return [null, null];
 };
 
 const datepickerModel = computed({
   get() {
-    if (!dateRange.value[0] && !dateRange.value[1]) {
-      return getDefaultDateRange();
+    // If dateRange is "all time" ([null, null]), we want the date picker to
+    // open showing a single day (today) for the user to start from.
+    if (!dateRange.value || (!dateRange.value[0] && !dateRange.value[1])) {
+      const today = new Date();
+      return [today, today]; // Return a temporary range for the date picker's display
     }
     return dateRange.value;
   },
   set(newValue) {
+    // This setter is called when the user selects a date range.
+    // We call the existing handler to process the new value and update dateRange.
     handleDateSelection(newValue);
   }
 });
@@ -110,25 +138,36 @@ const dateFilterTitle = computed(() => {
   if (!dateRange.value || !dateRange.value[0] || !dateRange.value[1]) {
     return 'All Time';
   }
-  const start = dateRange.value[0].toLocaleDateString('en-GB');
-  const end = dateRange.value[1].toLocaleDateString('en-GB');
-  return `${start} - ${end}`;
+  try {
+    const start = dateRange.value[0].toLocaleDateString('en-GB');
+    const end = dateRange.value[1].toLocaleDateString('en-GB');
+    return `${start} - ${end}`;
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Invalid Date Range';
+  }
 });
 
 const handleDateSelection = (modelData) => {
-  if (modelData && Array.isArray(modelData) && modelData.length === 2) {
-    const startDate = modelData[0] instanceof Date ? modelData[0] : new Date(modelData[0]);
-    const endDate = modelData[1] instanceof Date ? modelData[1] : new Date(modelData[1]);
+  try {
+    if (modelData && Array.isArray(modelData) && modelData.length === 2) {
+      const startDate = modelData[0] instanceof Date ? modelData[0] : new Date(modelData[0]);
+      const endDate = modelData[1] instanceof Date ? modelData[1] : new Date(modelData[1]);
 
-    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
-      dateRange.value = [startDate, endDate];
+      if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+        dateRange.value = [startDate, endDate];
+      } else {
+        dateRange.value = [null, null];
+      }
     } else {
       dateRange.value = [null, null];
     }
-  } else {
+    showDateModal.value = false;
+  } catch (error) {
+    console.error('Error handling date selection:', error);
     dateRange.value = [null, null];
+    showDateModal.value = false;
   }
-  showDateModal.value = false;
 };
 
 const clearDateFilter = () => {
@@ -138,27 +177,40 @@ const clearDateFilter = () => {
 
 // User filter functions
 const fetchUsers = async () => {
+  if (isLoading.value) return;
+  
   try {
+    isLoading.value = true;
     const response = await axios.get(`/dashboard/users`);
+    
     if (response.data && Array.isArray(response.data)) {
       allUsers.value = response.data;
     } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
       allUsers.value = response.data.data;
     } else {
+      console.warn('Unexpected users response format:', response.data);
       allUsers.value = [];
     }
   } catch (error) {
     console.error('Failed to fetch users:', error);
     allUsers.value = [];
+  } finally {
+    isLoading.value = false;
   }
 };
 
 const selectUserFilter = (userId) => {
-  const currentIndex = activeUserIds.value.indexOf(userId);
-  if (currentIndex > -1) {
-    activeUserIds.value.splice(currentIndex, 1);
-  } else {
-    activeUserIds.value.push(userId);
+  if (!userId) return;
+  
+  try {
+    const currentIndex = activeUserIds.value.indexOf(userId);
+    if (currentIndex > -1) {
+      activeUserIds.value.splice(currentIndex, 1);
+    } else {
+      activeUserIds.value.push(userId);
+    }
+  } catch (error) {
+    console.error('Error selecting user filter:', error);
   }
 };
 
@@ -171,120 +223,149 @@ const toggleAndUsers = () => {
 };
 
 const userFilterTitle = computed(() => {
-  if (activeUserIds.value.length === 0) {
-    return 'All Users';
-  } else if (activeUserIds.value.length === 1) {
-    const selectedUser = allUsers.value.find(user => user.id === activeUserIds.value[0]);
-    return selectedUser ? selectedUser.name : 'User Filter';
-  } else {
-    return `${activeUserIds.value.length} Users`;
+  try {
+    if (activeUserIds.value.length === 0) {
+      return 'All Users';
+    } else if (activeUserIds.value.length === 1) {
+      const selectedUser = allUsers.value.find(user => user && user.id === activeUserIds.value[0]);
+      return selectedUser ? selectedUser.name : 'User Filter';
+    } else {
+      return `${activeUserIds.value.length} Users`;
+    }
+  } catch (error) {
+    console.error('Error computing user filter title:', error);
+    return 'User Filter Error';
   }
 });
 
 const filteredUsers = computed(() => {
-  if (!allUsers.value || !Array.isArray(allUsers.value)) {
+  try {
+    if (!allUsers.value || !Array.isArray(allUsers.value)) {
+      return [];
+    }
+
+    if (!userSearchTerm.value || !userSearchTerm.value.trim()) {
+      return allUsers.value.filter(user => user && user.id); // Filter out null/undefined users
+    }
+
+    const lowerCaseSearchTerm = userSearchTerm.value.toLowerCase().trim();
+    return allUsers.value.filter(user => {
+      if (!user || !user.id) return false;
+      const nameMatch = user.name && user.name.toLowerCase().includes(lowerCaseSearchTerm);
+      const emailMatch = user.email && user.email.toLowerCase().includes(lowerCaseSearchTerm);
+      return nameMatch || emailMatch;
+    });
+  } catch (error) {
+    console.error('Error filtering users:', error);
     return [];
   }
-
-  if (!userSearchTerm.value || !userSearchTerm.value.trim()) {
-    return allUsers.value;
-  }
-
-  const lowerCaseSearchTerm = userSearchTerm.value.toLowerCase().trim();
-  return allUsers.value.filter(user => {
-    if (!user) return false;
-    const nameMatch = user.name && user.name.toLowerCase().includes(lowerCaseSearchTerm);
-    const emailMatch = user.email && user.email.toLowerCase().includes(lowerCaseSearchTerm);
-    return nameMatch || emailMatch;
-  });
 });
 
-// Check if user is in room
+// Check if user is in room - Fixed to properly handle null values
 const isInRoom = computed(() => {
-  return props.currentGameId !== null && props.currentGameId !== undefined;
+  const gameId = props.currentGameId;
+  return gameId !== null && gameId !== undefined && gameId !== 0 && !isNaN(gameId);
 });
 
 // URL parameter management
 const updateUrlParams = () => {
-  const params = new URLSearchParams();
+  try {
+    const params = new URLSearchParams();
 
-  // Date range
-  if (dateRange.value && dateRange.value[0] && dateRange.value[1]) {
-    const startDate = dateRange.value[0] instanceof Date ? dateRange.value[0] : new Date(dateRange.value[0]);
-    const endDate = dateRange.value[1] instanceof Date ? dateRange.value[1] : new Date(dateRange.value[1]);
+    // Date range
+    if (dateRange.value && dateRange.value[0] && dateRange.value[1]) {
+      const startDate = dateRange.value[0] instanceof Date ? dateRange.value[0] : new Date(dateRange.value[0]);
+      const endDate = dateRange.value[1] instanceof Date ? dateRange.value[1] : new Date(dateRange.value[1]);
 
-    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
-      params.set('start_date', startDate.toISOString().split('T')[0]);
-      params.set('end_date', endDate.toISOString().split('T')[0]);
+      if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+        params.set('start_date', startDate.toISOString().split('T')[0]);
+        params.set('end_date', endDate.toISOString().split('T')[0]);
+      }
     }
-  }
 
-  // User IDs
-  if (activeUserIds.value && Array.isArray(activeUserIds.value) && activeUserIds.value.length > 0) {
-    const validUserIds = activeUserIds.value.filter(id => id !== null && id !== undefined && !isNaN(id));
-    if (validUserIds.length > 0) {
-      params.set('user_ids', validUserIds.join(','));
+    // User IDs
+    if (activeUserIds.value && Array.isArray(activeUserIds.value) && activeUserIds.value.length > 0) {
+      const validUserIds = activeUserIds.value.filter(id => id !== null && id !== undefined && !isNaN(id));
+      if (validUserIds.length > 0) {
+        params.set('user_ids', validUserIds.join(','));
+      }
     }
-  }
 
-  // AND users
-  if (andUsers.value) {
-    params.set('and_users', 'true');
-  }
-
-  // Update URL without reloading
-  const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
-  window.history.pushState(null, '', newUrl);
-
-  // Emit filter change event for components to listen to
-  window.dispatchEvent(new CustomEvent('gameFiltersChanged', {
-    detail: {
-      dateRange: dateRange.value,
-      userIds: activeUserIds.value,
-      andUsers: andUsers.value
+    // AND users
+    if (andUsers.value) {
+      params.set('and_users', 'true');
     }
-  }));
+
+    // Update URL without reloading
+    const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
+    window.history.pushState(null, '', newUrl);
+
+    // Emit filter change event for components to listen to
+    window.dispatchEvent(new CustomEvent('gameFiltersChanged', {
+      detail: {
+        dateRange: dateRange.value,
+        userIds: activeUserIds.value,
+        andUsers: andUsers.value
+      }
+    }));
+  } catch (error) {
+    console.error('Error updating URL params:', error);
+  }
 };
 
-
 const activeFiltersDisplay = computed(() => {
-  const filters = [];
-  
-  // Date range filter
-  if (dateRange.value && dateRange.value[0] && dateRange.value[1]) {
-    const start = dateRange.value[0].toLocaleDateString('en-GB');
-    const end = dateRange.value[1].toLocaleDateString('en-GB');
-    filters.push({
-      type: 'date',
-      label: `Date: ${start} - ${end}`,
-      icon: 'calendar'
-    });
-  }
-  
-  // User filters
-  if (activeUserIds.value && activeUserIds.value.length > 0) {
-    if (activeUserIds.value.length === 1) {
-      const user = allUsers.value.find(u => u.id === activeUserIds.value[0]);
+  try {
+    const filters = [];
+    
+    // Date range filter
+    if (dateRange.value && dateRange.value[0] && dateRange.value[1]) {
+      const start = dateRange.value[0].toLocaleDateString('en-GB');
+      const end = dateRange.value[1].toLocaleDateString('en-GB');
       filters.push({
-        type: 'user',
-        label: `User: ${user?.name || 'Unknown'}`,
-        icon: 'user'
-      });
-    } else {
-      const operator = andUsers.value ? 'AND' : 'OR';
-      filters.push({
-        type: 'user',
-        label: `Users: ${activeUserIds.value.length} selected (${operator})`,
-        icon: 'users'
+        type: 'date',
+        label: `Date: ${start} - ${end}`,
+        icon: 'calendar'
       });
     }
+    
+    // User filters
+    if (activeUserIds.value && activeUserIds.value.length > 0) {
+      if (activeUserIds.value.length === 1) {
+        const user = allUsers.value.find(u => u && u.id === activeUserIds.value[0]);
+        filters.push({
+          type: 'user',
+          label: `User: ${user?.name || 'Unknown'}`,
+          icon: 'user'
+        });
+      } else {
+        const operator = andUsers.value ? 'AND' : 'OR';
+        filters.push({
+          type: 'user',
+          label: `Users: ${activeUserIds.value.length} selected (${operator})`,
+          icon: 'users'
+        });
+      }
+    }
+    
+    return filters;
+  } catch (error) {
+    console.error('Error computing active filters:', error);
+    return [];
   }
-  
-  return filters;
 });
 
 const hasActiveFilters = computed(() => {
   return activeFiltersDisplay.value.length > 0;
+});
+
+// Safe access to user data
+const currentUser = computed(() => {
+  try {
+    return window.$page?.props?.auth?.user || null;
+  } catch (error) {
+    console.error('Error accessing current user:', error);
+    return null;
+  }
 });
 
 // Watch for filter changes
@@ -292,10 +373,18 @@ watch([dateRange, activeUserIds, andUsers], () => {
   updateUrlParams();
 }, { deep: true });
 
-onMounted(() => {
-  initializeTheme();
-  getInitialFilters();
-  fetchUsers();
+onMounted(async () => {
+  try {
+    initializeTheme();
+    getInitialFilters();
+    await fetchUsers();
+  } catch (error) {
+    console.error('Error during component mount:', error);
+  }
+});
+
+onUnmounted(() => {
+  // Clean up any event listeners or timers if needed
 });
 </script>
 
@@ -322,7 +411,7 @@ onMounted(() => {
                 </Link>
 
                 <Link
-                  :href="isInRoom ? route('room', { game: props.currentGameId, user: $page.props.auth.user.id }) : '#'"
+                                    :href="isInRoom ? route('room', { game: props.currentGameId, user: $page.props.auth.user.id }) : '#'"
                   :class="{
                     'flex items-center px-3 py-2 text-sm font-medium transition duration-150 ease-in-out rounded-md': true,
                     'text-white hover:text-gray-300 hover:bg-gray-700': isInRoom,
@@ -371,7 +460,7 @@ onMounted(() => {
                           </div>
                         </button>
                         <button
-                          v-if="dateRange[0] && dateRange[1]"
+                          v-if="dateRange && dateRange[0] && dateRange[1]"
                           @click="clearDateFilter"
                           class="w-full mt-1 px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded-md transition duration-150 ease-in-out"
                         >
@@ -416,7 +505,7 @@ onMounted(() => {
                             :key="userId"
                             class="inline-flex items-center px-2 py-1 bg-teal-600 text-white text-xs rounded-md"
                           >
-                            {{ allUsers.find(u => u.id === userId)?.name || 'Unknown' }}
+                            {{ allUsers.find(u => u && u.id === userId)?.name || 'Unknown' }}
                             <button
                               @click="selectUserFilter(userId)"
                               class="ml-1 text-teal-200 hover:text-white font-bold"
@@ -429,7 +518,7 @@ onMounted(() => {
                         <div class="max-h-40 overflow-y-auto custom-scrollbar rounded-md">
                           <button
                             v-for="user in filteredUsers"
-                            :key="user.id"
+                            :key="`user-${user.id}`"
                             :class="[
                               'flex items-center justify-between w-full px-2 py-1.5 text-xs rounded-md mb-1 text-white cursor-pointer',
                               'transition-all duration-100 ease-in-out hover:brightness-110',
@@ -440,7 +529,7 @@ onMounted(() => {
                           >
                             <div class="flex items-center">
                               <UserIcon class="w-3 h-3 mr-2" />
-                              <span class="truncate">{{ user.name }}</span>
+                              <span class="truncate">{{ user.name || 'Unknown User' }}</span>
                             </div>
                             <span v-if="activeUserIds.includes(user.id)" class="text-teal-200 font-bold">✓</span>
                           </button>
@@ -448,7 +537,10 @@ onMounted(() => {
                           <p v-if="filteredUsers.length === 0 && userSearchTerm.trim()" class="text-gray-400 text-center text-xs py-2">
                             No users found
                           </p>
-                          <p v-else-if="allUsers.length === 0" class="text-gray-400 text-center text-xs py-2">
+                          <p v-else-if="allUsers.length === 0 && !isLoading" class="text-gray-400 text-center text-xs py-2">
+                            No users available
+                          </p>
+                          <p v-else-if="isLoading" class="text-gray-400 text-center text-xs py-2">
                             Loading users...
                           </p>
                         </div>
@@ -581,8 +673,6 @@ onMounted(() => {
           <div><slot /></div>
         </div>
 
-                
-
         <transition name="overlay">
           <div
             v-if="showingNavigation"
@@ -650,7 +740,8 @@ onMounted(() => {
         </div>
       </transition>
 
-      <div
+      <transition name="fade">
+        <div
           v-if="showDateModal"
           class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           @click.self="showDateModal = false"
@@ -700,16 +791,16 @@ onMounted(() => {
             </div>
           </div>
         </div>
+      </transition>
     </div>
   </div>
 </template>
 
-
 <style>
-
 .dp__menu {
   z-index: 9999 !important;
 }
+
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.25s ease;
