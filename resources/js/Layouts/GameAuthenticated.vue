@@ -664,7 +664,7 @@ onUnmounted(() => {
                     />
                   </svg>
                   
-                  <span class="truncate max-w-48">{{ filter.label }}</span>
+                  <span>{{ filter.label }}</span>
                 </div>
               </div>
             </div>
@@ -688,7 +688,7 @@ onUnmounted(() => {
           class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"
           @click.self="showLogoutModal = false"
         >
-          <div class="bg-gray-900 rounded-lg shadow-lg p-6 w-80 max-w-full text-gray-200">
+          <div class="bg-gray-900 rounded-lg shadow-lg p-6 w-96 max-w-full text-gray-200">
             <h2 class="text-lg font-semibold mb-4">User Options</h2>
 
             <div class="flex flex-col space-y-4">

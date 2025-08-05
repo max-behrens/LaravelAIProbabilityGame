@@ -17,50 +17,70 @@ class GamesService
 
     public function getIndexGames($page = 1, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null, bool $andUsers = false, $perPage = 10)
     {
-        Log::debug('Fetching paginated games list', ['page' => $page, 'perPage' => $perPage]);
+        \Log::info('Fetching filtered and paginated games list...', ['page' => $page]);
+        \Log::info('Filter parameters', [
+            'page' => $page,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'userIds' => $userIds,
+            'andUsers' => $andUsers,
+            'perPage' => $perPage
+        ]);
 
-        $query = Games::with(['users', 'gameType'])
-            ->withCount('users as players_count');
+        // RAW SQL LOGGING:
+        \DB::listen(function ($query) {
+            \Log::debug('SQL Executed', [
+                'sql' => vsprintf(str_replace('?', '%s', $query->sql), collect($query->bindings)->map(fn($b) => is_numeric($b) ? $b : "'$b'")->toArray()),
+                'time' => $query->time,
+            ]);
+        });
 
-        // Apply date range filter on game creation
-        if ($startDate && $endDate) {
-            $query->whereBetween('games.created_at', [$startDate, $endDate]);
-        }
+        $query = \DB::table('games')
+            ->leftJoin('game_scores', 'game_scores.game_id', '=', 'games.id')
+            ->join('games_user', 'games_user.game_id', '=', 'games.id')
+            ->join('users', 'users.id', '=', 'games_user.user_id')
+            ->leftJoin('game_types', 'game_types.id', '=', 'games.game_type_id')
+            ->select(
+                'games.id',
+                'games.max_players',
+                'game_types.name as game_type_name',
+                \DB::raw('COUNT(DISTINCT games_user.user_id) as players_count')
+            )
+            ->when($startDate && $endDate, function ($q) use ($startDate, $endDate) {
+                $q->whereBetween('game_scores.created_at', [$startDate, $endDate]);
+            })
+            ->when(!empty($userIds), function ($q) use ($userIds, $andUsers) {
+                if ($andUsers) {
+                    $q->whereIn('users.id', $userIds)
+                    ->groupBy('games.id', 'games.max_players', 'game_types.name')
+                    ->havingRaw('COUNT(DISTINCT users.id) = ?', [count($userIds)])
+                    ->havingRaw('COUNT(DISTINCT users.id) = COUNT(DISTINCT games_user.user_id)');
+                } else {
+                    $q->whereIn('users.id', $userIds);
+                }
+            })
+            ->groupBy('games.id', 'games.max_players', 'game_types.name')
+            ->orderBy('games.created_at', 'desc');
 
-        // Apply user ID filter (OR logic)
-        if (!empty($userIds) && !$andUsers) {
-            $query->whereHas('users', function ($q) use ($userIds) {
-                $q->whereIn('users.id', $userIds);
-            });
-        }
+        $games = $query->paginate($perPage, ['*'], 'page', $page);
 
-        // Handle AND logic (sessions with ALL userIds)
-        if (!empty($userIds) && $andUsers) {
-            $query->whereHas('users', function ($q) use ($userIds) {
-                $q->whereIn('users.id', $userIds);
-            }, '=', count($userIds));
-        }
-
-        // Apply pagination and get results
-        $games = $query->orderBy('games.created_at', 'desc')
-            ->paginate($perPage, ['*'], 'page', $page);
-
-        // Transform the collection items
+        // Transform collection to match previous structure (if needed)
         $games->getCollection()->transform(function ($game) {
             return [
                 'id' => $game->id,
-                'title' => $game->title,
                 'players_count' => $game->players_count,
                 'max_players' => $game->max_players,
-                'users' => $game->users,
-                'game_type_name' => $game->gameType?->name ?? null,
+                'users' => [], // You'll need a separate query if you want full user details
+                'game_type_name' => $game->game_type_name,
             ];
         });
 
-        Log::debug('Fetched games', ['count' => $games->count()]);
+        \Log::debug('Fetched games', ['count' => $games->count()]);
 
-        return $games; // Return the paginated result directly
+        return $games;
     }
+
+
 
     public function getGameScores($gameId, $page = 1, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null, bool $andUsers = false, $perPage = 5)
     {
