@@ -82,7 +82,7 @@ onBeforeUnmount(() => {
     <div class="bg-gray-900 flex-grow flex flex-col">
       <!-- Sticky Navigation with dynamic background -->
       <nav 
-        class="fixed top-0 left-0 right-0 !z-50 border-b border-gray-700 transition-all duration-300"
+        class="fixed top-0 left-0 right-0 !z-50 border-b border-gray-700 transition-all duration-300 h-16"
         :class="isScrolled ? 'bg-gray-700 backdrop-blur-md' : 'bg-gray-800'"
       >
         <!-- Primary Navigation Menu -->
@@ -155,7 +155,7 @@ onBeforeUnmount(() => {
                 <button
                   @click="showLogoutModal = true"
                   type="button"
-                  class="inline-flex items-center px-3 py-2 border border-transparent text-xs leading-4 font-medium rounded-md text-gray-400 hover:text-gray-300 focus:outline-none"
+                  class="inline-flex items-center px-3 border border-transparent text-xs leading-4 font-medium rounded-md text-gray-400 hover:text-gray-300 focus:outline-none"
                 >
                   <svg
                     class="h-4 w-4 text-gray-400"
