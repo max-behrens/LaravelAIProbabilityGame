@@ -123,94 +123,94 @@ class GamesController extends Controller
 
 
     public function submitAnswer(Request $request, $gameId)
-{
-    Log::info('Submitting answers', [
-        'gameId' => $gameId,
-        'userId' => $request->user()?->id,
-        'hasAIAnswers' => $request->has('aiAnswers'),
-        'playWithAI' => $request->boolean('playWithAI', false)
-    ]);
-
-    $request->validate([
-        'answers' => 'required|array',
-        'answers.*' => 'nullable|string',
-        'aiAnswers' => 'sometimes|array',
-        'aiAnswers.*' => 'nullable|string',
-        'playWithAI' => 'sometimes|boolean'
-    ]);
-
-    $user = $request->user();
-    if (!$user) {
-        return response()->json(['error' => 'Unauthorized'], 401);
-    }
-
-    // Use game start time to create unique session per game round
-    $gameStartKey = "game:{$gameId}:start_time";
-    $gameStartTime = Cache::remember($gameStartKey, now()->addHours(1), function() {
-        return now()->timestamp;
-    });
-
-    $sessionKey = "game:{$gameId}:session_id:{$gameStartTime}";
-    $sessionId = Cache::rememberForever($sessionKey, fn () => Str::uuid()->toString());
-
-    // Submit player answers with shared session_id
-    $this->gamesService->submitAnswers($gameId, $user->id, $request->answers, $sessionId);
-
-    // Submit AI answers ONLY if playing with AI AND aiAnswers are provided
-    if ($request->boolean('playWithAI', false) && $request->has('aiAnswers') && is_array($request->aiAnswers)) {
-        Log::info('Submitting AI answers', [
+    {
+        Log::info('Submitting answers', [
             'gameId' => $gameId,
-            'sessionId' => $sessionId,
-            'aiAnswersCount' => count($request->aiAnswers)
+            'userId' => $request->user()?->id,
+            'hasAIAnswers' => $request->has('aiAnswers'),
+            'playWithAI' => $request->boolean('playWithAI', false)
         ]);
 
-        try {
-            // Submit AI answers with the same session ID
-            $this->aiGameService->submitAIAnswers(
-                $gameId,
-                $user->id, // Use the current user's ID for consistency
-                $request->aiAnswers,
-                $sessionId
-            );
+        $request->validate([
+            'answers' => 'required|array',
+            'answers.*' => 'nullable|string',
+            'aiAnswers' => 'sometimes|array',
+            'aiAnswers.*' => 'nullable|string',
+            'playWithAI' => 'sometimes|boolean'
+        ]);
 
-            Log::info('AI answers submitted successfully', [
-                'gameId' => $gameId,
-                'sessionId' => $sessionId
-            ]);
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
 
-        } catch (\Exception $e) {
-            Log::error('Failed to submit AI answers', [
+        // Use game start time to create unique session per game round
+        $gameStartKey = "game:{$gameId}:start_time";
+        $gameStartTime = Cache::remember($gameStartKey, now()->addHours(1), function() {
+            return now()->timestamp;
+        });
+
+        $sessionKey = "game:{$gameId}:session_id:{$gameStartTime}";
+        $sessionId = Cache::rememberForever($sessionKey, fn () => Str::uuid()->toString());
+
+        // Submit player answers with shared session_id
+        $this->gamesService->submitAnswers($gameId, $user->id, $request->answers, $sessionId);
+
+        // Submit AI answers ONLY if playing with AI AND aiAnswers are provided
+        if ($request->boolean('playWithAI', false) && $request->has('aiAnswers') && is_array($request->aiAnswers)) {
+            Log::info('Submitting AI answers', [
                 'gameId' => $gameId,
                 'sessionId' => $sessionId,
-                'error' => $e->getMessage()
+                'aiAnswersCount' => count($request->aiAnswers)
             ]);
 
-            // Don't fail the entire request if AI submission fails
-            // But log the error for debugging
+            try {
+                // Submit AI answers with the same session ID
+                $this->aiGameService->submitAIAnswers(
+                    $gameId,
+                    $user->id, // Use the current user's ID for consistency
+                    $request->aiAnswers,
+                    $sessionId
+                );
+
+                Log::info('AI answers submitted successfully', [
+                    'gameId' => $gameId,
+                    'sessionId' => $sessionId
+                ]);
+
+            } catch (\Exception $e) {
+                Log::error('Failed to submit AI answers', [
+                    'gameId' => $gameId,
+                    'sessionId' => $sessionId,
+                    'error' => $e->getMessage()
+                ]);
+
+                // Don't fail the entire request if AI submission fails
+                // But log the error for debugging
+            }
+        } else {
+            Log::info('Skipping AI answers submission', [
+                'gameId' => $gameId,
+                'playWithAI' => $request->boolean('playWithAI', false),
+                'hasAIAnswers' => $request->has('aiAnswers'),
+                'aiAnswersIsArray' => $request->has('aiAnswers') ? is_array($request->aiAnswers) : false
+            ]);
         }
-    } else {
-        Log::info('Skipping AI answers submission', [
-            'gameId' => $gameId,
-            'playWithAI' => $request->boolean('playWithAI', false),
-            'hasAIAnswers' => $request->has('aiAnswers'),
-            'aiAnswersIsArray' => $request->has('aiAnswers') ? is_array($request->aiAnswers) : false
+
+        $this->triggerGameUpdate($gameId, 'game.answers_submitted', [
+            'userId' => $user->id,
+            'userName' => $user->name,
+            'timestamp' => now()->toISOString(),
+            'withAI' => $request->boolean('playWithAI', false) && $request->has('aiAnswers')
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Game completed successfully!',
+            'session_id' => $sessionId,
+            'ai_submitted' => $request->boolean('playWithAI', false) && $request->has('aiAnswers') && is_array($request->aiAnswers)
         ]);
     }
-
-    $this->triggerGameUpdate($gameId, 'game.answers_submitted', [
-        'userId' => $user->id,
-        'userName' => $user->name,
-        'timestamp' => now()->toISOString(),
-        'withAI' => $request->boolean('playWithAI', false) && $request->has('aiAnswers')
-    ]);
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Game completed successfully!',
-        'session_id' => $sessionId,
-        'ai_submitted' => $request->boolean('playWithAI', false) && $request->has('aiAnswers') && is_array($request->aiAnswers)
-    ]);
-}
 
     public function start(Games $game)
     {

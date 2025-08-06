@@ -566,7 +566,7 @@ onUnmounted(() => {
                       </div>
                   </transition>
 
-                  <div class="space-y-8 p-8 rounded-lg relative">
+                  <div class="space-y-8 p-6 rounded-lg relative">
                       <section>
                           <div class="w-full">
                               <transition name="chart-fade" mode="out-in">
