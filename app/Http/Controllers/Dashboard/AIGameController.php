@@ -22,21 +22,20 @@ class AIGameController extends Controller
     /**
      * Get AI scores for room.
      */
-     public function getAIScores(Request $request)
-     {
-         $gameId = $request->gameId;
-         $page = $request->query('page', 1);
+    public function getAIScores(Request $request)
+    {
+        $gameId = $request->gameId;
+        $page = $request->query('page', 1);
+    // Get filter parameters from the request
+    $startDate = $request->get('start_date');
+    $endDate = $request->get('end_date');
+    $excludeAI = $request->get('exclude_ai', 'true') === 'true'; // Add this line
 
-        // Get filter parameters from the request
-        $startDate = $request->get('start_date');
-        $endDate = $request->get('end_date');
+        $aiScores = $this->aiGameService->getAIGameScores($gameId, $page, $startDate, $endDate, $excludeAI); // Add excludeAI parameter
+        Log::info('AI Game scores retrieved', ['scores' => $aiScores]);
 
- 
-         $aiScores = $this->aiGameService->getAIGameScores($gameId, $page, $startDate, $endDate);
-         Log::info('AI Game scores retrieved', ['scores' => $aiScores]);
- 
-         return response()->json($aiScores);
-     }
+        return response()->json($aiScores);
+    }
 
     /**
      * Get AI answer for a specific question in a game

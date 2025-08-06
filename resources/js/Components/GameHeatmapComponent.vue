@@ -22,6 +22,7 @@ const questionTotals = ref({});
 const dateRange = ref([null, null]);
 const userIds = ref([]);
 const andUsers = ref(false);
+const excludeAI = ref(true);
 
 // Get initial filter values from URL
 const getInitialFilters = () => {
@@ -60,6 +61,9 @@ const fetchAllGameScores = async () => {
       params.set('user_ids', userIds.value.join(','));
       params.set('and_users', andUsers.value.toString());
     }
+
+    // Add exclude AI parameter - defaults to true
+    params.set('exclude_ai', excludeAI.value.toString());
 
     const url = `/games/${props.gameId}/all-scores${params.toString() ? '?' + params.toString() : ''}`;
     const response = await axios.get(url);
@@ -290,11 +294,12 @@ const chartOptions = ref({
 
 // Listen for filter changes from GameAuthenticated layout
 const handleFilterChange = (event) => {
-  const { dateRange: newDateRange, userIds: newUserIds, andUsers: newAndUsers } = event.detail;
+  const { dateRange: newDateRange, userIds: newUserIds, andUsers: newAndUsers, excludeAI: newExcludeAI } = event.detail;
   
   dateRange.value = newDateRange;
   userIds.value = newUserIds;
   andUsers.value = newAndUsers;
+  excludeAI.value = newExcludeAI !== undefined ? newExcludeAI : true;
   
   // Refresh data
   fetchAllGameScores();

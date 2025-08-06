@@ -50,6 +50,7 @@ const gameHeatmapRef = ref(null);
 const showVerticalNav = ref(false);
 const isNavigatingProgrammatically = ref(false);
 const currentNavSection = ref(0);
+const excludeAI = ref(true);
 
 // Initialize player interactions first
 const {
@@ -166,6 +167,14 @@ const fetchGameScores = async (page = 1) => {
 
 const fetchAIScores = async (page = 1) => {
     try {
+        // If AI is excluded, set empty array and return early
+        if (appliedFilters.value.excludeAI) {
+            aiScores.value = [];
+            aiScoresTotalPages.value = 1;
+            aiScoresCurrentPage.value = 1;
+            return;
+        }
+
         const params = new URLSearchParams({
             page: page.toString()
         });
@@ -176,16 +185,22 @@ const fetchAIScores = async (page = 1) => {
             params.set('end_date', appliedFilters.value.dateRange[1].toISOString().split('T')[0]);
         }
         
+        // Add exclude AI parameter
+        params.set('exclude_ai', appliedFilters.value.excludeAI.toString());
+        
         const response = await axios.get(`/api/games/${props.gameId}/ai-scores?${params.toString()}`);
-        aiScores.value = response.data.data;
-        aiScoresTotalPages.value = response.data.last_page;
-        aiScoresCurrentPage.value = response.data.current_page;
+        aiScores.value = response.data.data || []; // Ensure it's always an array
+        aiScoresTotalPages.value = response.data.last_page || 1;
+        aiScoresCurrentPage.value = response.data.current_page || 1;
     } catch (error) {
         errorMessage.value = 'Failed to load AI scores.';
         console.error(error);
+        // Set defaults on error
+        aiScores.value = [];
+        aiScoresTotalPages.value = 1;
+        aiScoresCurrentPage.value = 1;
     }
 };
-
 
 
 // Pagination handler
@@ -498,7 +513,8 @@ const updateNavigation = () => {
 const appliedFilters = ref({
     dateRange: [null, null],
     userIds: [],
-    andUsers: false
+    andUsers: false,
+    excludeAI: true
 });
 
 // Add this function to parse URL parameters for filters
@@ -520,13 +536,17 @@ const parseFiltersFromUrl = () => {
     
     // Parse AND users
     appliedFilters.value.andUsers = urlParams.get('and_users') === 'true';
+    
+    // Parse exclude AI - defaults to true if not present
+    appliedFilters.value.excludeAI = urlParams.get('exclude_ai') !== 'false';
 };
 
 const handleFilterChange = (event) => {
     appliedFilters.value = {
         dateRange: event.detail.dateRange || [null, null],
         userIds: event.detail.userIds || [],
-        andUsers: event.detail.andUsers || false
+        andUsers: event.detail.andUsers || false,
+        excludeAI: event.detail.excludeAI !== undefined ? event.detail.excludeAI : true
     };
     
     // Refresh scores when filters change

@@ -213,7 +213,7 @@ class GamesService
 
     // Game Room Charts methods:
 
-    public function playerAverages(int $gameId, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null, bool $andUsers = false)
+    public function playerAverages(int $gameId, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null, bool $andUsers = false, bool $excludeAI = true)
     {
         Log::debug('Calculating player averages with filters', [
             'gameId' => $gameId,
@@ -221,6 +221,7 @@ class GamesService
             'endDate' => $endDate,
             'userIds' => $userIds,
             'andUsers' => $andUsers,
+            'excludeAi' => $excludeAI
         ]);
 
         // Base query for user averages
@@ -269,30 +270,33 @@ class GamesService
             })
             ->toArray();
 
-        // AI scores
-        $aiAverageQuery = DB::table('ai_scores')
-            ->where('game_id', $gameId);
+        // Only include AI scores if excludeAI is false
+        if (!$excludeAI) {
+            // AI scores
+            $aiAverageQuery = DB::table('ai_scores')
+                ->where('game_id', $gameId);
+                
+            // Apply filters to AI scores
+            if ($startDate && $endDate) {
+                $aiAverageQuery->whereBetween('created_at', [$startDate, $endDate]);
+            }
             
-        // Apply filters to AI scores
-        if ($startDate && $endDate) {
-            $aiAverageQuery->whereBetween('created_at', [$startDate, $endDate]);
-        }
-        
-        // Only include AI scores if there are sessions that match the human player filters
-        if ($sessionsToConsider) {
-            $aiAverageQuery->whereIn('session_id', $sessionsToConsider);
-        }
+            // Only include AI scores if there are sessions that match the human player filters
+            if ($sessionsToConsider) {
+                $aiAverageQuery->whereIn('session_id', $sessionsToConsider);
+            }
 
-        $aiAverage = $aiAverageQuery
-            ->select(DB::raw("'AI' as name"), DB::raw('AVG(score) as average_score'))
-            ->first();
-        
-        if ($aiAverage && $aiAverage->average_score !== null) {
-            $userAverages[] = [
-                'id' => 'ai',
-                'name' => 'AI',
-                'average_score' => $aiAverage->average_score,
-            ];
+            $aiAverage = $aiAverageQuery
+                ->select(DB::raw("'AI' as name"), DB::raw('AVG(score) as average_score'))
+                ->first();
+            
+            if ($aiAverage && $aiAverage->average_score !== null) {
+                $userAverages[] = [
+                    'id' => 'ai',
+                    'name' => 'AI',
+                    'average_score' => $aiAverage->average_score,
+                ];
+            }
         }
         
         Log::debug('Player averages result', ['averages' => $userAverages]);
@@ -319,7 +323,7 @@ class GamesService
     }
     
 
-    public function getAllGameScores($gameId, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null, bool $andUsers = false)
+    public function getAllGameScores($gameId, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null, bool $andUsers = false, bool $excludeAI = true)
     {
         Log::debug('Fetching all AI game scores with filters', [
             'gameId' => $gameId,
@@ -384,53 +388,57 @@ class GamesService
             ];
         });
 
-        // AI scores query
-        $aiScoresQuery = DB::table('ai_scores')
-            ->where('game_id', $gameId)
-            ->select(
-                DB::raw('NULL as id'),
-                'session_id',
-                DB::raw('0 as user_id'),
-                'game_id',
-                'score',
-                'answer_json',
-                'created_at'
-            );
+        // Only include AI scores if excludeAI is false
+        $aiScores = collect(); // Default to empty collection
+        if (!$excludeAI) {
+            // AI scores query
+            $aiScoresQuery = DB::table('ai_scores')
+                ->where('game_id', $gameId)
+                ->select(
+                    DB::raw('NULL as id'),
+                    'session_id',
+                    DB::raw('0 as user_id'),
+                    'game_id',
+                    'score',
+                    'answer_json',
+                    'created_at'
+                );
 
-        if ($startDate && $endDate) {
-            $aiScoresQuery->whereBetween('created_at', [$startDate, $endDate]);
-        }
-
-        if (!empty($userIds)) {
-            if ($andUsers ?? false) {
-                $aiScoresQuery->whereIn('session_id', $sessionsWithAllUsers ?? []);
-            } else {
-                $sessionsWithAnyUser = GameScore::query()
-                    ->where('game_id', $gameId)
-                    ->whereIn('player_id', $userIds)
-                    ->select('session_id')
-                    ->distinct()
-                    ->pluck('session_id');
-
-                $aiScoresQuery->whereIn('session_id', $sessionsWithAnyUser);
+            if ($startDate && $endDate) {
+                $aiScoresQuery->whereBetween('created_at', [$startDate, $endDate]);
             }
-        }
 
-        $aiScores = $aiScoresQuery->get()->map(function ($score) {
-            return [
-                'id' => null,
-                'session_id' => $score->session_id,
-                'user_id' => 0,
-                'game_id' => $score->game_id,
-                'score' => $score->score,
-                'answer_json' => $score->answer_json,
-                'created_at' => $score->created_at,
-                'user' => [
-                    'id' => 0,
-                    'name' => 'AI',
-                ],
-            ];
-        });
+            if (!empty($userIds)) {
+                if ($andUsers ?? false) {
+                    $aiScoresQuery->whereIn('session_id', $sessionsWithAllUsers ?? []);
+                } else {
+                    $sessionsWithAnyUser = GameScore::query()
+                        ->where('game_id', $gameId)
+                        ->whereIn('player_id', $userIds)
+                        ->select('session_id')
+                        ->distinct()
+                        ->pluck('session_id');
+
+                    $aiScoresQuery->whereIn('session_id', $sessionsWithAnyUser);
+                }
+            }
+
+            $aiScores = $aiScoresQuery->get()->map(function ($score) {
+                return [
+                    'id' => null,
+                    'session_id' => $score->session_id,
+                    'user_id' => 0,
+                    'game_id' => $score->game_id,
+                    'score' => $score->score,
+                    'answer_json' => $score->answer_json,
+                    'created_at' => $score->created_at,
+                    'user' => [
+                        'id' => 0,
+                        'name' => 'AI',
+                    ],
+                ];
+            });
+        }
 
         // Merge and sort
         $mergedScores = $userScores->merge($aiScores)->sortByDesc('created_at')->values();

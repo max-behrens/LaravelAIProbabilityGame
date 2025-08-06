@@ -14,6 +14,7 @@ const chartCanvas = ref(null);
 let chartInstance = null;
 const playersData = ref([]);
 const totalGameScore = ref(null);
+const excludeAI = ref(true);
 
 // Filter states - will be updated by event listener
 const dateRange = ref([null, null]);
@@ -57,6 +58,9 @@ const fetchScoreTrendStats = async () => {
       params.set('user_ids', userIds.value.join(','));
       params.set('and_users', andUsers.value.toString());
     }
+
+    // Add exclude AI parameter - defaults to true
+    params.set('exclude_ai', excludeAI.value.toString());
 
     const url = `/api/games/${props.gameId}/score-trends${params.toString() ? '?' + params.toString() : ''}`;
     const response = await axios.get(url);
@@ -143,13 +147,15 @@ const drawChart = () => {
   });
 };
 
-// Listen for filter changes from GameAuthenticated layout
+
+// Update handleFilterChange function
 const handleFilterChange = (event) => {
-  const { dateRange: newDateRange, userIds: newUserIds, andUsers: newAndUsers } = event.detail;
+  const { dateRange: newDateRange, userIds: newUserIds, andUsers: newAndUsers, excludeAI: newExcludeAI } = event.detail;
   
   dateRange.value = newDateRange;
   userIds.value = newUserIds;
   andUsers.value = newAndUsers;
+  excludeAI.value = newExcludeAI !== undefined ? newExcludeAI : true;
   
   // Refresh data and chart
   fetchScoreTrendStats().then(() => {

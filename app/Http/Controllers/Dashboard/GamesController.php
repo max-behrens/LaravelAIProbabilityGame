@@ -245,39 +245,34 @@ class GamesController extends Controller
     public function getAllScores(Request $request, $gameId)
     {
         Log::info('Fetching all game scores', ['gameId' => $gameId, 'filters' => $request->all()]);
-
         // Get filter parameters from the request
         $startDate = $request->get('start_date');
         $endDate = $request->get('end_date');
         $userIds = $request->get('user_ids');
         $andUsers = $request->get('and_users', 'false') === 'true';
-
+        $excludeAI = $request->get('exclude_ai', 'true') === 'true';
         // The user IDs come as a comma-separated string, convert them to an array
         $userIds = $userIds ? explode(',', $userIds) : null;
-        
+    
         // Pass all filter parameters to the service method
-        $allScores = $this->gamesService->getAllGameScores($gameId, $startDate, $endDate, $userIds, $andUsers);
-
+        $allScores = $this->gamesService->getAllGameScores($gameId, $startDate, $endDate, $userIds, $andUsers, $excludeAI); // Add excludeAI parameter
         return response()->json($allScores);
     }
 
     public function getScoreTrendStats(Request $request, int $gameId)
     {
         Log::info('Fetching score trend stats', ['gameId' => $gameId, 'filters' => $request->all()]);
-
         // Get filter parameters from the request
         $startDate = $request->get('start_date');
         $endDate = $request->get('end_date');
         $userIds = $request->get('user_ids');
         $andUsers = $request->get('and_users', 'false') === 'true';
-
+        $excludeAI = $request->get('exclude_ai', 'true') === 'true';
         // The user IDs come as a comma-separated string, convert them to an array
         $userIds = $userIds ? explode(',', $userIds) : null;
-
         // Pass all filter parameters to the service methods
-        $players = $this->gamesService->playerAverages($gameId, $startDate, $endDate, $userIds, $andUsers);
+        $players = $this->gamesService->playerAverages($gameId, $startDate, $endDate, $userIds, $andUsers, $excludeAI); // Add excludeAI parameter
         $totalGameScore = $this->gamesService->totalScore($gameId);
-
         return response()->json([
             'players' => $players,
             'totalScore' => $totalGameScore,

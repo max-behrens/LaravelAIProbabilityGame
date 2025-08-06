@@ -31,7 +31,7 @@ const activeUserIds = ref([]);
 const allUsers = ref([]);
 const userSearchTerm = ref('');
 const andUsers = ref(false);
-const showAi = ref(false);
+const excludeAI = ref(false);
 const gameType = ref('');
 // Get initial filter values from URL params
 const getInitialFilters = () => {
@@ -62,7 +62,7 @@ const getInitialFilters = () => {
     // Game Type
     gameType.value = urlParams.get('game_type');
 
-    showAi.value = urlParams.get('ai_excluded') !== 'true';
+    excludeAI.value = urlParams.get('ai_excluded') === 'true';
 
   } catch (error) {
     console.error('Error parsing initial filters:', error);
@@ -313,8 +313,8 @@ const updateUrlParams = () => {
     params.set('game_type', gameType.value);
   }
 
-        // Game Type
-    if (!showAi.value) {
+    // Exclude AI
+    if (excludeAI.value) {
       params.set('ai_excluded', 'true');
     }
 
@@ -328,7 +328,7 @@ const updateUrlParams = () => {
         dateRange: dateRange.value,
         userIds: activeUserIds.value,
         andUsers: andUsers.value,
-        showAi: showAi.value,
+        excludeAI: excludeAI.value,
         gameType: gameType.value,
 
       }
@@ -382,9 +382,9 @@ const activeFiltersDisplay = computed(() => {
   }
 
   // AI Score Filter
-  if (!showAi.value) {
+  if (excludeAI.value) {
     filters.push({
-      type: 'showAi',
+      type: 'excludeAI',
       label: `AI Scores Excluded`,
       icon: 'ai'
     });
@@ -416,13 +416,13 @@ const showGameTypeFilter = computed(() => {
   return window.location.pathname.includes('/dashboard') && !window.location.pathname.includes('/room');
 });
 
-const showAiFilter = computed(() => {
+const excludeAIFilter = computed(() => {
   // Hide the AI filter on the AI game route, but show it on other dashboard pages.
   return window.location.pathname.includes('/dashboard') && !window.location.pathname.includes('/aigame');
 });
 
 // Watch for filter changes
-watch([dateRange, activeUserIds, andUsers, showAi, gameType], () => {
+watch([dateRange, activeUserIds, andUsers, excludeAI, gameType], () => {
   updateUrlParams();
 }, { deep: true });
 
@@ -611,14 +611,14 @@ onUnmounted(() => {
                           </option>
                         </select>
                       </div>
-                        <div v-if="showAiFilter">
-                          <label for="showAiToggle" class="block text-xs font-medium text-gray-400 mb-2">Show AI Scores</label>
+                        <div v-if="excludeAIFilter">
+                          <label for="excludeAIToggle" class="block text-xs font-medium text-gray-400 mb-2">Show AI Scores</label>
                           <div class="relative flex items-center justify-between p-2 rounded-md bg-gray-700">
                             <span class="text-white text-sm">Exclude AI Scores</span>
                             <input
                               type="checkbox"
-                              id="showAiToggle"
-                              v-model="showAi"
+                              id="excludeAIToggle"
+                              v-model="excludeAI"
                               class="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
                             />
                           </div>
