@@ -76,9 +76,7 @@ Route::post('/games/{gameId}/reset-session', [GamesController::class, 'resetGame
 Route::prefix('dashboard')
     ->middleware(['auth', 'verified'])
     ->group(function () {
-        Route::get('/', function () {
-            return Inertia::render('Dashboard/Index');
-        })->name('dashboard');
+        Route::get('/', IndexController::class)->name('dashboard');
 
         Route::resource('posts', DashboardPostController::class)->except(['update']);
         Route::prefix('posts')->group(function () {

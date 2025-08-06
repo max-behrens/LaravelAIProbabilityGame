@@ -1,31 +1,62 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
+import { usePage } from '@inertiajs/inertia-vue3';
 
-const slides = [
-  {
-    src: '/images/vecteezy_domesticated-black-donkeys-in-the-paddock-on-the-farm-pets_49542847.jpg',
-    alt: 'Object Detection Game',
-    title: 'Object Detection Game',
-    description: 'Play against the AI to identify objects from a variety of images...',
-    button1: { text: 'View AI Models', href: '/models' },
-    button2: { text: 'Find a Game', href: '/demo' }
-  },
-  {
-    src: '/images/person-with-futuristic-metaverse-avatar-mask.jpg',
-    alt: 'Game of Lies',
-    title: 'Game of Lies',
-    description: 'Determine whether your AI opponent will choose the correct or incorrect answer to each question you do...',
-    button1: { text: 'View AI Models', href: '/avatars' },
-    button2: { text: 'Find a Game', href: '/metaverse-demo' }
+// Accept props from parent component
+const props = defineProps({
+  gameTypes: {
+    type: Array,
+    default: () => []
   }
-];
+});
 
-// Initialize loadedImages with correct length from the start
-const loadedImages = ref(slides.map(() => false));
+// Debug: Also check if data is available directly from page
+const page = usePage();
+
+const gameTypes = page.props.gameTypes || null;
+
+// Generate slides dynamically based on game types
+const generateSlides = () => {
+  const baseSlides = [
+    {
+      src: '/images/vecteezy_domesticated-black-donkeys-in-the-paddock-on-the-farm-pets_49542847.jpg',
+      alt: 'Object Detection Game',
+      title: 'Object Detection Game',
+      description: 'Play against the AI to identify objects from a variety of images...',
+    },
+    {
+      src: '/images/person-with-futuristic-metaverse-avatar-mask.jpg',
+      alt: 'Game of Lies', 
+      title: 'Game of Lies',
+      description: 'Determine whether your AI opponent will choose the correct or incorrect answer to each question you do...',
+    }
+  ];
+
+  // Try both sources to see which one has the data
+  const gameTypesToUse = props.gameTypes?.length > 0 ? props.gameTypes : page.props.game_types;
+  
+  console.log('Using gameTypes:', gameTypesToUse);
+
+  return baseSlides.map((slide, index) => ({
+    ...slide,
+    button1: { text: 'View AI Models', href: '/models' },
+    button2: { 
+      text: 'Find a Game', 
+      href: gameTypesToUse?.[index] 
+        ? route('ai-game', { game_type: gameTypesToUse[index].id })
+        : '/dashboard'  // fallback if game type doesn't exist
+    }
+  }));
+};
+
+const slides = ref([]);
+
+// Initialize loadedImages reactively based on slides length
+const loadedImages = ref([]);
 const currentSlide = ref(0);
 
 const nextSlide = () => {
-  currentSlide.value = (currentSlide.value + 1) % slides.length;
+  currentSlide.value = (currentSlide.value + 1) % slides.value.length;
 };
 
 const goToSlide = (index) => {
@@ -48,8 +79,14 @@ const handleImageLoad = (index) => {
 let slideInterval;
 
 onMounted(() => {
+  // Generate slides when component mounts
+  slides.value = generateSlides();
+  loadedImages.value = slides.value.map(() => false);
+  
+  console.log('Generated slides:', slides.value);
+  console.log('Props gameTypes on mount:', props.gameTypes);
+  
   slideInterval = setInterval(nextSlide, 15000);
-  console.log('loadedImages onMounted:', loadedImages.value);
 });
 
 onUnmounted(() => {
@@ -91,23 +128,23 @@ onUnmounted(() => {
       <transition name="fade" appear mode="out-in">
         <div :key="currentSlide" class="max-w-4xl mx-auto fade-sides-bg rounded-lg p-4">
           <h1 class="text-5xl md:text-7xl font-bold mb-6 !text-white" style="font-size: 20pt !important;">
-            {{ slides[currentSlide].title }}
+            {{ slides[currentSlide]?.title }}
           </h1>
           <div class="text-xl md:text-2xl text-blue-200 mb-8">
-            <span class="typewriter" style="font-size: 15pt !important;">{{ slides[currentSlide].description }}</span>
+            <span class="typewriter" style="font-size: 15pt !important;">{{ slides[currentSlide]?.description }}</span>
           </div>
           <div class="flex flex-col sm:flex-row gap-4 justify-center">
             <a
-              :href="slides[currentSlide].button1.href"
+              :href="slides[currentSlide]?.button1.href"
               class="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-large rounded-lg transition-colors"
             >
-              {{ slides[currentSlide].button1.text }}
+              {{ slides[currentSlide]?.button1.text }}
             </a>
             <a
-              :href="slides[currentSlide].button2.href"
+              :href="slides[currentSlide]?.button2.href"
               class="inline-flex items-center px-6 py-3 bg-transparent !text-black border border-white bg-white/70 hover:bg-white hover:text-slate-900 font-large rounded-lg transition-colors"
             >
-              {{ slides[currentSlide].button2.text }}
+              {{ slides[currentSlide]?.button2.text }}
             </a>
           </div>
         </div>
@@ -138,19 +175,18 @@ onUnmounted(() => {
     </button>
 
     <!-- Down button -->
-  <button
-    @click="scrollToFeatured"
-    class="absolute z-20 bg-white/20 hover:bg-white/30 !text-white p-4 rounded-full transition-all duration-300 backdrop-blur-sm hover:scale-110 
-          bottom-20 left-8 -translate-x-1/2 sm:bottom-auto sm:left-4 sm:translate-x-0"
-    aria-label="Scroll to featured section"
-  >
-    <div class="animate-bounce">
-      <svg class="w-6 h-6 group-hover:translate-y-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-      </svg>
-    </div>
-  </button>
-
+    <button
+      @click="scrollToFeatured"
+      class="absolute z-20 bg-white/20 hover:bg-white/30 !text-white p-4 rounded-full transition-all duration-300 backdrop-blur-sm hover:scale-110 
+            bottom-20 left-8 -translate-x-1/2 sm:bottom-auto sm:left-4 sm:translate-x-0"
+      aria-label="Scroll to featured section"
+    >
+      <div class="animate-bounce">
+        <svg class="w-6 h-6 group-hover:translate-y-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+        </svg>
+      </div>
+    </button>
   </section>
 </template>
 
@@ -221,7 +257,6 @@ onUnmounted(() => {
 .animate-bounce {
   animation: bounce 10s ease-in-out infinite;
 }
-
 
 .fade-sides-bg {
   background: linear-gradient(

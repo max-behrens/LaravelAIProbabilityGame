@@ -60,7 +60,8 @@ const getInitialFilters = () => {
     andUsers.value = urlParams.get('and_users') === 'true';
 
     // Game Type
-    gameType.value = urlParams.get('game_type');
+    gameType.value = urlParams.get('game_type') || '';
+
 
     excludeAI.value = urlParams.get('ai_excluded') === 'true';
 
@@ -269,8 +270,9 @@ const filteredUsers = computed(() => {
 });
 
   const allGameTypes = computed(() => [
-    { value: '1', label: 'Type 1' },
-    { value: '2', label: 'Type 2' },
+    { value: '1', label: 'Object Detection Game' },
+    { value: '2', label: 'Game of Lies' },
+    // Add more game types as needed
   ]);
 
 // Check if user is in room - Fixed to properly handle null values

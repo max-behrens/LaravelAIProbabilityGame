@@ -8,6 +8,7 @@ use App\Services\Front\PostService;
 use App\Http\Controllers\Controller;
 use App\Services\Dashboard\GamesService;
 use App\Models\User;
+use App\Models\GameType;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -18,23 +19,17 @@ class IndexController extends Controller
 
     public function __invoke(Request $request)
     {
-
+        // Fetch the first two game types for the hero slides
+        $gameTypes = GameType::take(2)->get();
 
         return Inertia::render('Dashboard/Index', [
             'current_game_id' => $request->query('game_id'),
             'current_start_date' => $request->query('start_date'),
             'current_end_date' => $request->query('end_date'),
             'current_exponential_scale' => $request->query('exponential_scale'),
-            // Remove this auth override - let HandleInertiaRequests middleware handle it
-            // 'auth' => [
-            //     'user' => $request->user() ? [
-            //         'id' => $request->user()->id,
-            //         'name' => $request->user()->name,
-            //         'email' => $request->user()->email,
-            //     ] : null,
-            // ],
+            'game_types' => $gameTypes->toArray(), // Pass game types to the view
         ]);
-    }    
+    }
 
     public function __construct(GamesService $gamesService)
     {

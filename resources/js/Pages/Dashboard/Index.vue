@@ -8,14 +8,23 @@ import DashboardGameDetails from '@/Components/DashboardGameDetails.vue';
 import DashboardAIDetails from '@/Components/DashboardAIDetails.vue';
 import '@vuepic/vue-datepicker/dist/main.css';
 
+// Define props to accept data from the controller
+const props = defineProps({
+    current_game_id: String,
+    current_start_date: String,
+    current_end_date: String,
+    current_exponential_scale: String,
+    game_types: {
+        type: Array,
+        default: () => []
+    }
+});
+
 
 // Get initial URL parameters
 const page = usePage();
 const auth = page.props.auth;
 
-console.log('Auth object in Vue component:', auth);
-console.log('Auth user in Vue component:', auth?.user);
-console.log('Auth user name in Vue component:', auth?.user?.name);
 
 const showNav = ref(false);
 const currentSection = ref(0);
@@ -23,34 +32,12 @@ const showVerticalNav = ref(false);
 const currentNavSection = ref(0);
 const isNavigatingProgrammatically = ref(false);
 
-
 watch(currentSection, (newVal) => {
     showNav.value = newVal !== 0;
 });
 
-
-const slides = [
-    {
-        src: '/images/vecteezy_domesticated-black-donkeys-in-the-paddock-on-the-farm-pets_49542847.jpg',
-        alt: 'Object Detection Game',
-        title: 'Object Detection Game',
-        description: 'Play against the AI to identify objects from a variety of images...',
-        button1: { text: 'View AI Models', href: '/models' },
-        button2: { text: 'Find a Game', href: '/demo' }
-    },
-    {
-        src: '/images/person-with-futuristic-metaverse-avatar-mask.jpg',
-        alt: 'Game of Lies',
-        title: 'Game of Lies',
-        description: 'Determine whether your AI opponent will choose the correct or incorrect answer to each question you do...',
-        button1: { text: 'View AI Models', href: '/avatars' },
-        button2: { text: 'Find a Game', href: '/metaverse-demo' }
-    }
-];
-
-
 const mobileMenuOpen = ref(false);
-const currentSlide = ref(0);
+const currentSlide = ref(0); // Keep this if needed for any navigation logic
 
 const navSections = [
     { id: 'main', name: 'Home' },
@@ -64,14 +51,6 @@ const toggleMobileMenu = () => {
     mobileMenuOpen.value = !mobileMenuOpen.value;
 };
 
-const nextSlide = () => {
-    currentSlide.value = (currentSlide.value + 1) % slides.length;
-};
-
-const goToSlide = (index) => {
-    currentSlide.value = index;
-};
-
 const navigateSection = (direction) => {
     isNavigatingProgrammatically.value = true; 
 
@@ -79,7 +58,6 @@ const navigateSection = (direction) => {
         ? Math.max(0, currentNavSection.value - 1)
         : Math.min(navSections.length - 1, currentNavSection.value + 1);
 
-    // Update currentNavSection immediately for instant feedback
     currentNavSection.value = newIndex; 
     
     scrollToSection(newIndex);
@@ -98,20 +76,15 @@ const scrollToSection = (sectionIndex) => {
             behavior: 'smooth' 
         });
 
-        // Use requestAnimationFrame for more precise scroll end detection
-        // or a slightly longer timeout if that's too complex.
-        // For now, let's keep a robust timeout for simplicity.
         setTimeout(() => {
             isNavigatingProgrammatically.value = false;
-            // Force an update to showVerticalNav after scroll is likely finished
-            // This ensures it correctly hides if at the top.
             updateNavigation(); 
-        }, 800); // Adjust timeout based on your scroll behavior duration
+        }, 800);
     } else if (section.id === 'main') {
         window.scrollTo({ top: 0, behavior: 'smooth' });
         setTimeout(() => {
             isNavigatingProgrammatically.value = false;
-            updateNavigation(); // Ensure visibility is updated for 'main' section
+            updateNavigation();
         }, 800);
     }
 };
@@ -120,12 +93,10 @@ const updateNavigation = () => {
     const scrollY = window.scrollY;
     const windowHeight = window.innerHeight;
 
-    // This part should *always* update, regardless of programmatic navigation
     showVerticalNav.value = scrollY > windowHeight * 0.3;
 
-    // Only update currentNavSection if not navigating programmatically
     if (isNavigatingProgrammatically.value) {
-        return; // Exit here to prevent flickering of currentNavSection name
+        return;
     }
 
     const sectionElements = navSections.map((section, index) => ({
@@ -144,26 +115,15 @@ const updateNavigation = () => {
     }
 };
 
-let slideInterval;
 onMounted(async () => {
-    slideInterval = setInterval(() => {
-        nextSlide();
-    }, 15000);
-
     window.addEventListener('scroll', updateNavigation);
     
-    // Fetch users on mount (assuming fetchUsers is defined elsewhere in your script)
-    // await fetchUsers(); 
-
     nextTick(() => {
         updateNavigation();
     });
 });
 
 onUnmounted(() => {
-    if (slideInterval) {
-        clearInterval(slideInterval);
-    }
     window.removeEventListener('scroll', updateNavigation);
 });
 </script>
@@ -174,10 +134,11 @@ onUnmounted(() => {
     <BreezeAuthenticatedLayout>
 
         <section id="main">
-            <DashboardHeroSection />
+            <!-- Pass game_types as prop to DashboardHeroSection -->
+            <DashboardHeroSection :game-types="game_types" />
         </section>
 
-          <transition name="fade">
+        <transition name="fade">
             <div
             v-if="showVerticalNav"
             class="fixed left-4 top-1/2 transform -translate-y-1/2 z-50 bg-gray-800 backdrop-blur-sm rounded-lg p-2 shadow-lg hidden sm:block"
@@ -253,7 +214,6 @@ onUnmounted(() => {
     </BreezeAuthenticatedLayout>
 </template>
 
-
 <style scoped>
 /* Your existing styles */
 .tech-icon {
@@ -299,14 +259,14 @@ onUnmounted(() => {
 .fade-slide-y-enter-active,
 .fade-slide-y-leave-active {
     transition: all 0.3s ease-out;
-    overflow: hidden; /* Ensures content doesn't "jump" during height transition */
+    overflow: hidden;
 }
 
 .fade-slide-y-enter-from,
 .fade-slide-y-leave-to {
     opacity: 0;
     transform: translateY(-10px);
-    max-height: 0; /* Animate height from 0 */
+    max-height: 0;
     padding-top: 0;
     padding-bottom: 0;
     margin-top: 0;
@@ -317,12 +277,11 @@ onUnmounted(() => {
 .fade-slide-y-leave-from {
     opacity: 1;
     transform: translateY(0);
-    max-height: 500px; /* A value larger than the max possible height of the content */
-    /* Restore original padding/margin if they were removed in -from state */
-    padding-top: theme('padding.6'); /* or whatever your original padding-top was, e.g., p-6 means 1.5rem */
+    max-height: 500px;
+    padding-top: theme('padding.6');
     padding-bottom: theme('padding.6');
-    margin-top: theme('margin.4'); /* mt-4 */
-    margin-bottom: 0; /* if no mb */
+    margin-top: theme('margin.4');
+    margin-bottom: 0;
 }
 
 .hero-gradient-mask {
@@ -395,7 +354,6 @@ html {
     background-color: rgba(59, 130, 246, 0.2) !important;
 }
 
-/* Datepicker action buttons */
 :deep(.dp__action_buttons) button {
     @apply px-3 py-1 rounded-md text-white transition-colors duration-200;
 }

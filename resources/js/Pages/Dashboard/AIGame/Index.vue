@@ -50,7 +50,7 @@ const getFiltersFromURL = () => {
       end_date: urlParams.get('end_date'),
       user_ids: urlParams.get('user_ids'),
       and_users: urlParams.get('and_users') === 'true',
-      gameType: urlParams.get('game_type')
+      game_type: urlParams.get('game_type')
     };
   } catch (error) {
     console.error('Error parsing URL filters:', error);
@@ -167,13 +167,12 @@ const handleFilterChange = async (event) => {
   try {
     const { dateRange, userIds, andUsers, gameType } = event.detail;
     
-    // Update current filters
     currentFilters.value = {
       start_date: dateRange && dateRange[0] ? dateRange[0].toISOString().split('T')[0] : null,
       end_date: dateRange && dateRange[1] ? dateRange[1].toISOString().split('T')[0] : null,
       user_ids: userIds && userIds.length > 0 ? userIds.join(',') : null,
       and_users: andUsers,
-      game_type: gameType 
+      game_type: gameType // Make sure this is being passed correctly
     };
     
     // Reset to page 1 when filters change
@@ -188,7 +187,7 @@ const handleFilterChange = async (event) => {
 };
 
 const fetchGamesWithFilters = async () => {
-  if (isLoading.value) return; // Prevent concurrent requests
+  if (isLoading.value) return;
   
   try {
     isLoading.value = true;
@@ -201,7 +200,6 @@ const fetchGamesWithFilters = async () => {
     if (currentFilters.value.user_ids) filters.user_ids = currentFilters.value.user_ids;
     if (currentFilters.value.and_users) filters.and_users = currentFilters.value.and_users;
     if (currentFilters.value.game_type) filters.game_type = currentFilters.value.game_type;
-
     
     await fetchGames(currentPage.value, filters);
   } catch (error) {
@@ -364,11 +362,27 @@ const currentGameId = computed(() => {
 });
 
 // Cleanup event listener and timeouts
-onUnmounted(() => {
+onMounted(async () => {
   try {
-    window.removeEventListener('gameFiltersChanged', handleFilterChange);
+    // WAIT for next tick to ensure navigation component has initialized
+    await nextTick();
+    
+    // Initialize current filters from URL directly in games component
+    currentFilters.value = getFiltersFromURL();
+    
+    // Initialize with props if available
+    if (props.games && Array.isArray(props.games)) {
+      updateGameState(props.games);
+    }
+    
+    // Fetch games with current filters
+    await fetchGamesWithFilters();
+    
+    // Listen for filter changes from the navigation
+    window.addEventListener('gameFiltersChanged', handleFilterChange);
   } catch (error) {
-    console.error('Error during cleanup:', error);
+    console.error('Error during component mount:', error);
+    errorMessage.value = 'Failed to initialize games';
   }
 });
 
