@@ -31,7 +31,8 @@ const activeUserIds = ref([]);
 const allUsers = ref([]);
 const userSearchTerm = ref('');
 const andUsers = ref(false);
-
+const showAi = ref(false);
+const gameType = ref('');
 // Get initial filter values from URL params
 const getInitialFilters = () => {
   try {
@@ -57,6 +58,12 @@ const getInitialFilters = () => {
 
     // AND users
     andUsers.value = urlParams.get('and_users') === 'true';
+
+    // Game Type
+    gameType.value = urlParams.get('game_type');
+
+    showAi.value = urlParams.get('ai_excluded') !== 'true';
+
   } catch (error) {
     console.error('Error parsing initial filters:', error);
     // Set safe defaults
@@ -261,6 +268,11 @@ const filteredUsers = computed(() => {
   }
 });
 
+  const allGameTypes = computed(() => [
+    { value: '1', label: 'Type 1' },
+    { value: '2', label: 'Type 2' },
+  ]);
+
 // Check if user is in room - Fixed to properly handle null values
 const isInRoom = computed(() => {
   const gameId = props.currentGameId;
@@ -296,6 +308,16 @@ const updateUrlParams = () => {
       params.set('and_users', 'true');
     }
 
+    // Game Type
+  if (gameType.value) { // This now correctly handles the '' case for "All"
+    params.set('game_type', gameType.value);
+  }
+
+        // Game Type
+    if (!showAi.value) {
+      params.set('ai_excluded', 'true');
+    }
+
     // Update URL without reloading
     const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
     window.history.pushState(null, '', newUrl);
@@ -305,7 +327,10 @@ const updateUrlParams = () => {
       detail: {
         dateRange: dateRange.value,
         userIds: activeUserIds.value,
-        andUsers: andUsers.value
+        andUsers: andUsers.value,
+        showAi: showAi.value,
+        gameType: gameType.value,
+
       }
     }));
   } catch (error) {
@@ -347,6 +372,24 @@ const activeFiltersDisplay = computed(() => {
       }
     }
     
+  if (gameType.value && gameType.value !== '') {
+    const gameTypeLabel = allGameTypes.value.find(type => type.value === gameType.value)?.label || `Type ${gameType.value}`;
+    filters.push({
+      type: 'gameType',
+      label: `Game Type: ${gameTypeLabel}`,
+      icon: 'game'
+    });
+  }
+
+  // AI Score Filter
+  if (!showAi.value) {
+    filters.push({
+      type: 'showAi',
+      label: `AI Scores Excluded`,
+      icon: 'ai'
+    });
+  }
+
     return filters;
   } catch (error) {
     console.error('Error computing active filters:', error);
@@ -368,8 +411,18 @@ const currentUser = computed(() => {
   }
 });
 
+const showGameTypeFilter = computed(() => {
+  // Hide the AI filter on the AI game route, but show it on other dashboard pages.
+  return window.location.pathname.includes('/dashboard') && !window.location.pathname.includes('/room');
+});
+
+const showAiFilter = computed(() => {
+  // Hide the AI filter on the AI game route, but show it on other dashboard pages.
+  return window.location.pathname.includes('/dashboard') && !window.location.pathname.includes('/aigame');
+});
+
 // Watch for filter changes
-watch([dateRange, activeUserIds, andUsers], () => {
+watch([dateRange, activeUserIds, andUsers, showAi, gameType], () => {
   updateUrlParams();
 }, { deep: true });
 
@@ -544,6 +597,31 @@ onUnmounted(() => {
                             Loading users...
                           </p>
                         </div>
+                      </div>
+
+                      <div v-if="showGameTypeFilter">
+                        <label class="block text-xs font-medium text-gray-400 mb-2">Game Type</label>
+                        <select
+                          v-model="gameType"
+                          class="w-full p-2 text-xs rounded-md bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        >
+                          <option value="" selected>All Game Types</option>
+                          <option v-for="type in allGameTypes" :key="type.value" :value="type.value">
+                            {{ type.label }}
+                          </option>
+                        </select>
+                      </div>
+                        <div v-if="showAiFilter">
+                          <label for="showAiToggle" class="block text-xs font-medium text-gray-400 mb-2">Show AI Scores</label>
+                          <div class="relative flex items-center justify-between p-2 rounded-md bg-gray-700">
+                            <span class="text-white text-sm">Exclude AI Scores</span>
+                            <input
+                              type="checkbox"
+                              id="showAiToggle"
+                              v-model="showAi"
+                              class="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                            />
+                          </div>
                       </div>
                     </div>
                   </transition>

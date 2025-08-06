@@ -15,30 +15,24 @@ use Illuminate\Support\Facades\Log;
 class GamesService
 {
 
-    public function getIndexGames($page = 1, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null, bool $andUsers = false, $perPage = 10)
+    public function getIndexGames(
+        $page = 1, 
+        ?string $startDate = null, 
+        ?string $endDate = null, 
+        ?array $userIds = null, 
+        bool $andUsers = false, 
+        ?int $gameType = null,
+        $perPage = 5)
     {
-        \Log::info('Fetching filtered and paginated games list...', ['page' => $page]);
-        \Log::info('Filter parameters', [
-            'page' => $page,
-            'startDate' => $startDate,
-            'endDate' => $endDate,
-            'userIds' => $userIds,
-            'andUsers' => $andUsers,
-            'perPage' => $perPage
-        ]);
 
-        // RAW SQL LOGGING:
-        \DB::listen(function ($query) {
-            \Log::debug('SQL Executed', [
-                'sql' => vsprintf(str_replace('?', '%s', $query->sql), collect($query->bindings)->map(fn($b) => is_numeric($b) ? $b : "'$b'")->toArray()),
-                'time' => $query->time,
-            ]);
-        });
+        $gameType = (int) $gameType;
+
+        Log::info('GAME TYPE: ' . $gameType);
 
         $query = \DB::table('games')
             ->leftJoin('game_scores', 'game_scores.game_id', '=', 'games.id')
-            ->join('games_user', 'games_user.game_id', '=', 'games.id')
-            ->join('users', 'users.id', '=', 'games_user.user_id')
+            ->leftjoin('games_user', 'games_user.game_id', '=', 'games.id')
+            ->leftjoin('users', 'users.id', '=', 'games_user.user_id')
             ->leftJoin('game_types', 'game_types.id', '=', 'games.game_type_id')
             ->select(
                 'games.id',
@@ -59,8 +53,11 @@ class GamesService
                     $q->whereIn('users.id', $userIds);
                 }
             })
-            ->groupBy('games.id', 'games.max_players', 'game_types.name')
-            ->orderBy('games.created_at', 'desc');
+            ->when($gameType && $gameType > 0, function ($q) use ($gameType) {
+                $q->where('games.game_type_id', $gameType);
+            })
+            ->groupBy('games.id', 'games.max_players', 'game_types.name');
+            // ->orderBy('games.created_at', 'desc');
 
         $games = $query->paginate($perPage, ['*'], 'page', $page);
 
@@ -70,15 +67,14 @@ class GamesService
                 'id' => $game->id,
                 'players_count' => $game->players_count,
                 'max_players' => $game->max_players,
-                'users' => [], // You'll need a separate query if you want full user details
+                'users' => [],
                 'game_type_name' => $game->game_type_name,
             ];
         });
 
-        \Log::debug('Fetched games', ['count' => $games->count()]);
-
         return $games;
     }
+
 
 
 

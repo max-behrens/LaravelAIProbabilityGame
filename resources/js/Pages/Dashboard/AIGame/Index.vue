@@ -38,10 +38,6 @@ const playersLoading = ref(new Set()); // Track which games are loading players
 const playerDataCache = ref({}); // Cache with timestamps
 const CACHE_DURATION = 30000; // 30 seconds cache
 
-// NEW: Dropdown states
-const dropdownStates = ref({}); // Track which dropdowns are open
-const playersLoadedOnce = ref(new Set()); // Track which games have been loaded at least once
-
 // Internal states for pagination
 const currentPage = ref(1);
 
@@ -53,7 +49,8 @@ const getFiltersFromURL = () => {
       start_date: urlParams.get('start_date'),
       end_date: urlParams.get('end_date'),
       user_ids: urlParams.get('user_ids'),
-      and_users: urlParams.get('and_users') === 'true'
+      and_users: urlParams.get('and_users') === 'true',
+      gameType: urlParams.get('game_type')
     };
   } catch (error) {
     console.error('Error parsing URL filters:', error);
@@ -61,7 +58,8 @@ const getFiltersFromURL = () => {
       start_date: null,
       end_date: null,
       user_ids: null,
-      and_users: false
+      and_users: false,
+      game_type: null
     };
   }
 };
@@ -77,27 +75,7 @@ const isPlayerDataCached = (gameId) => {
   return (now - cached.timestamp) < CACHE_DURATION;
 };
 
-// NEW: Toggle dropdown and load players only when opened
-const togglePlayerDropdown = async (gameId) => {
-  const isCurrentlyOpen = dropdownStates.value[gameId];
-  
-  // Close dropdown if it's open
-  if (isCurrentlyOpen) {
-    dropdownStates.value[gameId] = false;
-    return;
-  }
-
-  // Open dropdown and load players if needed
-  dropdownStates.value[gameId] = true;
-  
-  // Only fetch if we haven't loaded this game before or cache is stale
-  if (!playersLoadedOnce.value.has(gameId) || !isPlayerDataCached(gameId)) {
-    await fetchGamePlayers(gameId, true);
-    playersLoadedOnce.value.add(gameId);
-  }
-};
-
-// Fetch players for a specific game with caching (SAME AS BEFORE)
+// Fetch players for a specific game with caching
 const fetchGamePlayers = async (gameId, forceRefresh = false) => {
   // Check cache first unless force refresh
   if (!forceRefresh && isPlayerDataCached(gameId)) {
@@ -152,7 +130,19 @@ const fetchGamePlayers = async (gameId, forceRefresh = false) => {
   }
 };
 
-// REMOVED: fetchAllGamePlayers function - no longer needed since we load on-demand
+// Fetch player data for all games
+const fetchAllGamePlayers = async () => {
+  const games = currentPageGames.value;
+  if (!games || games.length === 0) return;
+
+  console.log('Fetching players for all games:', games.map(g => g.id));
+  
+  // Create promises for all games
+  const promises = games.map(game => fetchGamePlayers(game.id));
+  
+  // Wait for all to complete
+  await Promise.allSettled(promises);
+};
 
 // Initialize with props and then update with live data
 onMounted(async () => {
@@ -175,14 +165,15 @@ onMounted(async () => {
 
 const handleFilterChange = async (event) => {
   try {
-    const { dateRange, userIds, andUsers } = event.detail;
+    const { dateRange, userIds, andUsers, gameType } = event.detail;
     
     // Update current filters
     currentFilters.value = {
       start_date: dateRange && dateRange[0] ? dateRange[0].toISOString().split('T')[0] : null,
       end_date: dateRange && dateRange[1] ? dateRange[1].toISOString().split('T')[0] : null,
       user_ids: userIds && userIds.length > 0 ? userIds.join(',') : null,
-      and_users: andUsers
+      and_users: andUsers,
+      game_type: gameType 
     };
     
     // Reset to page 1 when filters change
@@ -209,6 +200,8 @@ const fetchGamesWithFilters = async () => {
     if (currentFilters.value.end_date) filters.end_date = currentFilters.value.end_date;
     if (currentFilters.value.user_ids) filters.user_ids = currentFilters.value.user_ids;
     if (currentFilters.value.and_users) filters.and_users = currentFilters.value.and_users;
+    if (currentFilters.value.game_type) filters.game_type = currentFilters.value.game_type;
+
     
     await fetchGames(currentPage.value, filters);
   } catch (error) {
@@ -243,17 +236,17 @@ const updateGameState = (gamesList) => {
         playersCount.value[game.id] = 0;
         userInGames.value[game.id] = false;
         gamePlayersData.value[game.id] = [];
-        dropdownStates.value[game.id] = false; // NEW: Initialize dropdown state
       }
     }
   });
 };
 
-// UPDATED: Watch liveGames from composable but DON'T automatically fetch player data
+// Watch liveGames from composable and automatically fetch player data
 watchEffect(async () => {
   if (liveGames.value && Array.isArray(liveGames.value)) {
     updateGameState(liveGames.value);
-    // REMOVED: automatic player fetching - now done on-demand when dropdown is clicked
+    // Automatically fetch player data for all games
+    await fetchAllGamePlayers();
   }
 });
 
@@ -308,13 +301,9 @@ const joinGame = async (gameId) => {
       userInGames.value[gameId] = true;
       playersCount.value[gameId] = (playersCount.value[gameId] || 0) + 1;
 
-      // Invalidate cache and refresh player data for this specific game only
+      // Invalidate cache and refresh player data for this specific game
       delete playerDataCache.value[gameId];
-      
-      // Only refresh if the dropdown was open and data was loaded
-      if (dropdownStates.value[gameId] && playersLoadedOnce.value.has(gameId)) {
-        await fetchGamePlayers(gameId, true);
-      }
+      await fetchGamePlayers(gameId, true);
 
       successMessage.value = 'Successfully joined the game!';
 
@@ -348,13 +337,9 @@ const leaveGame = async (gameId) => {
       userInGames.value[gameId] = false;
       playersCount.value[gameId] = Math.max(0, (playersCount.value[gameId] || 1) - 1);
 
-      // Invalidate cache and refresh player data for this specific game only
+      // Invalidate cache and refresh player data for this specific game
       delete playerDataCache.value[gameId];
-      
-      // Only refresh if the dropdown was open and data was loaded
-      if (dropdownStates.value[gameId] && playersLoadedOnce.value.has(gameId)) {
-        await fetchGamePlayers(gameId, true);
-      }
+      await fetchGamePlayers(gameId, true);
 
       successMessage.value = 'Successfully left the game!';
     }
@@ -435,53 +420,31 @@ watch([errorMessage, successMessage], () => {
                   Lobby {{ game.id }}: {{ game.game_type_name || 'Unknown Game' }}
                 </h2>
                 
-
-                <!-- Player Details Dropdown -->
+                <!-- Player Details Section -->
                 <div class="mb-3">
-                  
-                  <button 
-                    @click="togglePlayerDropdown(game.id)"
-                    class="flex items-center justify-between w-full text-left text-gray-400 text-sm font-medium mb-1 hover:text-gray-300 transition-colors"
-                    :class="{ 'text-blue-400': dropdownStates[game.id] }"
-                  >
-                    <span>
-                      Player Details 
-                    </span>
-                    <svg 
-                      class="w-4 h-4 transition-transform duration-200" 
-                      :class="{ 'rotate-180': dropdownStates[game.id] }"
-                      fill="none" 
-                      stroke="currentColor" 
-                      viewBox="0 0 24 24"
-                    >
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                    </svg>
-                  </button>
-                  
-                  <!-- Dropdown Content -->
-                  <div 
-                    v-if="dropdownStates[game.id]" 
-                    class="bg-gray-700 rounded-md p-3 mt-2 border border-gray-600"
-                  >
-
-                  <p class="text-gray-300 mb-1">
-                    {{ getPlayerDisplayText(game) }}
-                  </p>
-                  <div class="w-full bg-gray-700 rounded-full h-2 mb-2">
-                    <div 
-                      class="h-2 rounded-full transition-all duration-300"
-                      :class="{
-                        'bg-green-500': !isGameFull(game),
-                        'bg-red-500': isGameFull(game)
-                      }"
-                      :style="{
-                        width: game.max_players ? `${Math.min(100, (playersCount[game.id] || 0) / game.max_players * 100)}%` : '0%'
-                      }"
-                    ></div>
-                  </div>
-                  <div v-if="isGameFull(game)" class="text-red-400 text-sm font-medium">
-                    Game is full
-                  </div>
+                  <div class="bg-gray-700 rounded-md p-3 border border-gray-600">
+                    <p class="text-gray-300 mb-1">
+                      {{ getPlayerDisplayText(game) }}
+                    </p>
+                    
+                    <!-- Progress Bar -->
+                    <div class="w-full bg-gray-700 rounded-full h-2 mb-2">
+                      <div 
+                        class="h-2 rounded-full transition-all duration-300"
+                        :class="{
+                          'bg-green-500': !isGameFull(game),
+                          'bg-red-500': isGameFull(game)
+                        }"
+                        :style="{
+                          width: game.max_players ? `${Math.min(100, (playersCount[game.id] || 0) / game.max_players * 100)}%` : '0%'
+                        }"
+                      ></div>
+                    </div>
+                    
+                    <div v-if="isGameFull(game)" class="text-red-400 text-sm font-medium mb-2">
+                      Game is full
+                    </div>
+                    
                     <!-- Loading State -->
                     <div v-if="playersLoading.has(game.id)" class="text-gray-500 text-xs italic flex items-center">
                       <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

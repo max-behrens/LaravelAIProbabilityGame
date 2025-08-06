@@ -37,30 +37,15 @@ class GamesController extends Controller
         $endDate = $request->get('end_date');
         $userIds = $request->get('user_ids');
         $andUsers = $request->get('and_users', 'false') === 'true';
-        $perPage = $request->get('per_page', 10); // Allow customizable per page
+        $gameType = $request->get('game_type');
+        $perPage = $request->get('per_page', 5); // Allow customizable per page
 
         // Convert user IDs from comma-separated string to array
         $userIds = $userIds ? explode(',', $userIds) : null;
 
-        Log::info('Filter parameters', [
-            'page' => $page,
-            'startDate' => $startDate,
-            'endDate' => $endDate,
-            'userIds' => $userIds,
-            'andUsers' => $andUsers,
-            'perPage' => $perPage
-        ]);
-
         // Get paginated games directly from service
-        $games = $this->gamesService->getIndexGames($page, $startDate, $endDate, $userIds, $andUsers, $perPage);
+        $games = $this->gamesService->getIndexGames($page, $startDate, $endDate, $userIds, $andUsers, $gameType, $perPage);
 
-        Log::info('Games retrieved successfully', [
-            'total' => $games->total(),
-            'current_page' => $games->currentPage(),
-            'last_page' => $games->lastPage(),
-            'per_page' => $games->perPage(),
-            'count' => $games->count()
-        ]);
 
         return response()->json($games);
     }

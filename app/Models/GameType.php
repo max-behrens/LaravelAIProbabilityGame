@@ -12,11 +12,9 @@ class GameType extends Model
     use HasFactory;
 
     public const DEFAULT_TYPES = [
-        'The Number Game',
-        'The Word Game',
-        'The Geography Game',
-        'The History Game',
-        'The Science Game',
+        'Number Game',
+        'History Game',
+        'Geography Game',
     ];
 
     protected $fillable = [
