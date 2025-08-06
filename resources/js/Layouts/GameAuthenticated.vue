@@ -614,7 +614,7 @@ onUnmounted(() => {
                         </select>
                       </div>
                         <div v-if="excludeAIFilter">
-                          <label for="excludeAIToggle" class="block text-xs font-medium text-gray-400 mb-2">Show AI Scores</label>
+                          <label for="excludeAIToggle" class="block text-xs font-medium text-gray-400 mb-2">AI Scores</label>
                           <div class="relative flex items-center justify-between p-2 rounded-md bg-gray-700">
                             <span class="text-white text-sm">Exclude AI Scores</span>
                             <input
