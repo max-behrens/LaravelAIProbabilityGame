@@ -82,91 +82,93 @@ onBeforeUnmount(() => {
     <div class="bg-gray-900 flex-grow flex flex-col">
       <!-- Sticky Navigation with dynamic background -->
       <nav 
-        class="fixed top-0 left-0 right-0 z-50 border-b border-gray-700 transition-all duration-300"
+        class="fixed top-0 left-0 right-0 !z-50 border-b border-gray-700 transition-all duration-300"
         :class="isScrolled ? 'bg-gray-700 backdrop-blur-md' : 'bg-gray-800'"
       >
         <!-- Primary Navigation Menu -->
-        <div class="main-width mx-auto px-4 lg:px-6 lg:px-8">
-          <div class="flex justify-between items-center h-16">
-            <!-- Logo -->
-            <div class="shrink-0 flex items-center mr-2">
-                <BreezeWebsiteLogo :href="route('dashboard')" class="block h-7 w-auto" />
-            </div>
-            
-            <!-- Navigation Links - Centered -->
-            <div class="hidden lg:flex absolute left-1/2 transform -translate-x-1/2">
-              <div class="flex space-x-8 h-16 items-center">
-                <BreezeNavLink
-                  :href="route('dashboard')"
-                  :active="route().current('dashboard')"
-                  class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
-                >
-                  Dashboard
-                </BreezeNavLink>
-                <BreezeNavLink
-                  :href="route('posts.index')"
-                  :active="route().current('posts.index')"
-                  class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
-                >
-                  Posts
-                </BreezeNavLink>
-                <BreezeNavLink
-                  :href="route('ai-game')"
-                  :active="route().current('ai-game')"
-                  class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
-                >
-                  AI Game
-                </BreezeNavLink>
-                <BreezeNavLink
-                  :href="route('weather.index')"
-                  :active="route().current('weather.index')"
-                  class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
-                >
-                  Weather API
-                </BreezeNavLink>
-                <BreezeNavLink
-                  :href="route('parse-xml')"
-                  :active="route().current('parse-xml')"
-                  class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
-                >
-                  XML Parser
-                </BreezeNavLink>
-                <BreezeNavLink
-                  :href="route('react.index')"
-                  :active="route().current('react.index')"
-                  class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
-                >
-                  React Page
-                </BreezeNavLink>
+         <div class="flex flex-row justify-between">
+            <div class="main-width mx-auto px-4 lg:px-6 lg:px-8">
+              <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <div class="shrink-0 flex items-center mr-2">
+                    <BreezeWebsiteLogo :href="route('dashboard')" class="block h-7 w-auto" />
+                </div>
+                
+                <!-- Navigation Links - Centered -->
+                <div class="hidden lg:flex absolute left-1/2 transform -translate-x-1/2">
+                  <div class="flex space-x-8 h-16 items-center">
+                    <BreezeNavLink
+                      :href="route('dashboard')"
+                      :active="route().current('dashboard')"
+                      class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
+                    >
+                      Dashboard
+                    </BreezeNavLink>
+                    <BreezeNavLink
+                      :href="route('posts.index')"
+                      :active="route().current('posts.index')"
+                      class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
+                    >
+                      Posts
+                    </BreezeNavLink>
+                    <BreezeNavLink
+                      :href="route('ai-game')"
+                      :active="route().current('ai-game')"
+                      class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
+                    >
+                      AI Game
+                    </BreezeNavLink>
+                    <BreezeNavLink
+                      :href="route('weather.index')"
+                      :active="route().current('weather.index')"
+                      class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
+                    >
+                      Weather API
+                    </BreezeNavLink>
+                    <BreezeNavLink
+                      :href="route('parse-xml')"
+                      :active="route().current('parse-xml')"
+                      class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
+                    >
+                      XML Parser
+                    </BreezeNavLink>
+                    <BreezeNavLink
+                      :href="route('react.index')"
+                      :active="route().current('react.index')"
+                      class="text-xs text-white hover:text-gray-300 focus:text-gray-300 active:text-gray-300 h-full flex items-center relative"
+                    >
+                      React Page
+                    </BreezeNavLink>
+                  </div>
+                </div>
               </div>
             </div>
-
-          <!-- User Section - Fixed width to balance logo -->
-          <div class="hidden lg:flex lg:items-center justify-end">
-            <!-- User Name Display -->
-            <div class="text-sm text-gray-300">
-              {{ $page.props.auth?.user?.name || 'Loading...' }}
-            </div>
             
-            <!-- Settings button opens modal directly -->
-            <button
-              @click="showLogoutModal = true"
-              type="button"
-              class="inline-flex items-center px-3 py-2 border border-transparent text-xs leading-4 font-medium rounded-md text-gray-400 hover:text-gray-300 focus:outline-none"
-            >
-              <svg
-                class="h-4 w-4 text-gray-400"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path d="M19.14 12.94a7.002 7.002 0 000-1.88l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.6-.22l-2.39.96a6.978 6.978 0 00-1.6-.94l-.36-2.54A.5.5 0 0014 3h-4a.5.5 0 00-.49.42l-.36 2.54a6.978 6.978 0 00-1.6.94l-2.39-.96a.5.5 0 00-.6.22l-1.92 3.32a.5.5 0 00.12.64l2.03 1.58a7.002 7.002 0 000 1.88l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32a.5.5 0 00.6.22l2.39-.96c.5.38 1.04.7 1.6.94l.36 2.54A.5.5 0 0010 21h4a.5.5 0 00.49-.42l.36-2.54c.56-.24 1.1-.56 1.6-.94l2.39.96a.5.5 0 00.6-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z" />
-              </svg>
-            </button>
-          </div>
-
+              <!-- User Section - Fixed width to balance logo -->
+              <div class="main-width p-6 hidden lg:flex lg:items-center justify-end">
+                <!-- User Name Display -->
+                <div class="text-sm text-gray-300">
+                  {{ $page.props.auth?.user?.name || 'Loading...' }}
+                </div>
+                
+                <!-- Settings button opens modal directly -->
+                <button
+                  @click="showLogoutModal = true"
+                  type="button"
+                  class="inline-flex items-center px-3 py-2 border border-transparent text-xs leading-4 font-medium rounded-md text-gray-400 hover:text-gray-300 focus:outline-none"
+                >
+                  <svg
+                    class="h-4 w-4 text-gray-400"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M19.14 12.94a7.002 7.002 0 000-1.88l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.6-.22l-2.39.96a6.978 6.978 0 00-1.6-.94l-.36-2.54A.5.5 0 0014 3h-4a.5.5 0 00-.49.42l-.36 2.54a6.978 6.978 0 00-1.6.94l-2.39-.96a.5.5 0 00-.6.22l-1.92 3.32a.5.5 0 00.12.64l2.03 1.58a7.002 7.002 0 000 1.88l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32a.5.5 0 00.6.22l2.39-.96c.5.38 1.04.7 1.6.94l.36 2.54A.5.5 0 0010 21h4a.5.5 0 00.49-.42l.36-2.54c.56-.24 1.1-.56 1.6-.94l2.39.96a.5.5 0 00.6-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z" />
+                  </svg>
+                </button>
+              </div>
             <!-- Hamburger -->
-            <div class="-mr-2 flex items-center lg:hidden">
+            <div class="main-width px-6 flex items-center lg:hidden">
               <button
                 @click="showingNavigationDropdown = !showingNavigationDropdown"
                 class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-700 focus:outline-none focus:bg-gray-700 focus:text-gray-500 transition duration-50 ease-in-out"
@@ -190,7 +192,6 @@ onBeforeUnmount(() => {
               </button>
             </div>
           </div>
-        </div>
 
         <!-- Responsive Navigation Menu -->
         <div :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }" class="lg:hidden">
@@ -259,9 +260,8 @@ onBeforeUnmount(() => {
                 </button>
               </div>
             </div>
-
-            
           </div>
+          
         </div>
       </nav>
 
