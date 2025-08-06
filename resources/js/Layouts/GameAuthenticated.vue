@@ -433,10 +433,9 @@ onUnmounted(() => {
                   >
                     <div class="flex items-center">
                       <FilterIcon class="mr-3 h-5 w-5" />
-                      Chart Filters
-                    </div>
+                      Game Filters
                     <svg
-                      class="h-4 w-4 transition-transform duration-200"
+                      class="h-4 w-4 ml-6 transition-transform duration-200"
                       :class="{ 'rotate-180': showFiltersSection }"
                       fill="none"
                       stroke="currentColor"
@@ -444,6 +443,7 @@ onUnmounted(() => {
                     >
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
+                    </div>
                   </button>
 
                   <transition name="filter-expand">
@@ -564,10 +564,9 @@ onUnmounted(() => {
                       <p class="text-sm font-medium text-white">{{ $page.props.auth.user.name }}</p>
                       <p class="text-xs text-gray-400">{{ $page.props.auth.user.email }}</p>
                     </div>
-                  </div>
                   <button
                     @click="showLogoutModal = true"
-                    class="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-700"
+                    class="p-1 ml-6 rounded-md text-gray-400 hover:text-white hover:bg-gray-700"
                   >
                     <svg
                       class="h-4 w-4 text-gray-400"
@@ -578,6 +577,7 @@ onUnmounted(() => {
                       <path d="M19.14 12.94a7.002 7.002 0 000-1.88l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.6-.22l-2.39.96a6.978 6.978 0 00-1.6-.94l-.36-2.54A.5.5 0 0014 3h-4a.5.5 0 00-.49.42l-.36 2.54a6.978 6.978 0 00-1.6.94l-2.39-.96a.5.5 0 00-.6.22l-1.92 3.32a.5.5 0 00.12.64l2.03 1.58a7.002 7.002 0 000 1.88l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32a.5.5 0 00.6.22l2.39-.96c.5.38 1.04.7 1.6.94l.36 2.54A.5.5 0 0010 21h4a.5.5 0 00.49-.42l.36-2.54c.56-.24 1.1-.56 1.6-.94l2.39.96a.5.5 0 00.6-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z" />
                     </svg>
                   </button>
+                  </div>
                 </div>
               </div>
             </div>

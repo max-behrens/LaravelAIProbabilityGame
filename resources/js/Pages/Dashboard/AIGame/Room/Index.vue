@@ -199,6 +199,10 @@ const changeAIScoresPage = (page) => {
     fetchAIScores(page);
 };
 
+const showSinglePlayerAIWarning = computed(() => {
+    return playerCount.value === 1 && !playWithAI.value;
+});
+
 // Updated game control functions
 const startGame = async () => {
     try {
@@ -211,12 +215,21 @@ const startGame = async () => {
             requiredCount: playerCount.value,
         });
 
+        console.log('playerCount.value: ' + playerCount.value);
+
         if (response.data.status === 'waiting') {
             addFlashMessage('Waiting for other players to be ready...', 'success');
         } else if (response.data.status === 'started') {
-            isGameStarted.value = true;
-            gameIsOver.value = false; // Ensure gameIsOver is false when game starts
-            addFlashMessage('Game started!', 'success');
+                if (showSinglePlayerAIWarning.value) {
+                    // The message will be displayed in the template, so no flash message is needed here.
+                    // You might still want to add an info message or a different flash message.
+                    addFlashMessage('Cannot start game. Please enable "Play with AI" or add more players.', 'warning');
+                    return; // Stop the function from proceeding
+                } else {
+                    isGameStarted.value = true;
+                    gameIsOver.value = false; // Ensure gameIsOver is false when game starts
+                    addFlashMessage('Game started!', 'success');
+            }
         }
     } catch (error) {
         errorMessage.value = error.response?.data?.message || 'Failed to signal readiness.';

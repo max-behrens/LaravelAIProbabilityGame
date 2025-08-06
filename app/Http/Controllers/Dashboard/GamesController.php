@@ -222,11 +222,11 @@ class GamesController extends Controller
         Log::info('Starting game', ['gameId' => $game->id, 'userId' => auth()->id()]);
         $game->start();
 
-        $this->triggerGameUpdate($game->id, 'game.started', [
-            'userId' => auth()->id(),
-            'userName' => auth()->user()->name,
-            'timestamp' => now()->toISOString()
-        ]);
+        // $this->triggerGameUpdate($game->id, 'game.started', [
+        //     'userId' => auth()->id(),
+        //     'userName' => auth()->user()->name,
+        //     'timestamp' => now()->toISOString()
+        // ]);
 
         return response()->json(['success' => true, 'status' => $game->status]);
     }
