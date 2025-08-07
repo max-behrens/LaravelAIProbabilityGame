@@ -14,6 +14,7 @@ const props = defineProps({
   },
 });
 
+
 // Reactive state
 const allGameScores = ref([]);
 const questionTotals = ref({});
@@ -22,7 +23,7 @@ const questionTotals = ref({});
 const dateRange = ref([null, null]);
 const userIds = ref([]);
 const andUsers = ref(false);
-const excludeAI = ref(true);
+const excludeAI = ref(false);
 
 // Get initial filter values from URL
 const getInitialFilters = () => {
@@ -155,9 +156,14 @@ const getQuestionAveragesByUser = () => {
 
       const label = `Q${questionNumber}`;
 
-      if (!maxScoresByQuestion[label] && answer?.score_awarded) {
-        maxScoresByQuestion[label] = answer.score_awarded;
+      // Only include questions that exist in props.gameQuestions
+      if (!maxScoresByQuestion.hasOwnProperty(label)) {
+        return;
       }
+
+      // if (!maxScoresByQuestion[label] && answer?.score_awarded) {
+      //   maxScoresByQuestion[label] = answer.score_awarded;
+      // }
 
       if (!questionCorrectCounts[playerName][label]) {
         questionCorrectCounts[playerName][label] = 0;
@@ -173,6 +179,7 @@ const getQuestionAveragesByUser = () => {
       grouped[playerName][label].totalPlayerScore += scoreValue;
       grouped[playerName][label].count++;
     });
+
   });
 
   // Build series

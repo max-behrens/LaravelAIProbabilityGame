@@ -50,6 +50,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             Route::get('/games/{gameId}/players', [GamesController::class, 'getPlayers']);
 
+            Route::get('/games/{gameId}/questions', [GamesController::class, 'getQuestions']);
+
             Route::post('/games/{game}/join', [GamesController::class, 'join']);
         Route::post('/games/{game}/leave', [GamesController::class, 'leave']);
         Route::post('/games/{game}/start', [GamesController::class, 'start'])->name('games.start');

@@ -23,6 +23,8 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             PostSeeder::class,
             GameTypeSeeder::class,
+            GameTypeDifficultySeeder::class,
+            GameTypeCategorySeeder::class,
             GameQuestionSeeder::class,
             GameSeeder::class,
             GameScoreSeeder::class,

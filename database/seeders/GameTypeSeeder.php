@@ -2,25 +2,22 @@
 
 namespace Database\Seeders;
 
-use App\Models\GameType;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
+use App\Models\GameType;
 
 class GameTypeSeeder extends Seeder
 {
-    public function run()
+    public function run(): void
     {
-        $now = Carbon::now();
+        $gameTypes = [
+            ['id' => 1, 'name' => 'Object Detection Game'],
+            ['id' => 2, 'name' => 'Game of Lies'],
+        ];
 
-        foreach (GameType::DEFAULT_TYPES as $index => $name) {
-            DB::table('game_types')->updateOrInsert(
-                ['id' => $index + 1],
-                [
-                    'name' => $name,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]
+        foreach ($gameTypes as $gameType) {
+            GameType::updateOrCreate(
+                ['id' => $gameType['id']],
+                $gameType
             );
         }
     }

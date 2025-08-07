@@ -138,6 +138,34 @@ class GamesService
     }
 
 
+    // Question retrieval methods:
+
+    public function getGameQuestionsByDifficultyAndCategory(Games $game, $difficultyId, $categoryId)
+    {
+
+        Log::debug('Fetching game questions by difficulty and category', [
+            'gameId' => $game->id,
+            'game_typeId' => $game->game_type_id,
+            'difficultyId' => $difficultyId,
+            'categoryId' => $categoryId
+        ]);
+        
+        // Build the query
+        $query = GameQuestion::where('game_type_id', $game->game_type_id)
+            ->where('difficulty_id', $difficultyId)
+            ->where('category_id', $categoryId)
+            ->with(['difficulty', 'category']);
+        
+        // Log raw SQL and bindings
+        Log::debug('Raw SQL query', [
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings()
+        ]);
+
+        // Execute query
+        return $query->get();
+    }
+
     public function getGameQuestions(Games $game)
     {
         Log::debug('Fetching game questions', ['gameId' => $game->id]);
@@ -159,6 +187,12 @@ class GamesService
 
         return $type;
     }
+
+
+
+
+
+    // Game submission methods:
 
     public function submitAnswers($gameId, $userId, array $answers, $sessionId)
     {
@@ -209,6 +243,7 @@ class GamesService
 
         return $sessionId;
     }
+
 
 
     // Game Room Charts methods:

@@ -55,6 +55,8 @@ Route::get('/games/{gameId}/players', [GamesController::class, 'getPlayers']);
 
 Route::post('/games/{gameId}/broadcast', [GamesController::class, 'broadcast']);
 
+Route::get('/games/{gameId}/questions', [GamesController::class, 'getQuestions']);
+
 
 
 // AI Game Routes

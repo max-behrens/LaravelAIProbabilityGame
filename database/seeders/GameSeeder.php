@@ -12,7 +12,7 @@ class GameSeeder extends Seeder
     {
         $gameTypes = GameType::all();
 
-        if ($gameTypes->count() < 3) {
+        if ($gameTypes->count() < 2) {
             throw new \Exception('At least 3 game types are required to seed games.');
         }
 

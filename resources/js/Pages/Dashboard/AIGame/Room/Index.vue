@@ -26,7 +26,8 @@ const props = defineProps({
     gameId: { type: Number, required: true },
     game: Object,
     gameType: Object,
-    gameQuestions: Array,
+    difficulties: Array,
+    categories: Array,
     auth: Object,
 });
 
@@ -51,6 +52,10 @@ const showVerticalNav = ref(false);
 const isNavigatingProgrammatically = ref(false);
 const currentNavSection = ref(0);
 const excludeAI = ref(true);
+
+const selectedDifficulty = ref(1); // Default to Easy (id: 1)
+const selectedCategory = ref(1);   // Default to Number (id: 1)
+const currentGameQuestions = ref([]);
 
 // Initialize player interactions first
 const {
@@ -107,7 +112,7 @@ const maxPlayersReached = computed(() => {
 });
 
 const isLastQuestion = computed(() => {
-    return currentQuestionIndex.value === props.gameQuestions.length - 1;
+    return currentQuestionIndex.value === currentGameQuestions.value.length - 1;
 });
 
 // Watch for game state changes
@@ -116,7 +121,7 @@ const isGameInProgress = computed(() => gameState.value.gameInProgress);
 
 // New computed property for controlling question input visibility
 const showQuestionInput = computed(() => {
-    return isGameStarted.value && !isWaitingForOthers.value && !gameIsOver.value;
+    return isGameStarted.value && !isWaitingForOthers.value && !gameIsOver.value && currentGameQuestions.value.length > 0;
 });
 
 // Format date helper
@@ -200,6 +205,31 @@ const fetchAIScores = async (page = 1) => {
         aiScoresTotalPages.value = 1;
         aiScoresCurrentPage.value = 1;
     }
+};
+
+const fetchGameQuestions = async (difficultyId = null, categoryId = null) => {
+    try {
+        const difficulty = difficultyId || selectedDifficulty.value;
+        const category = categoryId || selectedCategory.value;
+        
+        const response = await axios.get(`/api/games/${props.gameId}/questions`, {
+            params: {
+                difficulty_id: difficulty,
+                category_id: category
+            }
+        });
+        
+        currentGameQuestions.value = response.data.questions;
+        console.log('Fetched questions:', currentGameQuestions.value);
+    } catch (error) {
+        console.error('Failed to fetch game questions:', error);
+        errorMessage.value = 'Failed to load game questions.';
+    }
+};
+
+const onDifficultyOrCategoryChange = async () => {
+    console.log('Difficulty/Category changed:', selectedDifficulty.value, selectedCategory.value);
+    await fetchGameQuestions();
 };
 
 
@@ -298,12 +328,12 @@ const nextOrSubmit = async () => {
         if (result.submitted) {
             // Answer was submitted successfully (single player or all players answered)
             // Check if we're playing with AI and need to wait for AI answer
-            if (playWithAI.value && props.gameQuestions[currentQuestionIndex.value]) {
+            if (playWithAI.value && currentGameQuestions.value[currentQuestionIndex.value]) {
                 // For single player: Get AI answer immediately
                 if (playerCount.value === 1) {
                     console.log('Single player: Requesting AI answer for question:', currentQuestionIndex.value);
                     await getAIAnswerForQuestion(
-                        props.gameQuestions[currentQuestionIndex.value].question,
+                        currentGameQuestions.value[currentQuestionIndex.value].question,
                         props.gameId,
                         currentQuestionIndex.value
                     );
@@ -317,7 +347,7 @@ const nextOrSubmit = async () => {
                     if (!hasAIAnswered(currentQuestionIndex.value)) {
                         console.log('Requesting AI answer for question:', currentQuestionIndex.value);
                         await getAIAnswerForQuestion(
-                            props.gameQuestions[currentQuestionIndex.value].question,
+                            currentGameQuestions.value[currentQuestionIndex.value].question,
                             props.gameId,
                             currentQuestionIndex.value
                         );
@@ -362,7 +392,7 @@ const nextOrSubmit = async () => {
                     addFlashMessage('Waiting for AI to answer the final question...', 'info');
                     console.log('Triggering AI answer for final question:', currentQuestionIndex.value);
                     await getAIAnswerForQuestion(
-                        props.gameQuestions[currentQuestionIndex.value].question,
+                        currentGameQuestions.value[currentQuestionIndex.value].question,
                         props.gameId,
                         currentQuestionIndex.value
                     );
@@ -566,18 +596,18 @@ onMounted(() => {
     fetchCurrentGame();
     fetchGameScores();
     fetchAIScores();
+    
+    // Fetch initial game questions with default difficulty and category
+    fetchGameQuestions();
 
     // Vertical Nav:
     window.addEventListener('scroll', updateNavigation);
 
-        // Parse initial filters from URL
+    // Parse initial filters from URL
     parseFiltersFromUrl();
     
     // Listen for filter changes from GameAuthenticated layout
     window.addEventListener('gameFiltersChanged', handleFilterChange);
-    
-    // Fetch users on mount (assuming fetchUsers is defined elsewhere in your script)
-    // await fetchUsers(); 
 
     nextTick(() => {
         updateNavigation();
@@ -718,10 +748,10 @@ onUnmounted(() => {
                     <div class="flex flex-wrap gap-6 justify-center items-start">
                         <div v-if="showQuestionInput" class="basis-full mb-6">
                             <div class="text-center mb-2 text-gray-400 text-sm font-medium">
-                                Question {{ currentQuestionIndex + 1 }} / {{ props.gameQuestions.length }}
+                                Question {{ currentQuestionIndex + 1 }} / {{ currentGameQuestions.length }}
                             </div>
                             <div class="text-center mb-4 text-white text-xl font-semibold">
-                                {{ props.gameQuestions[currentQuestionIndex]?.question }}
+                                {{ currentGameQuestions[currentQuestionIndex]?.question }}
                             </div>
                             <div class="flex flex-col sm:flex-row gap-4 justify-center">
                                 <input v-model="answers[currentQuestionIndex]"
@@ -750,43 +780,83 @@ onUnmounted(() => {
                             </div>
                         </div>
 
-                        <div class="basis-full flex flex-wrap gap-4 justify-center p-4 bg-gray-800 rounded shadow">
-                            <div class="flex items-center gap-2 text-white">
-                                <label for="players">Number of Players:</label>
-                                <select id="players" :value="playerCount" @change="onPlayerCountChange($event.target.value)"
-                                    :disabled="isGameInProgress || isWaitingForOthers || gameIsOver"
-                                    class="border rounded px-2 py-1 bg-gray-700 text-white disabled:opacity-50">
-                                    <option value="1">1 Player</option>
-                                    <option value="2">2 Players</option>
-                                </select>
-                            </div>
+                        <!-- Game Setup Section -->
+                        <div class="basis-full flex flex-col gap-6 p-4 bg-gray-800 rounded shadow text-white">
 
-                            <div class="flex items-center text-white">
-                                <input type="checkbox" v-model="playWithAI"
-                                    :disabled="isGameInProgress || isWaitingForOthers || gameIsOver" class="mr-2" />
-                                <span>Play with AI</span>
-                            </div>
+                            <!-- Row 1: Game Name & Buttons -->
+                            <div class="flex items-center justify-center flex-wrap gap-4 min-h-[32px]">
+                                <h2 class="text-xl text-white font-semibold">
+                                    Lobby {{ game.id }}: {{ gameType.name || 'Unknown Game' }}
+                                </h2>
 
-                            <div class="flex flex-wrap gap-4 justify-center mt-4 w-full">
+                                
                                 <button @click="startGame"
-                                    :disabled="!isInGame || (isGameInProgress && !gameIsOver) || isWaitingForOthers"
-                                    class="bg-green-900 hover:bg-green-800 text-green-200 font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed">
-                                    {{ isWaitingForOthers ? 'Waiting...' : 'Start Game' }}
+                                :disabled="!isInGame || (isGameInProgress && !gameIsOver) || isWaitingForOthers"
+                                class="bg-green-900 hover:bg-green-800 text-green-200 font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed">
+                                {{ isWaitingForOthers ? 'Waiting...' : 'Start Game' }}
                                 </button>
-                                
+
                                 <button @click="joinGame"
-                                    :disabled="isInGame || submitting || maxPlayersReached || (isGameInProgress && !gameIsOver)"
-                                    class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50">
-                                    Join Game
+                                :disabled="isInGame || submitting || maxPlayersReached || (isGameInProgress && !gameIsOver)"
+                                class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50">
+                                Join Game
                                 </button>
-                                
+
                                 <button @click="leaveGame"
-                                    :disabled="!isInGame || submitting || (isGameInProgress && !gameIsOver)"
-                                    class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50">
-                                    Leave Game
+                                :disabled="!isInGame || submitting || (isGameInProgress && !gameIsOver)"
+                                class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50">
+                                Leave Game
                                 </button>
+                            </div>
+
+                            <!-- Row 2: Settings -->
+                            <div class="flex flex-wrap justify-center items-center gap-6">
+                                <!-- Number of Players -->
+                                <div class="flex items-center gap-2">
+                                    <label for="players">Number of Players:</label>
+                                    <select id="players" :value="playerCount" @change="onPlayerCountChange($event.target.value)"
+                                        :disabled="isGameInProgress || isWaitingForOthers || gameIsOver"
+                                        class="border rounded px-2 py-1 bg-gray-700 text-white disabled:opacity-50">
+                                        <option value="1">1 Player</option>
+                                        <option value="2">2 Players</option>
+                                    </select>
+                                </div>
+
+                                <!-- Difficulty -->
+                                <div class="flex items-center gap-2">
+                                    <label for="difficulty">Difficulty:</label>
+                                    <select id="difficulty" v-model="selectedDifficulty"
+                                        :disabled="isGameInProgress || isWaitingForOthers || gameIsOver"
+                                        @change="onDifficultyOrCategoryChange"
+                                        class="border rounded px-2 py-1 bg-gray-700 text-white disabled:opacity-50">
+                                        <option v-for="difficulty in difficulties" :key="difficulty.id" :value="difficulty.id">
+                                        {{ difficulty.name }}
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <!-- Category -->
+                                <div class="flex items-center gap-2">
+                                    <label for="category">Category:</label>
+                                    <select id="category" v-model="selectedCategory"
+                                        :disabled="isGameInProgress || isWaitingForOthers || gameIsOver"
+                                        @change="onDifficultyOrCategoryChange"
+                                        class="border rounded px-2 py-1 bg-gray-700 text-white disabled:opacity-50">
+                                        <option v-for="category in categories" :key="category.id" :value="category.id">
+                                        {{ category.name }}
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <!-- Play with AI -->
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" v-model="playWithAI"
+                                        :disabled="isGameInProgress || isWaitingForOthers || gameIsOver" />
+                                    <label>Play with AI</label>
+                                </div>
                             </div>
                         </div>
+
                         
 
                         <div v-if="isWaitingForOthers && !gameIsOver" class="basis-full mb-6 text-center">
@@ -822,7 +892,7 @@ onUnmounted(() => {
                               </div>
 
                               <div v-if="!aiLoading && !aiError" class="space-y-2">
-                                <div v-for="(question, index) in props.gameQuestions" :key="question.id" class="text-gray-300">
+                                <div v-for="(question, index) in currentGameQuestions" :key="question.id" class="text-gray-300">
                                     <span class="font-medium">Q{{ index + 1 }}:</span>
                                     <span v-if="hasAIAnswered(index)" class="text-green-400 ml-2">
                                         {{ aiAnswers[index]?.answer || 'Answer not available' }}
@@ -930,7 +1000,7 @@ onUnmounted(() => {
 
                         <div class="flex flex-col lg:flex-row gap-6 w-full">
                             <div class="w-full lg:w-1/2 lg:max-w-[50%] overflow-hidden">
-                                <GameHeatmapComponent ref="gameHeatmapRef" :gameId="gameId" :gameQuestions="gameQuestions" />
+                                <GameHeatmapComponent ref="gameHeatmapRef" :gameId="gameId" :gameQuestions="currentGameQuestions" />
                             </div>
 
                             <div class="w-full lg:w-1/2 lg:max-w-[50%] overflow-hidden">

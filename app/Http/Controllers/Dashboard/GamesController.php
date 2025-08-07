@@ -7,6 +7,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Games;
 use App\Models\User;
 use App\Models\GameScore;
+use App\Models\GameType;
+use App\Models\GameTypeDifficulty;
+use App\Models\GameTypeCategory;
 use App\Events\PlayerReady;
 use Illuminate\Support\Facades\Cache;
 use App\Events\GameStatusUpdated;
@@ -89,10 +92,14 @@ class GamesController extends Controller
     public function showRoom($gameId, $userId)
     {
         Log::info('Loading game room', ['gameId' => $gameId, 'userId' => $userId]);
+        
         $gameDetails = Games::findOrFail($gameId);
         $gameType = $this->gamesService->getGameType($gameDetails);
         $userDetails = User::findOrFail($userId);
-        $gameQuestions = $this->gamesService->getGameQuestions($gameDetails);
+        
+        // Get all difficulties and categories for dropdowns
+        $difficulties = GameTypeDifficulty::orderBy('id')->get(['id', 'name'])->toArray();
+        $categories = GameTypeCategory::orderBy('id')->get(['id', 'name'])->toArray();
 
         return Inertia::render('Dashboard/AIGame/Room/Index', [
             'gameId' => (int) $gameId,
@@ -100,9 +107,38 @@ class GamesController extends Controller
             'game' => $gameDetails,
             'maxPlayers' => $gameDetails->max_players,
             'userDetails' => $userDetails,
-            'gameQuestions' => $gameQuestions,
             'gameType' => $gameType,
+            'difficulties' => $difficulties,
+            'categories' => $categories,
             'auth' => ['user' => auth()->user()],
+        ]);
+    }
+
+    // New method to get questions based on difficulty and category
+    public function getQuestions($gameId, $difficultyId = 1, $categoryId = 1)
+    {
+
+        Log::info('Fetching game questions', [
+            'gameId' => $gameId,
+            'difficultyId' => $difficultyId,
+            'categoryId' => $categoryId
+        ]);
+        
+        $gameDetails = Games::findOrFail($gameId);
+        $gameQuestions = $this->gamesService->getGameQuestionsByDifficultyAndCategory(
+            $gameDetails, 
+            $difficultyId, 
+            $categoryId
+        );
+
+        Log::info('Fetching game questions AFTER!', [
+            'gameId' => $gameId,
+            'difficultyId' => $difficultyId,
+            'categoryId' => $categoryId
+        ]);
+
+        return response()->json([
+            'questions' => $gameQuestions
         ]);
     }
 
