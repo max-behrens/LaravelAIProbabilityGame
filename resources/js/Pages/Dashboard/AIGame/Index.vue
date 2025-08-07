@@ -447,7 +447,7 @@ watch([errorMessage, successMessage], () => {
                         class="h-2 rounded-full transition-all duration-300"
                         :class="{
                           'bg-green-500': !isGameFull(game),
-                          'bg-red-500': isGameFull(game)
+                          'bg-yellow-500': isGameFull(game)
                         }"
                         :style="{
                           width: game.max_players ? `${Math.min(100, (playersCount[game.id] || 0) / game.max_players * 100)}%` : '0%'
@@ -455,7 +455,7 @@ watch([errorMessage, successMessage], () => {
                       ></div>
                     </div>
                     
-                    <div v-if="isGameFull(game)" class="text-red-400 text-sm font-medium mb-2">
+                    <div v-if="isGameFull(game)" class="text-yellow-400 text-sm font-medium mb-2">
                       Game is full
                     </div>
                     
