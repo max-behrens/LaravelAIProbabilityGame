@@ -18,7 +18,7 @@ const showAdvancedFilters = ref(false);
 const getDefaultDateRange = () => {
   const endDate = new Date(); // Today
   const startDate = new Date();
-  startDate.setDate(endDate.getDate() - 2);
+  startDate.setDate(endDate.getDate() - 7);
   return [startDate, endDate];
 };
 

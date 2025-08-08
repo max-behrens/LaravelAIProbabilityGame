@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'; // Remove 'watch' import
+import { ref, computed } from 'vue';
 import axios from 'axios';
 
 // Factory function that creates AI composable with dependencies
@@ -49,7 +49,6 @@ export function createAI(gameId, getDependencies) {
     return answeredCount >= totalPlayers && totalPlayers > 0;
   });
 
-
   // Get AI answer for current question (kept for backward compatibility)
   const getAIAnswer = async () => {
     if (!playWithAI.value || aiLoading.value) return;
@@ -60,11 +59,23 @@ export function createAI(gameId, getDependencies) {
       
       const deps = getDependencies();
       const currentQuestion = deps.currentQuestionIndex;
-            
-      // Use the correct API endpoint that matches your controller
+      
+      // Get the current question text from dependencies
+      const questionText = deps.currentGameQuestions && deps.currentGameQuestions[currentQuestion]
+        ? deps.currentGameQuestions[currentQuestion].question
+        : null;
+      
+      if (!questionText) {
+        throw new Error('No question text available for current question index');
+      }
+      
+      // Use the correct API endpoint that includes the question text
       const response = await axios.post('/api/ai/answer', {
         gameId: gameId,
-        questionIndex: currentQuestion
+        questionIndex: currentQuestion,
+        questionText: questionText, // Include the actual question text
+        difficultyId: deps.selectedDifficulty || null,
+        categoryId: deps.selectedCategory || null
       });
       
       if (response.data.success) {
@@ -89,18 +100,23 @@ export function createAI(gameId, getDependencies) {
   };
 
   // Get AI answer for a specific question index
-  const getAIAnswerForQuestion = async (questionText, gameId, questionIndex) => {
+  const getAIAnswerForQuestion = async (questionText, gameId, questionIndex, selectedDifficulty, selectedCategory) => {
     if (!playWithAI.value || aiLoading.value) return;
     
     try {
       aiLoading.value = true;
       aiError.value = null;
             
-      // Use the correct API endpoint
+      // Use the correct API endpoint with the question text
       const response = await axios.post('/api/ai/answer', {
         gameId: gameId,
-        questionIndex: questionIndex
+        questionIndex: questionIndex,
+        questionText: questionText, // Actually use the question text parameter
+        difficultyId: selectedDifficulty || null,
+        categoryId: selectedCategory || null
       });
+
+      console.log('ETURNED AI ANSWER: ' + JSON.stringify(response));
       
       if (response.data.success) {
         // Store AI answer with proper structure
@@ -128,7 +144,7 @@ export function createAI(gameId, getDependencies) {
   const hasAIAnswered = (questionIndex) => {
     const answer = aiAnswers.value[questionIndex];
     return answer && answer.answer !== undefined && answer.answer !== null && answer.answer !== '';
-};
+  };
 
   // Reset AI state (for new games)
   const resetAI = () => {
@@ -136,7 +152,7 @@ export function createAI(gameId, getDependencies) {
     aiError.value = null;
     aiLoading.value = false;
     console.log('AI state reset');
-};
+  };
 
   return {
     // State
@@ -161,6 +177,7 @@ export function useAI(gameId, gameQuestions, gameState, players, currentQuestion
   return createAI(gameId, () => ({
     gameState: gameState?.value || gameState,
     players: players?.value || players,
-    currentQuestionIndex: currentQuestionIndex?.value || currentQuestionIndex
+    currentQuestionIndex: currentQuestionIndex?.value || currentQuestionIndex,
+    currentGameQuestions: gameQuestions?.value || gameQuestions
   }));
 }

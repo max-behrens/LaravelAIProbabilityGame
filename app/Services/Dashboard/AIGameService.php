@@ -118,20 +118,20 @@ class AIGameService
 
 
 
-    public function submitAIAnswers($gameId, $userId, array $answers, $sessionId)
+    public function submitAIAnswers($gameId, $userId, array $answers, $sessionId, $difficultyId = null, $categoryId = null)
     {
         Log::info('AI Service submitAIAnswers called', [
             'gameId' => $gameId,
             'userId' => $userId,
             'sessionId' => $sessionId,
-            'answersCount' => count($answers)
+            'answersCount' => count($answers),
+            'difficultyId' => $difficultyId,
+            'categoryId' => $categoryId
         ]);
-
         // Check if AI answers for this session already exist
         $existingAIScore = AIScore::where('game_id', $gameId)
             ->where('session_id', $sessionId)
             ->first();
-
         if ($existingAIScore) {
             Log::info('AI answers already saved for this session', [
                 'gameId' => $gameId,
@@ -140,18 +140,37 @@ class AIGameService
             ]);
             return $sessionId; // Return early, don't save duplicate
         }
-
         $game = Games::findOrFail($gameId);
-        $gameQuestions = $game->gameType->gameQuestions()->get();
-
+    
+        // Build query for game questions with difficulty and category filters
+        $gameQuestionsQuery = $game->gameType->gameQuestions();
+    
+        if ($difficultyId !== null) {
+            $gameQuestionsQuery->where('difficulty_id', $difficultyId);
+        }
+        if ($categoryId !== null) {
+            $gameQuestionsQuery->where('category_id', $categoryId);
+        }
+    
+        $gameQuestions = $gameQuestionsQuery->get();
         $answerJson = [];
         $totalScore = 0;
-
         foreach ($gameQuestions as $index => $question) {
             $submittedAnswer = $answers[$index] ?? null;
-            $isCorrect = $submittedAnswer !== null && strtolower(trim($submittedAnswer)) === strtolower(trim($question->answer));
+            $isCorrect = false;
+            $submittedAnswer = $answers[$index] ?? null;
+            if ($submittedAnswer !== null) {
+                // Trim whitespace and convert to lowercase
+                $submittedAnswerCleaned = strtolower(trim($submittedAnswer));
+                $correctAnswerCleaned = strtolower(trim($question->answer));
+                // Remove punctuation from both strings for a more flexible comparison
+                $submittedAnswerCleaned = preg_replace('/[^\p{L}\p{N}\s]/u', '', $submittedAnswerCleaned);
+                $correctAnswerCleaned = preg_replace('/[^\p{L}\p{N}\s]/u', '', $correctAnswerCleaned);
+                
+                // Check if the correct answer appears anywhere within the AI's answer
+                $isCorrect = strpos($submittedAnswerCleaned, $correctAnswerCleaned) !== false;
+            }
             $scoreAwarded = $isCorrect ? ($question->score_awarded ?? 0) : 0;
-
             $answerJson[$question->id] = [
                 'question_number' => $index + 1,
                 'question' => $question->question,
@@ -160,24 +179,29 @@ class AIGameService
                 'is_correct' => $isCorrect,
                 'score_awarded' => $scoreAwarded
             ];
-
             $totalScore += $scoreAwarded;
         }
-
+        // Add difficulty_id and category_id to answer_json for reference
+        if ($difficultyId !== null) {
+            $answerJson['difficulty_id'] = $difficultyId;
+        }
+        if ($categoryId !== null) {
+            $answerJson['category_id'] = $categoryId;
+        }
         $aiScore = AIScore::create([
             'game_id' => $game->id,
             'answer_json' => json_encode($answerJson),
             'session_id' => $sessionId,
             'score' => $totalScore,
         ]);
-
         Log::info('AI answers saved successfully', [
             'gameId' => $gameId,
             'sessionId' => $sessionId,
             'aiScoreId' => $aiScore->id,
-            'totalScore' => $totalScore
+            'totalScore' => $totalScore,
+            'difficultyId' => $difficultyId,
+            'categoryId' => $categoryId
         ]);
-
         return $sessionId;
     }
 }

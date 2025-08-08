@@ -45,9 +45,50 @@ const selectedPlayerIndex = ref(null);
 const hoveredPlayerIndex = ref(null);
 
 // NEW: Scrollable window state
-const windowSize = 30; // Show 30 days at a time
-const currentWindowStart = ref(0); // Index of the first day in the current window
+const windowSize = 10; // Show 10 columns at a time (instead of 30 days)
+const currentWindowStart = ref(0); // Index of the first column in the current window
 const allDates = ref([]); // All possible dates in the range
+const allColumns = ref([]); 
+
+const generateAllColumns = () => {
+  // First generate all dates
+  const dates = generateAllDates();
+  
+  // Then expand dates into columns based on session counts
+  const sessionsByDate = {};
+  heatmapData.value.forEach(session => {
+    if (!session.created_at) return;
+    const date = dayjs(session.created_at).format('YYYY-MM-DD');
+    if (!sessionsByDate[date]) sessionsByDate[date] = [];
+    sessionsByDate[date].push(session);
+  });
+  
+  const expandedColumns = [];
+  dates.forEach(date => {
+    const sessionsForDate = sessionsByDate[date] || [];
+    const numColumns = Math.ceil(sessionsForDate.length / 10) || 1;
+    
+    for (let colIndex = 0; colIndex < numColumns; colIndex++) {
+      if (colIndex === 0) {
+        expandedColumns.push(date);
+      } else {
+        expandedColumns.push(`${date} (${colIndex + 1})`);
+      }
+    }
+  });
+  
+  return expandedColumns;
+};
+
+/**
+ * Get the current window of columns to display
+ */
+const currentWindowColumns = computed(() => {
+  const start = currentWindowStart.value;
+  const end = Math.min(start + windowSize, allColumns.value.length);
+  return allColumns.value.slice(start, end);
+});
+
 
 /**
  * Fetch ALL heatmap data from API with filters
@@ -57,7 +98,6 @@ const fetchHeatmapData = async () => {
   try {
     const params = {};
     
-    // Only add game_type_id if a specific game is selected
     if (props.gameTypeId !== null && props.gameTypeId !== undefined) {
       params.game_type_id = props.gameTypeId;
     }
@@ -65,7 +105,6 @@ const fetchHeatmapData = async () => {
     if (props.startDate) params.start_date = dayjs(props.startDate).format('YYYY-MM-DD');
     if (props.endDate) params.end_date = dayjs(props.endDate).format('YYYY-MM-DD');
     
-    // Handle multiple user IDs - this was the main issue
     if (props.userIds) {      
         params.user_ids = props.userIds.join(',');
         console.log('🔴 Setting user_ids parameter:', params.user_ids);
@@ -74,25 +113,22 @@ const fetchHeatmapData = async () => {
     if (props.andUsers) {
       params.and_users = 'true';
     }
-    // Fetch a large number to get all data
     params.per_page = 1000;
 
     console.log('Fetching heatmap with params:', params);
 
     const response = await axios.get('/dashboard/cumulative-heatmap', { params });
-
-    // The backend now handles filtering, so we can use the data directly
     heatmapData.value = response.data.data || [];
 
     console.log('Received heatmap data:', heatmapData.value.length, 'sessions');
 
-    // Generate all dates and reset window
+    // Generate all dates and columns
     allDates.value = generateAllDates();
-    currentWindowStart.value = Math.max(0, allDates.value.length - windowSize); // Start at the end (most recent)
+    allColumns.value = generateAllColumns(); // NEW: Generate expanded columns
+    currentWindowStart.value = Math.max(0, allColumns.value.length - windowSize); // Start at the end (most recent)
 
     await nextTick();
 
-    // Auto-select first session after loading
     if (heatmapData.value.length > 0) {
       const firstSession = heatmapData.value[0];
       selectedSession.value = {
@@ -107,18 +143,17 @@ const fetchHeatmapData = async () => {
       selectedSessionDetails.value = null;
     }
 
-    // Force chart re-render
     chartKey.value++;
   } catch (error) {
     console.error('Failed to load heatmap data', error);
     heatmapData.value = [];
+    allColumns.value = [];
     selectedSession.value = null;
     selectedSessionDetails.value = null;
   } finally {
     heatmapLoading.value = false;
   }
 };
-
 
 /**
  * Fetch session details by sessionId - with better error handling
@@ -239,7 +274,7 @@ const activeHeatmapColorRanges = computed(() => {
  */
 // NEW: Updated heatmapSeries computed property with mixed color support
 const heatmapSeries = computed(() => {
-  const dates = currentWindowDates.value;
+  const columns = currentWindowColumns.value; // Use windowed columns instead of dates
   
   const sessionsByDate = {};
   heatmapData.value.forEach(session => {
@@ -252,42 +287,52 @@ const heatmapSeries = computed(() => {
     sessionsByDate[date].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   });
   
-  const maxSessionsPerDay = Math.max(1, ...Object.values(sessionsByDate).map(sessions => sessions.length));
+  const maxSessionsPerColumn = 10;
   
   const series = [];
-  for (let sessionIndex = 0; sessionIndex < maxSessionsPerDay; sessionIndex++) {
-    const rowData = dates.map(date => {
-      const sessionsForDate = sessionsByDate[date] || [];
-      const session = sessionsForDate[sessionIndex] || null;
+  for (let sessionIndex = 0; sessionIndex < maxSessionsPerColumn; sessionIndex++) {
+    const rowData = columns.map(column => { // Use columns instead of expandedDates
+      // Extract original date from column
+      const originalDate = column.includes(' (') 
+        ? column.split(' (')[0] 
+        : column;
+      
+      // Determine which column this is (0-based)
+      const columnIndex = column.includes(' (') 
+        ? parseInt(column.match(/\((\d+)\)/)[1]) - 1 
+        : 0;
+      
+      const sessionsForDate = sessionsByDate[originalDate] || [];
+      
+      // Calculate which session to show based on column and row
+      const sessionIndexInDate = (columnIndex * maxSessionsPerColumn) + sessionIndex;
+      const session = sessionsForDate[sessionIndexInDate] || null;
+      
       const hasAiScore = session?.ai_score !== null && session?.ai_score !== undefined;
 
       let scoreValue = null;
-      let useAiColors = false; // New flag to determine which color scheme to use
+      let useAiColors = false;
       let percentageScore = 0;
       let aiPercentageScore = 0;
       let yValue;
             
       if (session) {
         if (props.showAiScores && hasAiScore) {
-          // AI Scores are ON and the session has an AI score - show AI score with AI colors
           scoreValue = session.ai_score;
           useAiColors = true;
         } else if (session.combined_score !== null) {
-          // Show human score with human colors (whether AI mode is on or off)
           scoreValue = session.combined_score;
           useAiColors = false;
         }
       }
 
-      // Calculate Percentage Score
       if (scoreValue !== null) {
-        percentageScore = ((session.combined_score / (session.total_game_score * session.player_count)) * 100).toFixed(2);;
+        percentageScore = ((session.combined_score / (session.total_game_score * session.player_count)) * 100).toFixed(2);
         aiPercentageScore = (session.ai_score / session.total_game_score) * 100;
       }
 
-      // The y value needs to be a small negative number to distinguish 0 from null
       if (scoreValue === 0) {
-        yValue = -100; // Use a distinct negative value for sessions with a score of 0
+        yValue = -100;
       } else {
         if (props.showAiScores && hasAiScore) {
           yValue = aiPercentageScore;
@@ -296,13 +341,12 @@ const heatmapSeries = computed(() => {
         }
       }
       
-      // Offset AI scores by 1000 to use different color ranges
       if (useAiColors && yValue > 0) {
         yValue = yValue + 1000;
       }
 
       return {
-        x: date,
+        x: column, // Use column as x-axis value
         y: yValue,
         sessionId: session?.session_id ?? null,
         players: session?.players ?? [],
@@ -313,7 +357,7 @@ const heatmapSeries = computed(() => {
         aiPercentageScore: aiPercentageScore,
         percentageScore: percentageScore,
         useAiColors: useAiColors,
-        originalScore: scoreValue, // Keep original score for display
+        originalScore: scoreValue,
         customdata: {
           sessionId: session?.session_id,
           useAiColors: useAiColors
@@ -332,23 +376,25 @@ const heatmapSeries = computed(() => {
 /**
  * X-axis categories (current window dates)
  */
-const heatmapXAxisCategories = computed(() => currentWindowDates.value);
+const heatmapXAxisCategories = computed(() => currentWindowColumns.value);
 
-// NEW: Navigation functions
+// Update the navigation computed properties to work with columns:
 const canNavigateLeft = computed(() => currentWindowStart.value > 0);
-const canNavigateRight = computed(() => currentWindowStart.value + windowSize < allDates.value.length);
+const canNavigateRight = computed(() => currentWindowStart.value + windowSize < allColumns.value.length);
 
+// Update the navigation functions to work with columns:
 const navigateLeft = () => {
   if (canNavigateLeft.value) {
     currentWindowStart.value = Math.max(0, currentWindowStart.value - windowSize);
-    chartKey.value++; // Force chart re-render
+    chartKey.value++;
   }
 };
 
+
 const navigateRight = () => {
   if (canNavigateRight.value) {
-    currentWindowStart.value = Math.min(allDates.value.length - windowSize, currentWindowStart.value + windowSize);
-    chartKey.value++; // Force chart re-render
+    currentWindowStart.value = Math.min(allColumns.value.length - windowSize, currentWindowStart.value + windowSize);
+    chartKey.value++;
   }
 };
 
@@ -358,24 +404,24 @@ const jumpToStart = () => {
 };
 
 const jumpToEnd = () => {
-  currentWindowStart.value = Math.max(0, allDates.value.length - windowSize);
+  currentWindowStart.value = Math.max(0, allColumns.value.length - windowSize);
   chartKey.value++;
 };
 
 // NEW: Computed properties for navigation info
 const currentWindowInfo = computed(() => {
-  if (allDates.value.length === 0) return '';
+  if (allColumns.value.length === 0) return '';
   
   const start = currentWindowStart.value;
-  const end = Math.min(start + windowSize, allDates.value.length);
-  const startDate = allDates.value[start];
-  const endDate = allDates.value[end - 1];
+  const end = Math.min(start + windowSize, allColumns.value.length);
+  const startColumn = allColumns.value[start];
+  const endColumn = allColumns.value[end - 1];
   
-  return `${startDate} to ${endDate} (${end - start} days)`;
+  return `${startColumn} to ${endColumn} (${end - start} columns)`;
 });
 
 const totalDaysInfo = computed(() => {
-  return `${allDates.value.length} total days`;
+  return `${allColumns.value.length} total columns`;
 });
 
 const selectedHeatmapPoint = ref({ seriesIndex: null, dataPointIndex: null });

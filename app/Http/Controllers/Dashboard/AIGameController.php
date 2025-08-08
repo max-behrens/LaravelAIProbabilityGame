@@ -26,12 +26,13 @@ class AIGameController extends Controller
     {
         $gameId = $request->gameId;
         $page = $request->query('page', 1);
-    // Get filter parameters from the request
-    $startDate = $request->get('start_date');
-    $endDate = $request->get('end_date');
-    $excludeAI = $request->get('exclude_ai', 'true') === 'true'; // Add this line
 
-        $aiScores = $this->aiGameService->getAIGameScores($gameId, $page, $startDate, $endDate, $excludeAI); // Add excludeAI parameter
+        // Get filter parameters from the request
+        $startDate = $request->get('start_date');
+        $endDate = $request->get('end_date');
+        $excludeAI = $request->get('exclude_ai', 'true') === 'true';
+
+        $aiScores = $this->aiGameService->getAIGameScores($gameId, $page, $startDate, $endDate, $excludeAI);
         Log::info('AI Game scores retrieved', ['scores' => $aiScores]);
 
         return response()->json($aiScores);
@@ -49,16 +50,25 @@ class AIGameController extends Controller
 
         $gameId = $request->input('gameId');
         $questionIndex = $request->input('questionIndex');
+        $difficultyId = $request->input('difficultyId');
+        $categoryId = $request->input('categoryId');
 
         Log::info('AI Answer requested', [
             'gameId' => $gameId,
-            'questionIndex' => $questionIndex
+            'questionIndex' => $questionIndex,
+            'difficultyId' => $difficultyId,
+            'categoryId' => $categoryId
         ]);
 
         try {
             // Get game and questions
             $game = Games::findOrFail($gameId);
-            $gameQuestions = $game->gameType->gameQuestions()->get();
+            $gameQuestions = $game->gameType->gameQuestions()
+                ->where('difficulty_id', $difficultyId)
+                ->where('category_id', $categoryId)
+                ->get();
+
+                Log::info('Retrieved questions', ['questions' => $gameQuestions->toArray()]);
 
             // Validate question index
             if ($questionIndex >= $gameQuestions->count()) {
@@ -77,7 +87,16 @@ class AIGameController extends Controller
             $sessionId = Str::uuid()->toString();
 
             // Calculate score (check if AI answer is correct)
-            $isCorrect = strtolower(trim($aiAnswer)) === strtolower(trim($question->answer));
+            // Clean both answers for comparison
+            $aiAnswerCleaned = strtolower(trim($aiAnswer));
+            $correctAnswerCleaned = strtolower(trim($question->answer));
+            
+            // Remove punctuation from both strings for more flexible comparison
+            $aiAnswerCleaned = preg_replace('/[^\p{L}\p{N}\s]/u', '', $aiAnswerCleaned);
+            $correctAnswerCleaned = preg_replace('/[^\p{L}\p{N}\s]/u', '', $correctAnswerCleaned);
+            
+            // Check if the correct answer appears anywhere within the AI's answer
+            $isCorrect = strpos($aiAnswerCleaned, $correctAnswerCleaned) !== false;
             $scoreAwarded = $isCorrect ? ($question->score_awarded ?? 0) : 0;
 
             return response()->json([

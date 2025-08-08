@@ -79,7 +79,10 @@ const {
 const aiModule = createAI(props.gameId, () => ({
     gameState: gameState.value,
     players: players.value,
-    currentQuestionIndex: currentQuestionIndex.value
+    currentQuestionIndex: currentQuestionIndex.value,
+    currentGameQuestions: currentGameQuestions.value,
+    selectedDifficulty: selectedDifficulty.value,
+    selectedCategory: selectedCategory.value
 }));
 
 const {
@@ -124,6 +127,8 @@ const showQuestionInput = computed(() => {
     return isGameStarted.value && !isWaitingForOthers.value && !gameIsOver.value && currentGameQuestions.value.length > 0;
 });
 
+console.log('QUESTIONS: ' + JSON.stringify(currentGameQuestions.value));
+
 // Format date helper
 const formatDate = (dateString) => {
     if (!dateString) return '';
@@ -160,6 +165,14 @@ const fetchGameScores = async (page = 1) => {
             }
         }
         
+        // ADD THESE LINES - Include difficulty and category parameters
+        if (selectedDifficulty.value) {
+            params.set('difficulty_id', selectedDifficulty.value);
+        }
+        if (selectedCategory.value) {
+            params.set('category_id', selectedCategory.value);
+        }
+        
         const response = await axios.get(`/api/games/${props.gameId}/scores?${params.toString()}`);
         gameScores.value = response.data.data;
         scoresTotalPages.value = response.data.last_page;
@@ -193,6 +206,13 @@ const fetchAIScores = async (page = 1) => {
         // Add exclude AI parameter
         params.set('exclude_ai', appliedFilters.value.excludeAI.toString());
         
+        if (selectedDifficulty.value) {
+            params.set('difficulty_id', selectedDifficulty.value);
+        }
+        if (selectedCategory.value) {
+            params.set('category_id', selectedCategory.value);
+        }
+        
         const response = await axios.get(`/api/games/${props.gameId}/ai-scores?${params.toString()}`);
         aiScores.value = response.data.data || []; // Ensure it's always an array
         aiScoresTotalPages.value = response.data.last_page || 1;
@@ -207,17 +227,24 @@ const fetchAIScores = async (page = 1) => {
     }
 };
 
+
 const fetchGameQuestions = async (difficultyId = null, categoryId = null) => {
     try {
         const difficulty = difficultyId || selectedDifficulty.value;
         const category = categoryId || selectedCategory.value;
+
+        const urlParams = new URLSearchParams(window.location.search);
+
+        if (difficulty) {
+            urlParams.set('difficulty_id', difficulty);
+        }
+        if (category) {
+            urlParams.set('category_id', category);
+        }
         
-        const response = await axios.get(`/api/games/${props.gameId}/questions`, {
-            params: {
-                difficulty_id: difficulty,
-                category_id: category
-            }
-        });
+        const response = await axios.get(`/api/games/${props.gameId}/questions?${urlParams.toString()}`);
+
+        console.log('difficultyId: ' + difficultyId);
         
         currentGameQuestions.value = response.data.questions;
         console.log('Fetched questions:', currentGameQuestions.value);
@@ -229,9 +256,22 @@ const fetchGameQuestions = async (difficultyId = null, categoryId = null) => {
 
 const onDifficultyOrCategoryChange = async () => {
     console.log('Difficulty/Category changed:', selectedDifficulty.value, selectedCategory.value);
-    await fetchGameQuestions();
-};
+    
+    // 1. Fetch the new questions and scores
+    await fetchGameQuestions(selectedDifficulty.value, selectedCategory.value);
+    await fetchGameScores(1);
+    await fetchAIScores(1);
 
+    // 2. Update the URL in the browser's address bar
+    const url = new URL(window.location);
+    url.searchParams.set('difficulty_id', selectedDifficulty.value);
+    url.searchParams.set('category_id', selectedCategory.value);
+
+    // Use pushState to change the URL without reloading the page
+    window.history.pushState({}, '', url);
+
+    console.log('URL updated to:', url.toString());
+};
 
 // Pagination handler
 const changeScoresPage = (page) => {
@@ -335,7 +375,9 @@ const nextOrSubmit = async () => {
                     await getAIAnswerForQuestion(
                         currentGameQuestions.value[currentQuestionIndex.value].question,
                         props.gameId,
-                        currentQuestionIndex.value
+                        currentQuestionIndex.value,
+                        selectedDifficulty.value,
+                        selectedCategory.value
                     );
                     // Progress to next question immediately after AI responds
                     currentQuestionIndex.value++;
@@ -349,7 +391,9 @@ const nextOrSubmit = async () => {
                         await getAIAnswerForQuestion(
                             currentGameQuestions.value[currentQuestionIndex.value].question,
                             props.gameId,
-                            currentQuestionIndex.value
+                            currentQuestionIndex.value,
+                            selectedDifficulty.value,
+                            selectedCategory.value
                         );
                         
                         // Broadcast that AI has answered and all players can progress
@@ -394,12 +438,16 @@ const nextOrSubmit = async () => {
                     await getAIAnswerForQuestion(
                         currentGameQuestions.value[currentQuestionIndex.value].question,
                         props.gameId,
-                        currentQuestionIndex.value
+                        currentQuestionIndex.value,
+                        selectedDifficulty.value,
+                        selectedCategory.value
                     );
                 }
             }
+            const submissionAnswers = answers.value.map(answer => answer || ''); // Convert undefined/null to empty string
 
-            const result = await submitAnswers(answers.value, playerCount.value);
+            const result = await submitAnswers(submissionAnswers, playerCount.value, selectedDifficulty.value, selectedCategory.value);
+
 
             if (result.submitted) {
                 addFlashMessage('Answers submitted successfully! Game Completed.', 'success');
@@ -569,6 +617,20 @@ const parseFiltersFromUrl = () => {
     
     // Parse exclude AI - defaults to true if not present
     appliedFilters.value.excludeAI = urlParams.get('exclude_ai') !== 'false';
+    
+    const difficultyId = urlParams.get('difficulty_id');
+    if (difficultyId && !isNaN(parseInt(difficultyId))) {
+        selectedDifficulty.value = parseInt(difficultyId);
+    } else {
+        selectedDifficulty.value = 1; // Force default to 1 if URL param is invalid/missing
+    }
+    
+    const categoryId = urlParams.get('category_id');
+    if (categoryId && !isNaN(parseInt(categoryId))) {
+        selectedCategory.value = parseInt(categoryId);
+    } else {
+        selectedCategory.value = 1; // Force default to 1 if URL param is invalid/missing
+    }
 };
 
 const handleFilterChange = (event) => {

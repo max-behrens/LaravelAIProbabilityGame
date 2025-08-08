@@ -115,8 +115,11 @@ class GamesController extends Controller
     }
 
     // New method to get questions based on difficulty and category
-    public function getQuestions($gameId, $difficultyId = 1, $categoryId = 1)
+    public function getQuestions($gameId, Request $request)
     {
+
+        $difficultyId = $request->get('difficulty_id');
+        $categoryId = $request->get('category_id');
 
         Log::info('Fetching game questions', [
             'gameId' => $gameId,
@@ -149,7 +152,9 @@ class GamesController extends Controller
             'gameId' => $gameId,
             'userId' => $request->user()?->id,
             'hasAIAnswers' => $request->has('aiAnswers'),
-            'playWithAI' => $request->boolean('playWithAI', false)
+            'playWithAI' => $request->boolean('playWithAI', false),
+            'difficultyId' => $request->get('difficulty_id'),
+            'categoryId' => $request->get('category_id')
         ]);
 
         $request->validate([
@@ -157,13 +162,19 @@ class GamesController extends Controller
             'answers.*' => 'nullable|string',
             'aiAnswers' => 'sometimes|array',
             'aiAnswers.*' => 'nullable|string',
-            'playWithAI' => 'sometimes|boolean'
+            'playWithAI' => 'sometimes|boolean',
+            'difficulty_id' => 'sometimes|nullable|integer',
+            'category_id' => 'sometimes|nullable|integer'
         ]);
 
         $user = $request->user();
         if (!$user) {
             return response()->json(['error' => 'Unauthorized'], 401);
         }
+
+        // Get difficulty and category IDs from request
+        $difficultyId = $request->get('difficulty_id') ?? 1;
+        $categoryId = $request->get('category_id') ?? 1;
 
         // Use game start time to create unique session per game round
         $gameStartKey = "game:{$gameId}:start_time";
@@ -174,38 +185,44 @@ class GamesController extends Controller
         $sessionKey = "game:{$gameId}:session_id:{$gameStartTime}";
         $sessionId = Cache::rememberForever($sessionKey, fn () => Str::uuid()->toString());
 
-        // Submit player answers with shared session_id
-        $this->gamesService->submitAnswers($gameId, $user->id, $request->answers, $sessionId);
+        // Submit player answers with shared session_id, difficulty_id, and category_id
+        $this->gamesService->submitAnswers($gameId, $user->id, $request->answers, $sessionId, $difficultyId, $categoryId);
 
         // Submit AI answers ONLY if playing with AI AND aiAnswers are provided
         if ($request->boolean('playWithAI', false) && $request->has('aiAnswers') && is_array($request->aiAnswers)) {
             Log::info('Submitting AI answers', [
                 'gameId' => $gameId,
                 'sessionId' => $sessionId,
-                'aiAnswersCount' => count($request->aiAnswers)
+                'aiAnswersCount' => count($request->aiAnswers),
+                'difficultyId' => $difficultyId,
+                'categoryId' => $categoryId
             ]);
 
             try {
-                // Submit AI answers with the same session ID
+                // Submit AI answers with the same session ID, difficulty_id, and category_id
                 $this->aiGameService->submitAIAnswers(
                     $gameId,
                     $user->id, // Use the current user's ID for consistency
                     $request->aiAnswers,
-                    $sessionId
+                    $sessionId,
+                    $difficultyId,
+                    $categoryId
                 );
 
                 Log::info('AI answers submitted successfully', [
                     'gameId' => $gameId,
-                    'sessionId' => $sessionId
+                    'sessionId' => $sessionId,
+                    'difficultyId' => $difficultyId,
+                    'categoryId' => $categoryId
                 ]);
-
             } catch (\Exception $e) {
                 Log::error('Failed to submit AI answers', [
                     'gameId' => $gameId,
                     'sessionId' => $sessionId,
+                    'difficultyId' => $difficultyId,
+                    'categoryId' => $categoryId,
                     'error' => $e->getMessage()
                 ]);
-
                 // Don't fail the entire request if AI submission fails
                 // But log the error for debugging
             }
@@ -222,14 +239,18 @@ class GamesController extends Controller
             'userId' => $user->id,
             'userName' => $user->name,
             'timestamp' => now()->toISOString(),
-            'withAI' => $request->boolean('playWithAI', false) && $request->has('aiAnswers')
+            'withAI' => $request->boolean('playWithAI', false) && $request->has('aiAnswers'),
+            'difficultyId' => $difficultyId,
+            'categoryId' => $categoryId
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Game completed successfully!',
             'session_id' => $sessionId,
-            'ai_submitted' => $request->boolean('playWithAI', false) && $request->has('aiAnswers') && is_array($request->aiAnswers)
+            'ai_submitted' => $request->boolean('playWithAI', false) && $request->has('aiAnswers') && is_array($request->aiAnswers),
+            'difficulty_id' => $difficultyId,
+            'category_id' => $categoryId
         ]);
     }
 
