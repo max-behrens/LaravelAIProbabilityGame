@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use App\Services\Front\PostService;
 use App\Http\Controllers\Controller;
 use App\Services\Dashboard\GamesService;
+use App\Models\GameTypeDifficulty;
+use App\Models\GameTypeCategory;
 use App\Models\User;
 use App\Models\GameType;
 use Carbon\Carbon;
@@ -21,6 +23,11 @@ class IndexController extends Controller
     {
         // Fetch the first two game types for the hero slides
         $gameTypes = GameType::take(2)->get();
+        $difficulties = GameTypeDifficulty::all();
+        $categories = GameTypeCategory::all();
+
+                Log::info('DIFF', ['difficulties' => $difficulties]);
+
 
         return Inertia::render('Dashboard/Index', [
             'current_game_id' => $request->query('game_id'),
@@ -28,6 +35,8 @@ class IndexController extends Controller
             'current_end_date' => $request->query('end_date'),
             'current_exponential_scale' => $request->query('exponential_scale'),
             'game_types' => $gameTypes->toArray(), // Pass game types to the view
+            'difficulties' => $difficulties,
+            'categories' => $categories,
         ]);
     }
 
@@ -176,9 +185,11 @@ class IndexController extends Controller
         }
 
         $andOrUsers = (bool) $request->get('and_users') ?? false;
+        $difficultyId = (int) $request->get('difficulty_id') ?? 1;
+        $categoryId = (int) $request->get('category_id') ?? 1;
         
 
-        $heatmapData = $this->gamesService->getGameSessionsHeatmapData($gameTypeId, $startDate, $endDate, $userIds, $andOrUsers);
+        $heatmapData = $this->gamesService->getGameSessionsHeatmapData($gameTypeId, $startDate, $endDate, $userIds, $andOrUsers, $difficultyId, $categoryId);
         
         Log::info('Game sessions heatmap data retrieved', ['count' => count($heatmapData['data'])]);
         return response()->json($heatmapData);

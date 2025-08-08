@@ -13,6 +13,19 @@ const initialStartDate = page.props.current_start_date ? new Date(page.props.cur
 const initialEndDate = page.props.current_end_date ? new Date(page.props.current_end_date) : null;
 const initialExponentialScale = page.props.current_exponential_scale === 'true';
 const initialUserId = page.props.current_user_id || null;
+
+const props = defineProps({
+  difficulties: {
+      type: Array,
+      default: () => []
+  },
+  categories: {
+      type: Array,
+      default: () => []
+  }
+});
+
+console.log('DIFF: ' + JSON.stringify(props.difficulties));
 const showAdvancedFilters = ref(false);
 
 const getDefaultDateRange = () => {
@@ -42,6 +55,8 @@ const chartConfigs = [
 // **FIXED**: AI Feature States - Default to true (ON)
 const showAiScores = ref(true); // Changed default to true
 const andUsers = ref(false);
+const difficultyId = ref(null);
+const categoryId = ref(null);
 const showAiTooltip = ref(false);
 const currentChartPointAiData = ref(null);
 
@@ -81,6 +96,11 @@ onMounted(async () => {
   // **FIXED**: Initialize showAiScores from URL param, but default to true if not set
   showAiScores.value = page.props.current_show_ai_scores === 'true';  
   andUsers.value = page.props.current_and_users === 'true';  
+
+  difficultyId.value = page.props.current_difficulty_id ? parseInt(page.props.current_difficulty_id) : null;
+  categoryId.value = page.props.current_category_id ? parseInt(page.props.current_category_id) : null;
+  
+  
   // Fetch users on mount
   await fetchUsers();
 });
@@ -265,6 +285,48 @@ const filteredUsers = computed(() => {
   });
 });
 
+const rotateDifficulty = () => {
+    if (!props.difficulties || props.difficulties.length === 0) {
+        return;
+    }
+    
+    if (difficultyId.value === null) {
+        // Start with the first difficulty
+        difficultyId.value = props.difficulties[0].id;
+    } else {
+        // Find current index and move to next
+        const currentIndex = props.difficulties.findIndex(d => d.id === difficultyId.value);
+        if (currentIndex === -1 || currentIndex === props.difficulties.length - 1) {
+            // If not found or at the end, go back to "All" (null)
+            difficultyId.value = null;
+        } else {
+            // Move to next difficulty
+            difficultyId.value = props.difficulties[currentIndex + 1].id;
+        }
+    }
+};
+
+const rotateCategory = () => {
+    if (!props.categories || props.categories.length === 0) {
+        return;
+    }
+    
+    if (categoryId.value === null) {
+        // Start with the first category
+        categoryId.value = props.categories[0].id;
+    } else {
+        // Find current index and move to next
+        const currentIndex = props.categories.findIndex(c => c.id === categoryId.value);
+        if (currentIndex === -1 || currentIndex === props.categories.length - 1) {
+            // If not found or at the end, go back to "All" (null)
+            categoryId.value = null;
+        } else {
+            // Move to next category
+            categoryId.value = props.categories[currentIndex + 1].id;
+        }
+    }
+};
+
 const datepickerRef = ref(null);
 
 watch(showDateModal, async (newVal) => {
@@ -281,8 +343,8 @@ watch(activeUserIds, (newIds, oldIds) => {
 }, { deep: true });
 
 watch(
-  [activeGameId, dateRange, isExponentialScale, activeUserIds, andUsers, showAiScores],
-  ([newGameId, newDateRange, newIsExponentialScale, newUserIds, newAndUsers, newShowAiScores]) => {
+  [activeGameId, dateRange, isExponentialScale, activeUserIds, andUsers, difficultyId, categoryId, showAiScores],
+  ([newGameId, newDateRange, newIsExponentialScale, newUserIds, newAndUsers, newDifficultyId, newCategoryId, newShowAiScores]) => {
     console.log('Watcher triggered with userIds:', newUserIds); // Debug log
     
     const params = new URLSearchParams();
@@ -321,6 +383,15 @@ watch(
     if (newAndUsers) {
       params.set('and_users', 'true');
     }
+
+    if (newDifficultyId) {
+      params.set('difficulty_id', newDifficultyId);
+    }
+
+    if (newCategoryId) {
+      params.set('category_id', newCategoryId);
+    }
+
 
     if (newShowAiScores) {
       params.set('show_ai_scores', 'true');
@@ -397,7 +468,7 @@ onUnmounted(() => {
                             v-for="(filter, index) in gameFilters"
                             :key="filter.id"
                             :class="[
-                                'flex items-center justify-center space-x-2 p-2 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
+                                'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
                                 'transition-all duration-300 ease-in-out',
                                 optionColors[index] + ' hover:brightness-90',
                                 activeGameId === filter.id ? 'bg-blue-700 ring-2 ring-blue-400' : ''
@@ -408,6 +479,59 @@ onUnmounted(() => {
                             <span class="font-medium truncate">{{ filter.name }}</span>
                         </button>
                     </div>
+
+                    <div class="flex flex-col space-y-2 flex-grow min-w-[180px] max-w-xs">
+                      <!-- Difficulty Filter Button -->
+                      <button
+                          @click="rotateDifficulty"
+                          :class="[
+                              'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
+                              'transition-all duration-300 ease-in-out',
+                              'bg-green-600/50 hover:brightness-90',
+                              difficultyId ? 'bg-green-700 ring-2 ring-green-400' : ''
+                          ]"
+                      >
+                          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                          </svg>
+                          <span class="font-medium truncate">
+                              {{ difficultyId ? difficulties.find(d => d.id === difficultyId)?.name : 'All Difficulties' }}
+                          </span>
+                      </button>
+
+                      <!-- Category Filter Button -->
+                      <button
+                          @click="rotateCategory"
+                          :class="[
+                              'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
+                              'transition-all duration-300 ease-in-out',
+                              'bg-pink-600/50 hover:brightness-90',
+                              categoryId ? 'bg-pink-700 ring-2 ring-pink-400' : ''
+                          ]"
+                      >
+                          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                          </svg>
+                          <span class="font-medium truncate">
+                              {{ categoryId ? categories.find(c => c.id === categoryId)?.name : 'All Categories' }}
+                          </span>
+                      </button>
+                  </div>
+
+                      <div class="flex-grow min-w-[180px] max-w-xs">
+                          <button
+                              @click="toggleAiScores"
+                              :class="[
+                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full w-full',
+                                  'transition-all duration-300 ease-in-out',
+                                  aiFilterColor + ' hover:brightness-90',
+                                  showAiScores ? 'bg-lime-700 ring-2 ring-lime-400' : ''
+                              ]"
+                          >
+                              <BrainCircuitIcon class="w-5 h-5 shrink-0" />
+                              <span class="font-medium truncate">{{ showAiScores ? 'AI Scores ON' : 'AI Scores OFF' }}</span>
+                          </button>
+                      </div>
 
                       <div class="flex-grow min-w-[180px] max-w-xs">
                           <button
@@ -424,20 +548,6 @@ onUnmounted(() => {
                           </button>
                       </div>
 
-                      <div class="flex-grow min-w-[180px] max-w-xs">
-                          <button
-                              @click="toggleAiScores"
-                              :class="[
-                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full w-full',
-                                  'transition-all duration-300 ease-in-out',
-                                  aiFilterColor + ' hover:brightness-90',
-                                  showAiScores ? 'bg-lime-700 ring-2 ring-lime-400' : ''
-                              ]"
-                          >
-                              <BrainCircuitIcon class="w-5 h-5 shrink-0" />
-                              <span class="font-medium truncate">{{ showAiScores ? 'AI Scores ON' : 'AI Scores OFF' }}</span>
-                          </button>
-                      </div>
 
                       <div class="flex-grow min-w-[180px] max-w-xs">
                           <button
@@ -587,6 +697,8 @@ onUnmounted(() => {
                                               :end-date="dateRange[1]"
                                               :user-ids="activeUserIds"
                                               :and-users="andUsers"
+                                              :difficulty-id="difficultyId"
+                                              :category-id="categoryId"
                                               :show-ai-scores="showAiScores"
                                           />
                                   </div>
@@ -647,6 +759,22 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* Dropdown animation */
+.dropdown-enter-active,
+.dropdown-leave-active {
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.dropdown-enter-from,
+.dropdown-leave-to {
+    opacity: 0;
+    transform: translateY(-10px);
+}
+
+/* Close dropdowns when clicking outside */
+.relative {
+    z-index: 10;
+}
+
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.3s ease;

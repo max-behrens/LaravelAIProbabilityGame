@@ -7,6 +7,8 @@ use App\Models\AIScore;
 use App\Models\Games;
 use App\Models\GameType;
 use App\Models\GameQuestion;
+use App\Models\GameTypeDifficulty;
+use App\Models\GameTypeCategory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
@@ -619,7 +621,14 @@ class GamesService
         return $series;
     }
 
-    public function getGameSessionsHeatmapData(?int $gameTypeId = null, ?string $startDate = null, ?string $endDate = null, array $userIds = null, bool $andOrUsers = false)
+    public function getGameSessionsHeatmapData(
+        ?int $gameTypeId = null, 
+        ?string $startDate = null, 
+        ?string $endDate = null, 
+        array $userIds = null, 
+        bool $andOrUsers = false,
+        ?int $difficultyId = null,
+        ?int $categoryId = null)
     {
         // Define the main query without the game_questions join to avoid redundant data
         $query = GameScore::query()
@@ -659,6 +668,14 @@ class GamesService
         if (!empty($userIds)) {
             $query->whereIn('game_scores.player_id', $userIds);
         }
+
+        if ($difficultyId !== null && $difficultyId !== 0) {
+            $query->whereJsonContains('game_scores.answer_json', ['difficulty_id' => $difficultyId]);
+        }
+        if ($categoryId !== null && $categoryId !== 0) {
+            $query->whereJsonContains('game_scores.answer_json', ['category_id' => $categoryId]);
+        }
+
 
         // Get all results
         $results = $query->get();
@@ -701,10 +718,6 @@ class GamesService
                     $difficultyId = $answerData['difficulty_id'] ?? null;
                     $categoryId = $answerData['category_id'] ?? null;
             }
-
-                Log::warning('ANSWER DATA', [
-                    'answerData' => $answerData,
-                ]); 
 
             // Create a cache key that includes game type, difficulty, and category
             $cacheKey = $gameTypeId . '_' . ($difficultyId ?? 'null') . '_' . ($categoryId ?? 'null');
@@ -896,18 +909,26 @@ class GamesService
 
                 if (is_array($aiAnswerData)) {
                     foreach ($aiAnswerData as $qNum => $answer) {
-                        $questionNumber = $answer['question_number'] ?? $answer['question_id'] ?? $qNum;
+                        if (is_integer($qNum)) {
+                            $questionNumber = $answer['question_number'] ?? $answer['question_id'] ?? $qNum;
 
-                        // Initialize the question key if it doesn't exist
-                        if (!isset($playerAnswersByQuestion[$questionNumber]['question'])) {
-                            $playerAnswersByQuestion[$questionNumber]['question'] = $answer['question'] ?? $answer['question_text'] ?? 'Unknown Question';
+                            // Initialize the question key if it doesn't exist
+                            if (!isset($playerAnswersByQuestion[$questionNumber]['question'])) {
+                                $playerAnswersByQuestion[$questionNumber]['question'] = $answer['question'] ?? $answer['question_text'] ?? 'Unknown Question';
+                            }
+
+                            $playerAnswersByQuestion[$questionNumber]['ai'] = [
+                                'submitted' => $answer['submitted'] ?? $answer['selected_answer'] ?? $answer['ai_answer'] ?? null,
+                                'is_correct' => $answer['is_correct'] ?? $answer['correct'] ?? null,
+                                'score_awarded' => $answer['score_awarded'] ?? $answer['points'] ?? $answer['score'] ?? null
+                            ];
+                        } 
+                        if ($qNum === 'difficulty_id') {
+                            $difficultyId = $answer;
                         }
-
-                        $playerAnswersByQuestion[$questionNumber]['ai'] = [
-                            'submitted' => $answer['submitted'] ?? $answer['selected_answer'] ?? $answer['ai_answer'] ?? null,
-                            'is_correct' => $answer['is_correct'] ?? $answer['correct'] ?? null,
-                            'score_awarded' => $answer['score_awarded'] ?? $answer['points'] ?? $answer['score'] ?? null
-                        ];
+                        if ($qNum === 'category_id') {
+                            $categoryId = $answer;
+                        }
                     }
                 } else {
                 Log::warning('AI answer JSON could not be decoded into array', [
@@ -932,7 +953,16 @@ class GamesService
         }
 
         // Sort by question number
-        usort($questions, fn($a, $b) => (int)($a['question_number'] ?? 0) - (int)($b['question_number'] ?? 0));        
+        usort($questions, fn($a, $b) => (int)($a['question_number'] ?? 0) - (int)($b['question_number'] ?? 0));
+
+
+        $difficulty = GameTypeDifficulty::find($difficultyId);
+
+        $difficultyName = $difficulty->name ?? 'Unknown Difficulty';
+
+
+        $category = GameTypeCategory::find($categoryId);
+        $categoryName = $category->name ?? 'Unknown Category';
 
         return [
             'session_id' => substr($first->session_id, 0, 10) . '...',
@@ -940,6 +970,8 @@ class GamesService
             'game_name' => $first->game_name,
             'total_score' => $this->getTotalScoreByGame($first->game_id, $difficultyId, $categoryId),
             'ai_score' => $aiScore->score ?? null,
+            'difficulty_name' => $difficultyName,
+            'category_name' => $categoryName,
             'created_at' => $first->created_at,
             'players' => $allPlayers,
             'questions' => $questions,

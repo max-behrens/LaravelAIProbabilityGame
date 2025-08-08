@@ -25,6 +25,14 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  difficultyId: {
+    type: [String, Number],
+    default: null
+  },
+  categoryId: {
+    type: [String, Number],
+    default: null
+  },
   showAiScores: {
     type: Boolean,
     default: false
@@ -113,6 +121,14 @@ const fetchHeatmapData = async () => {
     if (props.andUsers) {
       params.and_users = 'true';
     }
+
+    if (props.difficultyId) {
+        params.difficulty_id = props.difficultyId; // Changed from difficultyId to difficulty_id
+    }
+    if (props.categoryId) {
+        params.category_id = props.categoryId; // Changed from categoryId to category_id
+    }
+
     params.per_page = 1000;
 
     console.log('Fetching heatmap with params:', params);
@@ -824,8 +840,8 @@ watch(() => props.showAiScores, () => {
 
 // Watch filters props to refetch heatmap data
 watch(
-  [() => props.gameTypeId, () => props.startDate, () => props.endDate, () => props.userIds, () => props.andUsers], // Fixed: andUsers not andOrUsers
-  ([newGameTypeId, newStartDate, newEndDate, newUserIds, newAndUsers], [oldGameTypeId, oldStartDate, oldEndDate, oldUserIds, oldAndUsers]) => {
+  [() => props.gameTypeId, () => props.startDate, () => props.endDate, () => props.userIds, () => props.andUsers, () => props.difficultyId, () => props.categoryId],
+  ([newGameTypeId, newStartDate, newEndDate, newUserIds, newAndUsers, newDifficultyId, newCategoryId], [oldGameTypeId, oldStartDate, oldEndDate, oldUserIds, oldAndUsers, oldDifficultyId, oldCategoryId]) => {
     console.log('🟣 Heatmap watcher triggered');
     console.log('🟣 userIds changed from:', oldUserIds, 'to:', newUserIds);
     fetchHeatmapData();
@@ -923,6 +939,7 @@ onMounted(() => {
 
     <div class="w-1/2 flex flex-col">
       <div class="p-4 border-b border-gray-600">
+                      
         <div class="w-full h-48 flex flex-row items-center justify-center">
           <VueApexCharts
             v-if="radialChartData.series.length"
@@ -961,6 +978,13 @@ onMounted(() => {
       <div class="p-4 overflow-auto">
         <div v-if="selectedSessionDetails">
           <div class="space-y-2 text-sm">
+
+          <div class="font-medium">
+            Difficulty: {{ selectedSessionDetails.difficulty_name }}
+          </div>
+          <div class="font-medium">
+            Category: {{ selectedSessionDetails.category_name }}
+          </div><br/>
             
             <div class="mt-4">
 

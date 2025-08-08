@@ -17,6 +17,14 @@ const props = defineProps({
     game_types: {
         type: Array,
         default: () => []
+    },
+    difficulties: {
+        type: Array,
+        default: () => []
+    },
+    categories: {
+        type: Array,
+        default: () => []
     }
 });
 
@@ -176,7 +184,7 @@ onUnmounted(() => {
         <div class="py-2 mx-auto px-100 lg:px-100">
 
             <section id="stats">
-              <DashboardChartSection />
+              <DashboardChartSection :difficulties="difficulties" :categories="categories" />
             </section>
         
             
