@@ -976,61 +976,72 @@ onMounted(() => {
       </div>
 
       <div class="p-4 overflow-auto">
-        <div v-if="selectedSessionDetails">
-          <div class="space-y-2 text-sm">
+        <div v-if="selectedSessionDetails" class="flex items-start gap-8">
+          
+          <!-- Left side: Questions -->
+          <div class="flex-1 min-w-0">
+            <template v-if="selectedSessionDetails.questions && selectedSessionDetails.questions.length > 0">
+              <div 
+                v-for="question in selectedSessionDetails.questions" 
+                :key="question.question_number" 
+              >
+                <div class="font-medium break-words">
+                  <!-- {{ question.question_text }} -->
+                </div>
 
-          <div class="font-medium">
-            Difficulty: {{ selectedSessionDetails.difficulty_name }}
+                <div 
+                  v-for="answer in question.player_answers" 
+                  :key="answer.player_name" 
+                >
+                  Q{{ question.question_number }} 
+                  <span class="text-blue-300 ml-2">{{ answer.player_name }}
+                     <!-- {{ answer.submitted || 'No answer' }} -->
+                    </span>
+                  <span :class="answer.is_correct ? 'text-green-400' : 'text-red-400'" class="ml-2">
+                    {{ answer.is_correct ? '✓' : '✗' }}
+                  </span>
+                  <span class="ml-2 text-gray-300">({{ answer.score_awarded || 0 }} pts)</span>
+                </div>
+
+                <div v-if="props.showAiScores && question.ai_answer" class="mt-1">
+                  <span class="text-green-300">AI: {{ question.ai_answer }}</span>
+                  <span :class="question.ai_is_correct ? 'text-green-400' : 'text-red-400'" class="ml-2">
+                    {{ question.ai_is_correct ? '✓' : '✗' }}
+                  </span>
+                  <span class="ml-2 text-gray-300">({{ question.ai_score || 0 }} pts)</span>
+                </div>
+              </div>
+            </template>
+
+            <template v-else>
+              <div class="text-gray-400 text-sm">
+                No detailed questions found for this session. This might be due to:
+                <ul class="list-disc list-inside mt-1 text-xs">
+                  <li>Backend API not returning question details for this game type</li>
+                  <li>Session data structure differences</li>
+                  <li>Data not stored for this particular session</li>
+                </ul>
+              </div>
+            </template>
           </div>
-          <div class="font-medium">
-            Category: {{ selectedSessionDetails.category_name }}
-          </div><br/>
-            
-            <div class="mt-4">
 
-              <template v-if="selectedSessionDetails.questions && selectedSessionDetails.questions.length > 0">
-                <div v-for="question in selectedSessionDetails.questions" :key="question.question_number">
-                  <div class="font-medium">
-                    Q{{ question.question_number }}: {{ question.question_text }}
-                  </div>
-
-                  <div v-for="answer in question.player_answers" :key="answer.player_name" class="mt-1">
-                    <span class="text-blue-300">{{ answer.player_name }}: {{ answer.submitted || 'No answer' }}</span>
-                    <span :class="answer.is_correct ? 'text-green-400' : 'text-red-400'" class="ml-2">
-                      {{ answer.is_correct ? '✓' : '✗' }}
-                    </span>
-                    <span class="ml-2 text-gray-300">({{ answer.score_awarded || 0 }} pts)</span>
-                  </div>
-
-                  <div v-if="props.showAiScores && question.ai_answer" class="mt-1">
-                    <span class="text-green-300">AI: {{ question.ai_answer }}</span>
-                    <span :class="question.ai_is_correct ? 'text-green-400' : 'text-red-400'" class="ml-2">
-                      {{ question.ai_is_correct ? '✓' : '✗' }}
-                    </span>
-                    <span class="ml-2 text-gray-300">({{ question.ai_score || 0 }} pts)</span>
-                  </div>
-                </div>
-              </template>
-
-              <template v-else>
-                <div class="text-gray-400 text-sm">
-                  No detailed questions found for this session. This might be due to:
-                  <ul class="list-disc list-inside mt-1 text-xs">
-                    <li>Backend API not returning question details for this game type</li>
-                    <li>Session data structure differences</li>
-                    <li>Data not stored for this particular session</li>
-                  </ul>
-                </div>
-              </template>
-              
+          <!-- Right side: Difficulty & Category -->
+          <div class="w-48 shrink-0 space-y-2 text-sm">
+            <div class="font-medium">
+              Difficulty: {{ selectedSessionDetails.difficulty_name }}
+            </div>
+            <div class="font-medium">
+              Category: {{ selectedSessionDetails.category_name }}
             </div>
           </div>
+
         </div>
 
         <div v-else class="text-gray-400">
           Click a heatmap cell to view session details.
         </div>
       </div>
+
 
     </div>
   </div>

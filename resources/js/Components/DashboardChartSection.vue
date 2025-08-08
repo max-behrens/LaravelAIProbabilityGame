@@ -426,14 +426,14 @@ onUnmounted(() => {
       <div class="container mx-auto px-20">
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-2">
               <div class="lg:col-span-3">
-                  <div class="flex flex-wrap justify-center gap-4 mb-6 px-6">
+                  <div class="flex justify-center gap-4 mb-6 px-6">
 
                     
                       <div class="flex items-center gap-2 min-w-[180px] max-w-xs mr-20">
                           <button
                               @click="toggleChart"
                               :class="[
-                                  'flex items-center space-x-2 p-3 rounded-lg text-white cursor-pointer text-sm md:text-base h-full w-full',
+                                  'flex items-center p-3 rounded-lg text-white cursor-pointer text-sm md:text-base h-full w-full',
                                   'transition-all duration-300 ease-in-out',
                                   chartToggleColor + ' hover:brightness-90'
                               ]"
@@ -463,6 +463,23 @@ onUnmounted(() => {
                               </svg>
                           </button>
                       </div>
+
+                      <div class="mb-2">
+                          <button
+                              @click="showDateModal = true"
+                              :class="[
+                                  'flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full w-full',
+                                  'transition-all duration-300 ease-in-out',
+                                  dateFilterColor + ' hover:brightness-90',
+                                  (dateRange[0] && dateRange[1]) ? 'bg-orange-900 ring-2 ring-orange-400' : ''
+                              ]"
+                          >
+                              <CalendarDaysIcon class="w-5 h-5 shrink-0" />
+                              <span class="font-medium truncate">{{ dateFilterTitle }}</span>
+                          </button>
+                      </div>
+
+
                     <div class="flex flex-col space-y-2 flex-grow min-w-[180px] max-w-xs">
                         <button
                             v-for="(filter, index) in gameFilters"
@@ -471,7 +488,7 @@ onUnmounted(() => {
                                 'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
                                 'transition-all duration-300 ease-in-out',
                                 optionColors[index] + ' hover:brightness-90',
-                                activeGameId === filter.id ? 'bg-blue-700 ring-2 ring-blue-400' : ''
+                                activeGameId === filter.id ? 'bg-blue-700 ring-2 ring-gray-400' : ''
                             ]"
                             @click="selectGameFilter(filter.id)"
                         >
@@ -480,7 +497,7 @@ onUnmounted(() => {
                         </button>
                     </div>
 
-                    <div class="flex flex-col space-y-2 flex-grow min-w-[180px] max-w-xs">
+                    <div class="flex flex-col space-y-2 flex-grow h-full">
                       <!-- Difficulty Filter Button -->
                       <button
                           @click="rotateDifficulty"
@@ -518,11 +535,11 @@ onUnmounted(() => {
                       </button>
                   </div>
 
-                      <div class="flex-grow min-w-[180px] max-w-xs">
+                      <div class="mb-2">
                           <button
                               @click="toggleAiScores"
                               :class="[
-                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full w-full',
+                                  'flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full w-full',
                                   'transition-all duration-300 ease-in-out',
                                   aiFilterColor + ' hover:brightness-90',
                                   showAiScores ? 'bg-lime-700 ring-2 ring-lime-400' : ''
@@ -533,27 +550,12 @@ onUnmounted(() => {
                           </button>
                       </div>
 
-                      <div class="flex-grow min-w-[180px] max-w-xs">
-                          <button
-                              @click="showDateModal = true"
-                              :class="[
-                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full w-full',
-                                  'transition-all duration-300 ease-in-out',
-                                  dateFilterColor + ' hover:brightness-90',
-                                  (dateRange[0] && dateRange[1]) ? 'bg-orange-700 ring-2 ring-orange-400' : ''
-                              ]"
-                          >
-                              <CalendarDaysIcon class="w-5 h-5 shrink-0" />
-                              <span class="font-medium truncate">{{ dateFilterTitle }}</span>
-                          </button>
-                      </div>
 
-
-                      <div class="flex-grow min-w-[180px] max-w-xs">
+                      <div class="mb-2">
                           <button
                               @click="showAdvancedFilters = !showAdvancedFilters"
                               :class="[
-                                  'w-full flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full',
+                                  'w-full flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full',
                                   'transition-all duration-300 ease-in-out',
                                   'bg-gray-600/50 hover:bg-gray-700',
                                   showAdvancedFilters ? 'bg-gray-700' : ''
@@ -567,7 +569,7 @@ onUnmounted(() => {
                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>
                                    </template>
                                </span>
-                              <span class="font-medium truncate">Advanced</span>
+                              <span class="font-medium truncate px-1">Advanced</span>
                           </button>
                       </div>
                   </div>
