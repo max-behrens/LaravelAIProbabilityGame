@@ -95,23 +95,25 @@ class IndexController extends Controller
         $userIds = [];
         
         if ($request->get('user_ids')) {
-
-
             // Parse comma-separated user IDs
             $userIds = array_map('intval', explode(',', $request->get('user_ids')));
-
             $userIds = array_filter($userIds); // Remove any invalid values
-
         } elseif ($userId) {
             // Fallback to single user ID for backward compatibility
             $userIds = [$userId];
         }
 
+        // Add difficulty and category parameters
+        $difficultyId = $request->get('difficulty_id') ? (int) $request->get('difficulty_id') : null;
+        $categoryId = $request->get('category_id') ? (int) $request->get('category_id') : null;
+
         Log::info('getCumulativeLineGraph called', [
             'requested_game_type_id' => $gameTypeId, // Updated logging
             'start_date' => $startDate,
             'end_date' => $endDate,
-            'user_id' => $userIds
+            'user_id' => $userIds,
+            'difficulty_id' => $difficultyId,
+            'category_id' => $categoryId
         ]);
 
         // Validate date formats if provided
@@ -126,12 +128,14 @@ class IndexController extends Controller
         }
 
         try {
-            // Pass game_type_id instead of game_id
+            // Pass game_type_id instead of game_id and include new filters
             $cumulativeScores = $this->gamesService->getCumulativeLineGraphData(
                 $gameTypeId, // Changed parameter name
                 $startDate,
                 $endDate,
-                $userIds
+                $userIds,
+                $difficultyId,
+                $categoryId
             );
 
             Log::info('Cumulative scores retrieved', [

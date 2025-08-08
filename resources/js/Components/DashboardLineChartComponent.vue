@@ -37,6 +37,14 @@ const props = defineProps({
   showAiScores: { // New prop for AI toggle
     type: Boolean,
     default: false
+  },
+  difficultyId: { // Added difficulty filter
+    type: [String, Number],
+    default: null
+  },
+  categoryId: { // Added category filter
+    type: [String, Number],
+    default: null
   }
 });
 
@@ -365,7 +373,7 @@ const updateChart = (seriesData, isExponentialScale) => {
   chart.updateSeries(seriesData, true);
 };
 
-const fetchCumulativeLineGraphScores = async (gameTypeId = null, startDate = null, endDate = null, userIds = null) => {
+const fetchCumulativeLineGraphScores = async (gameTypeId = null, startDate = null, endDate = null, userIds = null, difficultyId = null, categoryId = null) => {
   try {
     const params = {};
     if (gameTypeId !== null) params.game_type_id = gameTypeId;
@@ -379,6 +387,16 @@ const fetchCumulativeLineGraphScores = async (gameTypeId = null, startDate = nul
         console.log('Line Chart: Setting user_ids parameter:', params.user_ids);
       }
     }
+
+    // Add difficulty and category filters
+    if (difficultyId) {
+      params.difficulty_id = difficultyId;
+    }
+    if (categoryId) {
+      params.category_id = categoryId;
+    }
+
+    console.log('pARAMS: ' + JSON.stringify(params));
 
     const response = await axios.get(`/dashboard/cumulative-linegraph`, { params });
     return response.data;
@@ -394,7 +412,9 @@ const initOrUpdateChart = async () => {
       props.gameTypeId,
       props.startDate,
       props.endDate,
-      props.userIds
+      props.userIds,
+      props.difficultyId,
+      props.categoryId
     );
     currentData.value = seriesData;
 
@@ -426,7 +446,7 @@ onUnmounted(() => {
 });
 
 watch(
-  [() => props.gameTypeId, () => props.startDate, () => props.endDate, () => props.userIds, () => props.showAiScores], // Add showAiScores to watch
+  [() => props.gameTypeId, () => props.startDate, () => props.endDate, () => props.userIds, () => props.showAiScores, () => props.difficultyId, () => props.categoryId], // Added difficultyId and categoryId to watch
   () => {
     initOrUpdateChart();
   },

@@ -688,6 +688,8 @@ onUnmounted(() => {
                                           :end-date="dateRange[1]"
                                           :is-exponential-scale="isExponentialScale"
                                           :user-ids="activeUserIds"
+                                          :difficulty-id="difficultyId"
+                                          :category-id="categoryId"
                                           :show-ai-scores="showAiScores" 
                                           @pointClicked="handleChartPointClick" />
                                           <DashboardHeatmapComponent

@@ -515,7 +515,7 @@ class GamesService
     /**
      * Methods to retrieve cumulative scores for each player across all games to the dashboard.
      */
-    public function getCumulativeLineGraphData(?int $gameTypeId = null, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null)
+    public function getCumulativeLineGraphData(?int $gameTypeId = null, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null, ?int $difficultyId = null, ?int $categoryId = null)
     {
         $query = GameScore::query()
             ->select(
@@ -523,6 +523,7 @@ class GamesService
                 'game_scores.player_id',
                 'game_scores.score',
                 'game_scores.session_id',
+                'game_scores.answer_json', // Added to access difficulty and category filters
                 'ai_scores.created_at as ai_created_at',
                 'ai_scores.score as ai_score',
                 'users.name as player_name',
@@ -536,7 +537,7 @@ class GamesService
             ->join('game_types', 'games.game_type_id', '=', 'game_types.id')
             ->leftJoin('ai_scores', function($join) { // Use leftJoin to include game scores without AI data
                 $join->on('game_scores.session_id', '=', 'ai_scores.session_id')
-                     ->on('game_scores.game_id', '=', 'ai_scores.game_id'); // Join on game_id too if applicable
+                    ->on('game_scores.game_id', '=', 'ai_scores.game_id'); // Join on game_id too if applicable
             })
             ->orderBy('users.name')
             ->orderBy('game_scores.created_at');
@@ -557,6 +558,16 @@ class GamesService
         // Handle multiple user IDs filtering - we want sessions that contain ANY of these users
         if (!empty($userIds)) {
             $query->whereIn('game_scores.player_id', $userIds);
+        }
+
+        // Add difficulty filter
+        if ($difficultyId !== null && $difficultyId !== 0) {
+            $query->whereJsonContains('game_scores.answer_json', ['difficulty_id' => $difficultyId]);
+        }
+
+        // Add category filter
+        if ($categoryId !== null && $categoryId !== 0) {
+            $query->whereJsonContains('game_scores.answer_json', ['category_id' => $categoryId]);
         }
 
         $results = $query->get();
