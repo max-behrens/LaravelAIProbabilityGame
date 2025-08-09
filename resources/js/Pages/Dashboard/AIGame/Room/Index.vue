@@ -507,7 +507,7 @@ const nextOrSubmit = async () => {
                     );
                 }
             }
-            const submissionAnswers = answers.value.map(answer => answer || ''); // Convert undefined/null to empty string
+            const submissionAnswers = answers.value.map(answer => answer);
 
             const result = await submitAnswers(submissionAnswers, playerCount.value, selectedDifficulty.value, selectedCategory.value);
 
