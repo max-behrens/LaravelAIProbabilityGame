@@ -118,8 +118,8 @@ class GamesController extends Controller
     public function getQuestions($gameId, Request $request)
     {
 
-        $difficultyId = $request->get('difficulty_id');
-        $categoryId = $request->get('category_id');
+        $difficultyId = (int) $request->get('difficulty_id') ?? 1;
+        $categoryId = (int) $request->get('category_id') ?? 1;
 
         Log::info('Fetching game questions', [
             'gameId' => $gameId,
@@ -133,12 +133,6 @@ class GamesController extends Controller
             $difficultyId, 
             $categoryId
         );
-
-        Log::info('Fetching game questions AFTER!', [
-            'gameId' => $gameId,
-            'difficultyId' => $difficultyId,
-            'categoryId' => $categoryId
-        ]);
 
         return response()->json([
             'questions' => $gameQuestions
@@ -445,16 +439,52 @@ class GamesController extends Controller
         $userId = $user->id;
         $userName = $user->name;
         $requiredCount = (int) $request->requiredCount;
+        
+        // Get game settings from the request
+        $difficultyId = $request->get('difficulty_id', 1);
+        $categoryId = $request->get('category_id', 1);
+        $playWithAI = $request->boolean('play_with_ai', false);
 
         $cacheKey = "game:{$game->id}:readyPlayers";
         $readyPlayers = Cache::get($cacheKey, []);
+
+        // Store the first player's settings as the "official" game settings
+        $settingsKey = "game:{$game->id}:gameSettings";
+        $currentSettings = Cache::get($settingsKey);
+        
+        if (!$currentSettings) {
+            // This is the first player to click ready - store their settings
+            $gameQuestions = $this->gamesService->getGameQuestionsByDifficultyAndCategory(
+                $game, 
+                $difficultyId, 
+                $categoryId
+            );
+            
+            $gameSettings = [
+                'difficulty_id' => $difficultyId,
+                'category_id' => $categoryId,
+                'play_with_ai' => $playWithAI,
+                'questions' => $gameQuestions,
+                'starter_name' => $userName
+            ];
+            
+            Cache::put($settingsKey, $gameSettings, now()->addMinutes(30));
+            $currentSettings = $gameSettings;
+            
+            Log::info('Game settings stored by first ready player', [
+                'gameId' => $game->id,
+                'userId' => $userId,
+                'settings' => $gameSettings
+            ]);
+        }
 
         // Add debug logging to see current state
         Log::info('Before adding player to ready list', [
             'gameId' => $game->id,
             'userId' => $userId,
             'currentReadyPlayers' => $readyPlayers,
-            'requiredCount' => $requiredCount
+            'requiredCount' => $requiredCount,
+            'gameSettings' => $currentSettings
         ]);
 
         if (!in_array($userId, $readyPlayers)) {
@@ -469,11 +499,11 @@ class GamesController extends Controller
             'userId' => $userId,
             'readyCount' => $readyCount,
             'requiredCount' => $requiredCount,
-            'allReadyPlayers' => $readyPlayers // Add this for debugging
+            'allReadyPlayers' => $readyPlayers
         ]);
 
-        // Broadcast the player ready event
-        broadcast(new PlayerReady($game->id, $userId, $userName, $readyCount, $requiredCount))->toOthers();
+        // Broadcast the player ready event with game settings
+        broadcast(new PlayerReady($game->id, $userId, $userName, $readyCount, $requiredCount, $currentSettings))->toOthers();
 
         if ($readyCount >= $requiredCount) {
             // All players are ready - update game status and broadcast special event
@@ -482,25 +512,28 @@ class GamesController extends Controller
             
             // Clear the ready players cache since game is starting
             Cache::forget($cacheKey);
+            Cache::forget($settingsKey); // Clear settings cache too
             
             // Broadcast a special event for when all players are ready
             $this->triggerGameUpdate($game->id, 'game.started.all.ready', [
                 'gameId' => $game->id,
                 'playerCount' => $requiredCount,
                 'readyCount' => $readyCount,
+                'gameSettings' => $currentSettings, // Include settings in start event too
                 'timestamp' => now()->toISOString()
             ]);
             
             Log::info('All players ready - game starting', [
                 'gameId' => $game->id,
                 'playerCount' => $requiredCount,
-                'finalReadyPlayers' => $readyPlayers
+                'finalReadyPlayers' => $readyPlayers,
+                'finalSettings' => $currentSettings
             ]);
             
-            return response()->json(['status' => 'started']);
+            return response()->json(['status' => 'started', 'gameSettings' => $currentSettings]);
         }
 
-        return response()->json(['status' => 'waiting']);
+        return response()->json(['status' => 'waiting', 'gameSettings' => $currentSettings]);
     }
 
 

@@ -15,14 +15,16 @@ class PlayerReady implements ShouldBroadcast
     public $userName;
     public $readyCount;
     public $requiredCount;
+    public $gameSettings; // New property for game settings
 
-    public function __construct($gameId, $userId, $userName, $readyCount, $requiredCount)
+    public function __construct($gameId, $userId, $userName, $readyCount, $requiredCount, $gameSettings = null)
     {
         $this->gameId = $gameId;
         $this->userId = $userId;
         $this->userName = $userName;
         $this->readyCount = $readyCount;
         $this->requiredCount = $requiredCount;
+        $this->gameSettings = $gameSettings; // Include difficulty, category, playWithAI, questions
     }
 
     public function broadcastOn()

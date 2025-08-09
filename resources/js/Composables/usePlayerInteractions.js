@@ -14,7 +14,9 @@ export function usePlayerInteractions(gameId, auth) {
     playersPreAnswered: new Map(), // questionIndex -> Set of userIds
     currentPlayerCount: 1,
     gameInProgress: false,
-    waitingForOthers: false
+    waitingForOthers: false,
+    gameSettings: null,
+    starterName: null
   });
   const error = ref(null);
   
@@ -548,6 +550,14 @@ export function usePlayerInteractions(gameId, auth) {
       if (data.userId !== currentUserId.value) {
           // Another player clicked start
           gameState.value.playersReady.add(data.userId);
+          
+          // NEW: Store game settings and starter info
+          if (data.gameSettings) {
+              gameState.value.gameSettings = data.gameSettings;
+              gameState.value.starterName = data.gameSettings.starter_name;
+              console.log('Game settings received from ready player:', data.gameSettings);
+          }
+          
           addFlashMessage(`${data.userName} is ready to start! (${data.readyCount}/${data.requiredCount} ready)`, 'info');
           
           // Check if all required players are now ready for auto-start
@@ -575,8 +585,14 @@ export function usePlayerInteractions(gameId, auth) {
       }
   });
 
-  gameChannel.bind('game.started.all.ready', (data) => {
+  // Also update the game.started.all.ready handler
+  gameChannel.bind('game.started.all.ready', async (data) => {
       console.log('🔔 Received game.started.all.ready event:', data);
+      
+      // Apply game settings for all players
+      if (data.gameSettings && callbacks.value.onApplyGameSettings) {
+          await callbacks.value.onApplyGameSettings(data.gameSettings);
+      }
       
       // If I'm waiting and this event is received, trigger auto-start
       if (isWaitingToStart.value) {
@@ -588,6 +604,7 @@ export function usePlayerInteractions(gameId, auth) {
           }
       }
   });
+
 
 
 

@@ -170,22 +170,14 @@ class GamesService
 
     public function getGameQuestions(Games $game)
     {
-        Log::debug('Fetching game questions', ['gameId' => $game->id]);
-
         $questions = $game->gameType->gameQuestions;
-
-        Log::debug('Fetched questions', ['questions' => $questions]);
 
         return $questions;
     }
 
     public function getGameType(Games $game): ?GameType
     {
-        Log::debug('Fetching game type', ['gameId' => $game->id]);
-
         $type = $game->gameType;
-
-        Log::debug('Fetched game type', ['type' => $type]);
 
         return $type;
     }

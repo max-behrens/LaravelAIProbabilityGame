@@ -291,6 +291,16 @@ const showSinglePlayerAIWarning = computed(() => {
     return playerCount.value === 1 && !playWithAI.value;
 });
 
+const getDifficultyName = (difficultyId) => {
+    const difficulty = props.difficulties.find(d => d.id === difficultyId);
+    return difficulty ? difficulty.name : 'Unknown';
+};
+
+const getCategoryName = (categoryId) => {
+    const category = props.categories.find(c => c.id === categoryId);
+    return category ? category.name : 'Unknown';
+};
+
 // Updated game control functions
 const startGame = async () => {
     try {
@@ -301,6 +311,10 @@ const startGame = async () => {
             userId: props.auth.user.id,
             userName: props.auth.user.name,
             requiredCount: playerCount.value,
+            // NEW: Send current game settings
+            difficulty_id: selectedDifficulty.value,
+            category_id: selectedCategory.value,
+            play_with_ai: playWithAI.value,
         });
 
         console.log('playerCount.value: ' + playerCount.value);
@@ -323,7 +337,11 @@ const startGame = async () => {
                 addFlashMessage('You are ready! Waiting for other players to start...', 'success');
             }
         } else if (response.data.status === 'started') {
-            // All players are ready - start immediately
+            // All players are ready - apply the game settings and start immediately
+            if (response.data.gameSettings) {
+                await applyGameSettings(response.data.gameSettings);
+            }
+            
             if (showSinglePlayerAIWarning.value) {
                 addFlashMessage('Cannot start game. Please enable "Play with AI" or add more players.', 'warning');
                 return;
@@ -339,6 +357,32 @@ const startGame = async () => {
         errorMessage.value = error.response?.data?.message || 'Failed to signal readiness.';
         console.error(error);
     }
+};
+
+const applyGameSettings = async (settings) => {
+    console.log('Applying game settings from ready player:', settings);
+    
+    // Update local settings
+    selectedDifficulty.value = settings.difficulty_id;
+    selectedCategory.value = settings.category_id;
+    playWithAI.value = settings.play_with_ai;
+    
+    // Update questions if provided
+    if (settings.questions && settings.questions.length > 0) {
+        currentGameQuestions.value = settings.questions;
+        console.log('Questions updated from game settings:', settings.questions.length, 'questions');
+    } else {
+        // Fallback: fetch questions for these settings
+        await fetchGameQuestions(settings.difficulty_id, settings.category_id);
+    }
+    
+    // Update URL to reflect new settings
+    const url = new URL(window.location);
+    url.searchParams.set('difficulty_id', settings.difficulty_id);
+    url.searchParams.set('category_id', settings.category_id);
+    window.history.pushState({}, '', url);
+    
+    addFlashMessage(`Game settings updated to match ${settings.starter_name}'s preferences!`, 'info');
 };
 
 // Join the game with real-time updates
@@ -717,7 +761,6 @@ onMounted(() => {
                 await gameHeatmapRef.value.refreshHeatmap();
             }
         },
-        // UI reset callback for auto-submitted users
         onGameComplete: async (data) => {
             console.log('🔄 Received game complete event. Resetting UI state...');
             gameIsOver.value = true;
@@ -729,39 +772,29 @@ onMounted(() => {
                 console.log('Auto-submitted user UI state fully reset - ready for new game');
             }, 2000);
         },
-
-        // ENHANCED: Handle both AI answered and question progression
         onQuestionProgress: async (questionIndex, allAnswers = null) => {
             console.log('🔄 Received question progress event for question:', questionIndex);
             
-            // If this is from an AI answer event, just progress
             if (allAnswers === null) {
                 if (questionIndex === currentQuestionIndex.value) {
                     currentQuestionIndex.value++;
                     addFlashMessage('Moving to next question!', 'success');
                 }
             } else {
-                // This is from auto-progression - all players answered
                 if (questionIndex === currentQuestionIndex.value) {
-                    // Check if we need AI to answer before progressing
                     if (playWithAI.value && !hasAIAnswered(questionIndex)) {
                         console.log('All players answered, waiting for AI...');
                         addFlashMessage('All players answered! Waiting for AI...', 'info');
-                        // AI will be requested by the first player who triggered this
-                        // We'll progress when we receive the ai.answered event
                     } else {
-                        // No AI needed or AI already answered - progress immediately
                         currentQuestionIndex.value++;
                         addFlashMessage('All players answered! Moving to next question!', 'success');
                     }
                 }
             }
         },
-
         onAutoStart: () => {
             console.log('🚀 Auto-starting game via callback...');
             
-            // Check the single player AI warning
             if (playerCount.value === 1 && !playWithAI.value) {
                 addFlashMessage('Cannot start game. Please enable "Play with AI" or add more players.', 'warning');
                 return;
@@ -773,6 +806,11 @@ onMounted(() => {
             preReadyPlayers.value.clear();
             
             addFlashMessage('All players ready! Your game has started automatically!', 'success');
+        },
+        // NEW: Add callback for applying game settings
+        onApplyGameSettings: async (settings) => {
+            console.log('🔄 Applying game settings via callback:', settings);
+            await applyGameSettings(settings);
         }
     });
 
@@ -895,6 +933,44 @@ onUnmounted(() => {
                                         <p class="text-sm mt-2">Waiting for other players to click "Start Game"...</p>
                                         <div class="mt-2 text-xs text-blue-300">
                                             Ready players: {{ gameState.playersReady.size + 1 }} / {{ playerCount }}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- NEW: Waiting indicator for when others are ready but I'm not -->
+                                <div v-if="!isWaitingToStart && !isGameStarted && gameState.playersReady.size > 0 && !gameIsOver" class="basis-full mb-6 text-center">
+                                    <div class="p-4 bg-yellow-900 text-yellow-200 rounded border border-yellow-700">
+                                        <div class="text-lg font-semibold mb-3">
+                                            {{ gameState.starterName }} is ready to start!
+                                        </div>
+                                        
+                                        <div class="text-sm mb-4">
+                                            They have set the game to these settings:
+                                        </div>
+                                        
+                                        <div class="bg-yellow-800 bg-opacity-50 rounded p-3 mb-4 text-sm">
+                                            <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                                <div>
+                                                    <span class="font-semibold">Difficulty:</span> 
+                                                    {{ getDifficultyName(gameState.gameSettings?.difficulty_id) }}
+                                                </div>
+                                                <div>
+                                                    <span class="font-semibold">Category:</span> 
+                                                    {{ getCategoryName(gameState.gameSettings?.category_id) }}
+                                                </div>
+                                                <div>
+                                                    <span class="font-semibold">Play with AI:</span> 
+                                                    {{ gameState.gameSettings?.play_with_ai ? 'Yes' : 'No' }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="text-sm mb-4">
+                                            <strong>Click "Start Game" to join with these settings!</strong>
+                                        </div>
+                                        
+                                        <div class="text-xs text-yellow-300">
+                                            Ready players: {{ gameState.playersReady.size }} / {{ playerCount }}
                                         </div>
                                     </div>
                                 </div>
