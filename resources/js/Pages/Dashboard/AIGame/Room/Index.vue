@@ -64,6 +64,9 @@ const {
     gameState,
     isInGame,
     preSubmittedAnswers,
+    preAnsweredQuestions,
+    preReadyPlayers,
+    isWaitingToStart,
     fetchPlayers,
     changePlayerCount,
     answerQuestion,
@@ -303,17 +306,33 @@ const startGame = async () => {
         console.log('playerCount.value: ' + playerCount.value);
 
         if (response.data.status === 'waiting') {
-            addFlashMessage('Waiting for other players to be ready...', 'success');
-        } else if (response.data.status === 'started') {
+            if (playerCount.value === 1) {
+                // Single player - start immediately
                 if (showSinglePlayerAIWarning.value) {
-                    // The message will be displayed in the template, so no flash message is needed here.
-                    // You might still want to add an info message or a different flash message.
                     addFlashMessage('Cannot start game. Please enable "Play with AI" or add more players.', 'warning');
-                    return; // Stop the function from proceeding
+                    return;
                 } else {
                     isGameStarted.value = true;
-                    gameIsOver.value = false; // Ensure gameIsOver is false when game starts
+                    gameIsOver.value = false;
                     addFlashMessage('Game started!', 'success');
+                }
+            } else {
+                // Multiplayer - store ready state and wait for others
+                preReadyPlayers.value.add(props.auth.user.id);
+                isWaitingToStart.value = true;
+                addFlashMessage('You are ready! Waiting for other players to start...', 'success');
+            }
+        } else if (response.data.status === 'started') {
+            // All players are ready - start immediately
+            if (showSinglePlayerAIWarning.value) {
+                addFlashMessage('Cannot start game. Please enable "Play with AI" or add more players.', 'warning');
+                return;
+            } else {
+                isGameStarted.value = true;
+                gameIsOver.value = false;
+                isWaitingToStart.value = false;
+                preReadyPlayers.value.clear();
+                addFlashMessage('All players ready! Game started!', 'success');
             }
         }
     } catch (error) {
@@ -501,7 +520,10 @@ const resetGameState = () => {
     answers.value = [];
     isGameStarted.value = false;
     gameIsOver.value = false;
-    gameState.value.waitingForOthers = false; // Ensure waiting state is also reset
+    isWaitingToStart.value = false; // Reset waiting to start state
+    preReadyPlayers.value.clear(); // Clear ready players
+    gameState.value.waitingForOthers = false;
+    gameState.value.playersReady.clear(); // Clear ready state
     resetAI();
     console.log('Game state fully reset - ready for new game');
 };
@@ -734,19 +756,27 @@ onMounted(() => {
                     }
                 }
             }
+        },
+
+        onAutoStart: () => {
+            console.log('🚀 Auto-starting game via callback...');
+            
+            // Check the single player AI warning
+            if (playerCount.value === 1 && !playWithAI.value) {
+                addFlashMessage('Cannot start game. Please enable "Play with AI" or add more players.', 'warning');
+                return;
+            }
+            
+            isGameStarted.value = true;
+            gameIsOver.value = false;
+            isWaitingToStart.value = false;
+            preReadyPlayers.value.clear();
+            
+            addFlashMessage('All players ready! Your game has started automatically!', 'success');
         }
     });
 
-    echo.channel(`game.${props.gameId}`)
-        .listen('.player.ready', (data) => {
-            console.log('Player ready:', data.userName);
-            fetchPlayers();
-            if (data.status === 'started') { // Use the status from the server event
-                isGameStarted.value = true;
-                gameIsOver.value = false; // Ensure gameIsOver is false when game starts
-                addFlashMessage('Game started!', 'success');
-            }
-        });
+        
 });
 
 onUnmounted(() => {
@@ -853,10 +883,21 @@ onUnmounted(() => {
 
                                 
                                 <button @click="startGame"
-                                :disabled="!isInGame || (isGameInProgress && !gameIsOver) || isWaitingForOthers"
-                                class="bg-green-900 hover:bg-green-800 text-green-200 font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed">
-                                {{ isWaitingForOthers ? 'Waiting...' : 'Start Game' }}
+                                    :disabled="!isInGame || (isGameInProgress && !gameIsOver) || isWaitingToStart"
+                                    class="bg-green-900 hover:bg-green-800 text-green-200 font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed">
+                                    {{ isWaitingToStart ? 'Ready - Waiting...' : (isWaitingForOthers ? 'Waiting...' : 'Start Game') }}
                                 </button>
+
+                                <!-- Waiting indicator for multiplayer start -->
+                                <div v-if="isWaitingToStart && !gameIsOver" class="basis-full mb-6 text-center">
+                                    <div class="p-4 bg-blue-900 text-blue-200 rounded border border-blue-700">
+                                        <p class="text-lg font-semibold">You are ready to start!</p>
+                                        <p class="text-sm mt-2">Waiting for other players to click "Start Game"...</p>
+                                        <div class="mt-2 text-xs text-blue-300">
+                                            Ready players: {{ gameState.playersReady.size + 1 }} / {{ playerCount }}
+                                        </div>
+                                    </div>
+                                </div>
 
                                 <button @click="joinGame"
                                 :disabled="isInGame || submitting || maxPlayersReached || (isGameInProgress && !gameIsOver)"

@@ -18,6 +18,9 @@ export function usePlayerInteractions(gameId, auth) {
   });
   const error = ref(null);
   
+  const preReadyPlayers = ref(new Set());
+  const isWaitingToStart = ref(false);
+
   // Store pre-submitted answers for auto-submission
   const preSubmittedAnswers = ref(null);
   const preSubmittedAIAnswers = ref(null);
@@ -211,7 +214,7 @@ export function usePlayerInteractions(gameId, auth) {
         // Single player - answer immediately
         gameState.value.playersAnswered.add(`${currentUserId.value}-${questionIndex}`);
         
-        // Broadcast answer with difficulty and category info
+        // Broadcast answer info
         await axios.post(`/api/games/${gameId}/broadcast`, {
           event: 'player.answered',
           data: {
@@ -226,17 +229,15 @@ export function usePlayerInteractions(gameId, auth) {
         
       } else {
         // MULTIPLAYER: Store answer for potential auto-submission
+
         console.log('💾 Storing answer for potential auto-progression:', { 
           questionIndex, 
           answer,
-          difficultyId,
-          categoryId
+
         });
         
         preAnsweredQuestions.value.set(questionIndex, {
           answer: answer,
-          difficultyId: difficultyId,
-          categoryId: categoryId
         });
         
         // Initialize the set for this question if it doesn't exist
@@ -245,7 +246,7 @@ export function usePlayerInteractions(gameId, auth) {
         }
         gameState.value.playersPreAnswered.get(questionIndex).add(currentUserId.value);
 
-        // Broadcast pre-answer with difficulty and category info
+        // Broadcast pre-answer info
         await axios.post(`/api/games/${gameId}/broadcast`, {
           event: 'player.pre.answered',
           data: {
@@ -254,8 +255,6 @@ export function usePlayerInteractions(gameId, auth) {
             questionIndex: questionIndex,
             answeredCount: gameState.value.playersPreAnswered.get(questionIndex).size,
             requiredCount: playerCount,
-            difficultyId: difficultyId,
-            categoryId: categoryId,
             timestamp: new Date().toISOString()
           }
         });
@@ -274,8 +273,6 @@ export function usePlayerInteractions(gameId, auth) {
             data: {
               questionIndex: questionIndex,
               playerCount: playerCount,
-              difficultyId: difficultyId,
-              categoryId: categoryId,
               timestamp: new Date().toISOString()
             }
           });
@@ -435,19 +432,24 @@ export function usePlayerInteractions(gameId, auth) {
     }
   };
 
-  // Reset game state
+  // Update the resetGameState function in usePlayerInteractions.js
   const resetGameState = () => {
-    console.log('Resetting game state');
-    gameState.value.playersReady.clear();
-    gameState.value.playersAnswered.clear();
-    gameState.value.playersSubmitted.clear();
-    gameState.value.playersPreAnswered.clear(); //  Clear pre-answered questions
-    gameState.value.gameInProgress = false;
-    gameState.value.waitingForOthers = false;
-    // Clear pre-submitted answers and pre-answered questions
-    preSubmittedAnswers.value = null;
-    preSubmittedAIAnswers.value = null;
-    preAnsweredQuestions.value.clear(); //  Clear pre-answered questions
+      console.log('Resetting game state');
+      gameState.value.playersReady.clear();
+      gameState.value.playersAnswered.clear();
+      gameState.value.playersSubmitted.clear();
+      gameState.value.playersPreAnswered.clear();
+      gameState.value.gameInProgress = false;
+      gameState.value.waitingForOthers = false;
+      
+      // Clear pre-submitted answers and pre-answered questions
+      preSubmittedAnswers.value = null;
+      preSubmittedAIAnswers.value = null;
+      preAnsweredQuestions.value.clear();
+      
+      // Clear ready state
+      preReadyPlayers.value.clear();
+      isWaitingToStart.value = false;
   };
 
   // Enhanced Pusher setup with better connection handling
@@ -540,13 +542,54 @@ export function usePlayerInteractions(gameId, auth) {
     });
 
     // Player ready (multiplayer start)
-    gameChannel.bind('player.ready', (data) => {
+  gameChannel.bind('player.ready', (data) => {
       console.log('🔔 Received player.ready event:', data);
+      
       if (data.userId !== currentUserId.value) {
-        gameState.value.playersReady.add(data.userId);
-        addFlashMessage(`${data.userName} clicked Start Game! (${data.readyCount}/${data.requiredCount} ready)`, 'info');
+          // Another player clicked start
+          gameState.value.playersReady.add(data.userId);
+          addFlashMessage(`${data.userName} is ready to start! (${data.readyCount}/${data.requiredCount} ready)`, 'info');
+          
+          // Check if all required players are now ready for auto-start
+          const allPlayersReady = data.readyCount >= data.requiredCount;
+          const iAmReady = preReadyPlayers.value.has(currentUserId.value);
+          const gameNotStartedYet = !gameState.value.gameInProgress;
+          
+          console.log('Auto-start check:', {
+              allPlayersReady,
+              iAmReady,
+              gameNotStartedYet,
+              readyCount: data.readyCount,
+              requiredCount: data.requiredCount,
+              isWaitingToStart: isWaitingToStart.value
+          });
+          
+          if (allPlayersReady && iAmReady && gameNotStartedYet && isWaitingToStart.value) {
+              console.log('Auto-starting game for ready player via callback...');
+              
+              // Use callback to notify main component to start the game
+              if (callbacks.value.onAutoStart) {
+                  callbacks.value.onAutoStart();
+              }
+          }
       }
-    });
+  });
+
+  gameChannel.bind('game.started.all.ready', (data) => {
+      console.log('🔔 Received game.started.all.ready event:', data);
+      
+      // If I'm waiting and this event is received, trigger auto-start
+      if (isWaitingToStart.value) {
+          console.log('🔄 Auto-starting game via all.ready callback...');
+          
+          // Use callback to notify main component to start the game
+          if (callbacks.value.onAutoStart) {
+              callbacks.value.onAutoStart();
+          }
+      }
+  });
+
+
 
     // Single player game started
     gameChannel.bind('game.started.single', (data) => {
@@ -851,6 +894,8 @@ export function usePlayerInteractions(gameId, auth) {
     isInGame,
     preSubmittedAnswers, // Expose for debugging if needed
     preAnsweredQuestions, //  Expose pre-answered questions
+    preReadyPlayers,
+    isWaitingToStart,
     
     // Methods
     fetchPlayers,

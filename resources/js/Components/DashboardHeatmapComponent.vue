@@ -1004,7 +1004,9 @@ onMounted(() => {
                 </div>
 
                 <div v-if="props.showAiScores && question.ai_answer" class="mt-1">
-                  <span class="text-green-300">AI: {{ question.ai_answer }}</span>
+                  <span class="text-green-300">AI: 
+                    <!-- {{ question.ai_answer }} -->
+                  </span>
                   <span :class="question.ai_is_correct ? 'text-green-400' : 'text-red-400'" class="ml-2">
                     {{ question.ai_is_correct ? '✓' : '✗' }}
                   </span>

@@ -449,29 +449,60 @@ class GamesController extends Controller
         $cacheKey = "game:{$game->id}:readyPlayers";
         $readyPlayers = Cache::get($cacheKey, []);
 
+        // Add debug logging to see current state
+        Log::info('Before adding player to ready list', [
+            'gameId' => $game->id,
+            'userId' => $userId,
+            'currentReadyPlayers' => $readyPlayers,
+            'requiredCount' => $requiredCount
+        ]);
+
         if (!in_array($userId, $readyPlayers)) {
             $readyPlayers[] = $userId;
             Cache::put($cacheKey, $readyPlayers, now()->addMinutes(30));
         }
 
         $readyCount = count($readyPlayers);
+        
         Log::info('Player marked ready', [
             'gameId' => $game->id,
             'userId' => $userId,
             'readyCount' => $readyCount,
-            'requiredCount' => $requiredCount
+            'requiredCount' => $requiredCount,
+            'allReadyPlayers' => $readyPlayers // Add this for debugging
         ]);
 
+        // Broadcast the player ready event
         broadcast(new PlayerReady($game->id, $userId, $userName, $readyCount, $requiredCount))->toOthers();
 
         if ($readyCount >= $requiredCount) {
+            // All players are ready - update game status and broadcast special event
             $game->status = 'in_progress';
             $game->save();
+            
+            // Clear the ready players cache since game is starting
+            Cache::forget($cacheKey);
+            
+            // Broadcast a special event for when all players are ready
+            $this->triggerGameUpdate($game->id, 'game.started.all.ready', [
+                'gameId' => $game->id,
+                'playerCount' => $requiredCount,
+                'readyCount' => $readyCount,
+                'timestamp' => now()->toISOString()
+            ]);
+            
+            Log::info('All players ready - game starting', [
+                'gameId' => $game->id,
+                'playerCount' => $requiredCount,
+                'finalReadyPlayers' => $readyPlayers
+            ]);
+            
             return response()->json(['status' => 'started']);
         }
 
         return response()->json(['status' => 'waiting']);
     }
+
 
     public function broadcast(Request $request, $gameId)
     {
@@ -493,16 +524,37 @@ class GamesController extends Controller
     {
         $gameStartKey = "game:{$gameId}:start_time";
         $sessionKey = "game:{$gameId}:session_id";
+        // DON'T clear ready players here - they should persist until game actually starts
+        // $readyPlayersKey = "game:{$gameId}:readyPlayers"; // REMOVE THIS LINE
         
-        // Clear both keys to force new session creation
+        // Clear only session-related keys, not ready players
         Cache::forget($gameStartKey);
         Cache::forget($sessionKey);
+        // Cache::forget($readyPlayersKey); // REMOVE THIS LINE
         
-        Log::info('Game session reset', ['gameId' => $gameId, 'userId' => $request->user()?->id]);
+        Log::info('Game session reset', [
+            'gameId' => $gameId, 
+            'userId' => $request->user()?->id,
+            'clearedKeys' => [$gameStartKey, $sessionKey] // Update logging
+        ]);
         
         return response()->json([
             'success' => true,
             'message' => 'Game session reset successfully'
+        ]);
+    }
+
+    // Add a separate method to clear ready players when needed
+    public function clearReadyPlayers(Request $request, $gameId)
+    {
+        $readyPlayersKey = "game:{$gameId}:readyPlayers";
+        Cache::forget($readyPlayersKey);
+        
+        Log::info('Ready players cleared', ['gameId' => $gameId]);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Ready players cleared'
         ]);
     }
 }
