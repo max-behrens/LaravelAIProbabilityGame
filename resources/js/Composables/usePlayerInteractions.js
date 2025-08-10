@@ -181,30 +181,43 @@ export function usePlayerInteractions(gameId, auth) {
 
   // Change player count
   const changePlayerCount = async (count) => {
-    if (!isInGame.value) {
-      console.log('User not in game, cannot change player count');
-      return;
-    }
-    
-    console.log('Changing player count to:', count);
-    gameState.value.currentPlayerCount = count;
+      if (!isInGame.value) {
+        console.log('User not in game, cannot change player count');
+        return;
+      }
+      
+      console.log('Changing player count to:', count);
+      gameState.value.currentPlayerCount = count;
 
-    // Broadcast player count change
-    try {
-      const eventData = {
-        userId: currentUserId.value,
-        userName: currentUserName.value,
-        playerCount: count,
-        timestamp: new Date().toISOString()
-      };
+      // NEW: Store player count preference in backend cache
+      try {
+        console.log('Storing player count preference in cache:', count);
+        await axios.post(`/api/games/${gameId}/store-player-count`, {
+          playerCount: count,
+          userId: currentUserId.value
+        });
+        
+        console.log('Player count preference stored in cache');
+      } catch (err) {
+        console.error('Failed to store player count preference:', err);
+      }
 
-      await axios.post(`/api/games/${gameId}/broadcast`, {
-        event: 'player.count.changed',
-        data: eventData
-      });
-    } catch (err) {
-      console.error('Failed to broadcast player count change:', err);
-    }
+      // Broadcast player count change
+      try {
+        const eventData = {
+          userId: currentUserId.value,
+          userName: currentUserName.value,
+          playerCount: count,
+          timestamp: new Date().toISOString()
+        };
+
+        await axios.post(`/api/games/${gameId}/broadcast`, {
+          event: 'player.count.changed',
+          data: eventData
+        });
+      } catch (err) {
+        console.error('Failed to broadcast player count change:', err);
+      }
   };
 
   // Updated answerQuestion function with difficulty and category support
@@ -424,8 +437,6 @@ export function usePlayerInteractions(gameId, auth) {
   const setupPusher = () => {
     console.log('=== Setting up Pusher ===');
     
-    // Enable Pusher logging for debugging
-    Pusher.logToConsole = true;
     
     pusher = new Pusher('c493e35de663a696d88e', {
       cluster: 'eu',
@@ -510,46 +521,46 @@ export function usePlayerInteractions(gameId, auth) {
     });
 
     // Player ready (multiplayer start)
-  gameChannel.bind('player.ready', (data) => {
-      console.log('🔔 Received player.ready event:', data);
-      
-      if (data.userId !== currentUserId.value) {
-          // Another player clicked start
-          gameState.value.playersReady.add(data.userId);
-          
+    gameChannel.bind('player.ready', (data) => {
+        console.log('🔔 Received player.ready event:', data);
+        
+        if (data.userId !== currentUserId.value) {
+            // Another player clicked start
+            gameState.value.playersReady.add(data.userId);
+            
           // NEW: Store game settings and starter info
-          if (data.gameSettings) {
-              gameState.value.gameSettings = data.gameSettings;
-              gameState.value.starterName = data.gameSettings.starter_name;
-              console.log('Game settings received from ready player:', data.gameSettings);
-          }
-          
-          addFlashMessage(`${data.userName} is ready to start! (${data.readyCount}/${data.requiredCount} ready)`, 'info');
-          
+            if (data.gameSettings) {
+                gameState.value.gameSettings = data.gameSettings;
+                gameState.value.starterName = data.gameSettings.starter_name;
+                console.log('Game settings received from ready player:', data.gameSettings);
+            }
+            
+            addFlashMessage(`${data.userName} is ready to start! (${data.readyCount}/${data.requiredCount} ready)`, 'info');
+            
           // Check if all required players are now ready for auto-start
-          const allPlayersReady = data.readyCount >= data.requiredCount;
-          const iAmReady = preReadyPlayers.value.has(currentUserId.value);
-          const gameNotStartedYet = !gameState.value.gameInProgress;
-          
-          console.log('Auto-start check:', {
-              allPlayersReady,
-              iAmReady,
-              gameNotStartedYet,
-              readyCount: data.readyCount,
-              requiredCount: data.requiredCount,
-              isWaitingToStart: isWaitingToStart.value
-          });
-          
-          if (allPlayersReady && iAmReady && gameNotStartedYet && isWaitingToStart.value) {
-              console.log('Auto-starting game for ready player via callback...');
-              
-              // Use callback to notify main component to start the game
-              if (callbacks.value.onAutoStart) {
-                  callbacks.value.onAutoStart();
-              }
-          }
-      }
-  });
+                const allPlayersReady = data.readyCount >= data.requiredCount;
+                const iAmReady = preReadyPlayers.value.has(currentUserId.value);
+                const gameNotStartedYet = !gameState.value.gameInProgress;
+                
+                console.log('Auto-start check:', {
+                    allPlayersReady,
+                    iAmReady,
+                    gameNotStartedYet,
+                    readyCount: data.readyCount,
+                    requiredCount: data.requiredCount,
+                    isWaitingToStart: isWaitingToStart.value
+                });
+                
+                if (allPlayersReady && iAmReady && gameNotStartedYet && isWaitingToStart.value) {
+                    console.log('Auto-starting game for ready player via callback...');
+                    
+                    // Use callback to notify main component to start the game
+                    if (callbacks.value.onAutoStart) {
+                        callbacks.value.onAutoStart();
+                }
+            }
+        }
+    });
 
   // Also update the game.started.all.ready handler
   gameChannel.bind('game.started.all.ready', async (data) => {

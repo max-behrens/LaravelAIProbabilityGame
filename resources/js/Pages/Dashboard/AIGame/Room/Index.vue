@@ -304,6 +304,30 @@ const getCategoryName = (categoryId) => {
 // Updated game control functions
 const startGame = async () => {
     try {
+
+        console.log('Starting game with player count:', playerCount.value);
+        // Check if this is a multiplayer attempt and validate other players' settings
+        const playerCountNum = parseInt(playerCount.value);
+        
+        // Check if this is a multiplayer attempt and validate other players' settings
+        if (playerCountNum > 1) {
+            console.log('Starting multiplayer game with 2 players...');
+            // Check if any other players in the game have their player count set to 2
+            const response = await axios.get(`/games/${props.gameId}/validate-multiplayer-start`);
+
+            console.log('Multiplayer start validation response:', JSON.stringify(response.data));
+
+            console.log('Can start multiplayer:', response.data.canStartMultiplayer);
+            
+            if (!response.data.canStartMultiplayer) {
+                addFlashMessage(
+                    'Cannot start multiplayer game. At least one other player must also have "2 Players" selected to start a multiplayer game.', 
+                    'warning'
+                );
+                return;
+            }
+        }
+
         // Reset session before starting new game
         await axios.post(`/games/${props.gameId}/reset-session`);
         
@@ -311,7 +335,6 @@ const startGame = async () => {
             userId: props.auth.user.id,
             userName: props.auth.user.name,
             requiredCount: playerCount.value,
-            // NEW: Send current game settings
             difficulty_id: selectedDifficulty.value,
             category_id: selectedCategory.value,
             play_with_ai: playWithAI.value,
@@ -415,11 +438,16 @@ const leaveGame = async () => {
     }
 };
 
-// Handle player count changes
+// Handle player count changes - FIXED to ensure numeric value
 const onPlayerCountChange = async (newCount) => {
-    playerCount.value = newCount;
+    // Convert to number to ensure consistent type
+    const numericCount = parseInt(newCount);
+    playerCount.value = numericCount;
+    
+    console.log('Player count changed to:', numericCount, 'Type:', typeof numericCount);
+    
     if (isInGame.value) {
-        await changePlayerCount(newCount);
+        await changePlayerCount(numericCount);
     }
 };
 

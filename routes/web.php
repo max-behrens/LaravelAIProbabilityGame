@@ -35,7 +35,9 @@ Route::get('/403', [ErrorController::class, 'unauthorized'])->name('errors.403')
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
-        Route::post('/games/{gameId}/submit-answer', [GamesController::class, 'submitAnswer'])->name('games.submit-answer');
+            Route::post('/games/{gameId}/submit-answer', [GamesController::class, 'submitAnswer'])->name('games.submit-answer');
+
+            Route::get('/games/{gameId}/validate-multiplayer-start', [GamesController::class, 'validateMultiplayerStart']);
 
 
             Route::get('/games/{gameId}/scores', [GamesController::class, 'getScores']);
@@ -52,9 +54,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             Route::get('/games/{gameId}/questions', [GamesController::class, 'getQuestions']);
 
+            
+
             Route::post('/games/{game}/join', [GamesController::class, 'join']);
-        Route::post('/games/{game}/leave', [GamesController::class, 'leave']);
-        Route::post('/games/{game}/start', [GamesController::class, 'start'])->name('games.start');
+            Route::post('/games/{game}/leave', [GamesController::class, 'leave']);
+            Route::post('/games/{game}/start', [GamesController::class, 'start'])->name('games.start');
 
 
     
