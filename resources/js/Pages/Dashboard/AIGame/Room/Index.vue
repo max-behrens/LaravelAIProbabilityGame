@@ -304,7 +304,6 @@ const getCategoryName = (categoryId) => {
 // Updated game control functions
 const startGame = async () => {
     try {
-
         console.log('Starting game with player count:', playerCount.value);
         // Check if this is a multiplayer attempt and validate other players' settings
         const playerCountNum = parseInt(playerCount.value);
@@ -316,7 +315,6 @@ const startGame = async () => {
             const response = await axios.get(`/games/${props.gameId}/validate-multiplayer-start`);
 
             console.log('Multiplayer start validation response:', JSON.stringify(response.data));
-
             console.log('Can start multiplayer:', response.data.canStartMultiplayer);
             
             if (!response.data.canStartMultiplayer) {
@@ -352,6 +350,26 @@ const startGame = async () => {
                     isGameStarted.value = true;
                     gameIsOver.value = false;
                     addFlashMessage('Game started!', 'success');
+                    
+                    // Broadcast single-player game start to other players
+                    try {
+                        await axios.post(`/api/games/${props.gameId}/broadcast`, {
+                            event: 'game.started.single',
+                            data: {
+                                userId: props.auth.user.id,
+                                userName: props.auth.user.name,
+                                playerCount: 1,
+                                difficulty_id: selectedDifficulty.value,
+                                category_id: selectedCategory.value,
+                                play_with_ai: playWithAI.value,
+                                timestamp: new Date().toISOString()
+                            }
+                        });
+                        console.log('Single-player game start broadcasted to other players');
+                    } catch (error) {
+                        console.error('Failed to broadcast single-player start:', error);
+                        // Don't fail the game start if broadcast fails
+                    }
                 }
             } else {
                 // Multiplayer - store ready state and wait for others
@@ -493,8 +511,8 @@ const nextOrSubmit = async () => {
                             data: {
                                 questionIndex: currentQuestionIndex.value,
                                 aiAnswer: aiAnswers.value[currentQuestionIndex.value]?.answer,
-                                aiScore: aiAnswers.value[currentQuestionIndex.value]?.score, // Add this line
-                                isCorrect: aiAnswers.value[currentQuestionIndex.value]?.isCorrect, // Add this too
+                                aiScore: aiAnswers.value[currentQuestionIndex.value]?.score,
+                                isCorrect: aiAnswers.value[currentQuestionIndex.value]?.isCorrect,
                                 timestamp: new Date().toISOString()
                             }
                         });
@@ -522,10 +540,11 @@ const nextOrSubmit = async () => {
         submitting.value = true;
 
         try {
-            if (playWithAI.value) {
+            // For single-player: Get AI answer for final question if needed
+            if (playerCount.value === 1 && playWithAI.value) {
                 if (!hasAIAnswered(currentQuestionIndex.value)) {
-                    addFlashMessage('Waiting for AI to answer the final question...', 'info');
-                    console.log('Triggering AI answer for final question:', currentQuestionIndex.value);
+                    addFlashMessage('Getting AI answer for final question...', 'info');
+                    console.log('Single-player: Getting AI answer for final question:', currentQuestionIndex.value);
                     await getAIAnswerForQuestion(
                         currentGameQuestions.value[currentQuestionIndex.value].question,
                         props.gameId,
@@ -535,15 +554,55 @@ const nextOrSubmit = async () => {
                     );
                 }
             }
+            
+            // For multiplayer: Check if AI needs to answer
+            if (playerCount.value > 1 && playWithAI.value) {
+                if (!hasAIAnswered(currentQuestionIndex.value)) {
+                    addFlashMessage('Waiting for AI to answer the final question...', 'info');
+                    console.log('Multiplayer: Triggering AI answer for final question:', currentQuestionIndex.value);
+                    await getAIAnswerForQuestion(
+                        currentGameQuestions.value[currentQuestionIndex.value].question,
+                        props.gameId,
+                        currentQuestionIndex.value,
+                        selectedDifficulty.value,
+                        selectedCategory.value
+                    );
+                }
+            }
+
             const submissionAnswers = answers.value.map(answer => answer);
 
-            const result = await submitAnswers(submissionAnswers, playerCount.value, selectedDifficulty.value, selectedCategory.value);
-
+            const result = await submitAnswers(
+                submissionAnswers, 
+                playerCount.value, 
+                selectedDifficulty.value, 
+                selectedCategory.value
+            );
 
             if (result.submitted) {
                 addFlashMessage('Answers submitted successfully! Game Completed.', 'success');
                 gameIsOver.value = true;
                 isGameStarted.value = false;
+                
+                // CRITICAL FIX: For single-player, broadcast game completion immediately
+                if (playerCount.value === 1) {
+                    try {
+                        await axios.post(`/api/games/${props.gameId}/broadcast`, {
+                            event: 'game.completed.single',
+                            data: {
+                                userId: props.auth.user.id,
+                                userName: props.auth.user.name,
+                                timestamp: new Date().toISOString(),
+                                difficultyId: selectedDifficulty.value,
+                                categoryId: selectedCategory.value,
+                                playedWithAI: playWithAI.value
+                            }
+                        });
+                        console.log('Single-player game completion broadcasted');
+                    } catch (error) {
+                        console.error('Failed to broadcast single-player completion:', error);
+                    }
+                }
 
                 setTimeout(() => {
                     resetGameState();
@@ -923,6 +982,7 @@ onUnmounted(() => {
                             </div>
                         </div>
 
+
                         <div v-for="flash in flashMessages" :key="flash.id" class="mb- w-full">
                             <div :class="{
                                     'bg-red-900 text-red-200 border-red-700': flash.type === 'error',
@@ -935,6 +995,25 @@ onUnmounted(() => {
                                     class="absolute top-1 right-2 text-xl font-bold opacity-70 hover:opacity-100">
                                     ×
                                 </button>
+                            </div>
+                        </div>
+
+                        <!-- Single Player Game In Progress Indicator -->
+                        <div v-if="gameState.gameInProgress" 
+                            class="basis-full mb-6 text-center">
+                            <div class="p-6 bg-orange-900 text-orange-200 rounded-lg border border-orange-700">
+                                <div class="flex items-center justify-center mb-4">
+                                    <svg class="animate-spin h-6 w-6 mr-3" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <h3 class="text-xl font-bold">Game In Progress</h3>
+                                </div>
+                                <p class="text-lg mb-2">A player is currently playing a single-player game in this room.</p>
+                                <p class="text-sm opacity-90">Please wait for them to finish before starting your own game.</p>
+                                <div class="mt-4 text-xs bg-orange-800 bg-opacity-50 rounded p-2">
+                                    You can still view scores and statistics while waiting.
+                                </div>
                             </div>
                         </div>
 

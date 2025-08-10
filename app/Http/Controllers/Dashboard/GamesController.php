@@ -552,6 +552,34 @@ public function playerReady(Request $request, Games $game)
     $categoryId = $request->get('category_id', 1);
     $playWithAI = $request->boolean('play_with_ai', false);
 
+    // CHECK IF THIS IS A SINGLE-PLAYER GAME
+    if ($requiredCount === 1) {
+        Log::info('Single-player game detected - bypassing ready system', [
+            'gameId' => $game->id,
+            'userId' => $userId,
+            'userName' => $userName
+        ]);
+        
+        // For single-player, don't use the ready players cache system at all
+        // Don't broadcast player.ready event - let frontend handle the single-player broadcast
+        return response()->json([
+            'status' => 'waiting', // This will trigger single-player logic in frontend
+            'gameSettings' => [
+                'difficulty_id' => $difficultyId,
+                'category_id' => $categoryId,
+                'play_with_ai' => $playWithAI,
+                'starter_name' => $userName
+            ]
+        ]);
+    }
+
+    // MULTIPLAYER LOGIC ONLY FROM HERE
+    Log::info('Multiplayer game detected - using ready system', [
+        'gameId' => $game->id,
+        'userId' => $userId,
+        'requiredCount' => $requiredCount
+    ]);
+
     $cacheKey = "game:{$game->id}:readyPlayers";
     $readyPlayers = Cache::get($cacheKey, []);
 
@@ -585,15 +613,6 @@ public function playerReady(Request $request, Games $game)
         ]);
     }
 
-    // Add debug logging to see current state
-    Log::info('Before adding player to ready list', [
-        'gameId' => $game->id,
-        'userId' => $userId,
-        'currentReadyPlayers' => $readyPlayers,
-        'requiredCount' => $requiredCount,
-        'gameSettings' => $currentSettings
-    ]);
-
     if (!in_array($userId, $readyPlayers)) {
         $readyPlayers[] = $userId;
         Cache::put($cacheKey, $readyPlayers, now()->addMinutes(30));
@@ -601,7 +620,7 @@ public function playerReady(Request $request, Games $game)
 
     $readyCount = count($readyPlayers);
     
-    Log::info('Player marked ready', [
+    Log::info('Player marked ready for multiplayer', [
         'gameId' => $game->id,
         'userId' => $userId,
         'readyCount' => $readyCount,
@@ -609,8 +628,8 @@ public function playerReady(Request $request, Games $game)
         'allReadyPlayers' => $readyPlayers
     ]);
 
-        // Broadcast the player ready event with game settings
-        broadcast(new PlayerReady($game->id, $userId, $userName, $readyCount, $requiredCount, $currentSettings))->toOthers();
+    // ONLY broadcast player.ready for multiplayer games
+    broadcast(new PlayerReady($game->id, $userId, $userName, $readyCount, $requiredCount, $currentSettings))->toOthers();
 
     if ($readyCount >= $requiredCount) {
         // All players are ready - update game status and broadcast special event
@@ -619,18 +638,18 @@ public function playerReady(Request $request, Games $game)
         
         // Clear the ready players cache since game is starting
         Cache::forget($cacheKey);
-        Cache::forget($settingsKey); // Clear settings cache too
+        Cache::forget($settingsKey);
         
-            // Broadcast a special event for when all players are ready
-            $this->triggerGameUpdate($game->id, 'game.started.all.ready', [
-                'gameId' => $game->id,
-                'playerCount' => $requiredCount,
-                'readyCount' => $readyCount,
-                'gameSettings' => $currentSettings, // Include settings in start event too
-                'timestamp' => now()->toISOString()
-            ]);
+        // Broadcast a special event for when all players are ready
+        $this->triggerGameUpdate($game->id, 'game.started.all.ready', [
+            'gameId' => $game->id,
+            'playerCount' => $requiredCount,
+            'readyCount' => $readyCount,
+            'gameSettings' => $currentSettings,
+            'timestamp' => now()->toISOString()
+        ]);
         
-        Log::info('All players ready - game starting', [
+        Log::info('All players ready - multiplayer game starting', [
             'gameId' => $game->id,
             'playerCount' => $requiredCount,
             'finalReadyPlayers' => $readyPlayers,
