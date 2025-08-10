@@ -474,7 +474,7 @@ watch([errorMessage, successMessage], () => {
                         <div 
                           v-for="player in gamePlayersData[game.id]" 
                           :key="player.id"
-                          class="flex items-center justify-between py-1 px-2 bg-gray-600 rounded text-xs"
+                          class="flex items-center justify-between py-1 px-2s rounded text-xs"
                         >
                           <span>{{ player.name }}</span>
                           <span 

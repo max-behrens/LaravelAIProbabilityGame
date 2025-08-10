@@ -927,7 +927,7 @@ onUnmounted(() => {
                                 </button>
 
                                 <!-- Waiting indicator for multiplayer start -->
-                                <div v-if="isWaitingToStart && !gameIsOver" class="basis-full mb-6 text-center">
+                                <div v-if="isWaitingToStart && !gameIsOver && !isGameStarted" class="basis-full mb-6 text-center">
                                     <div class="p-4 bg-blue-900 text-blue-200 rounded border border-blue-700">
                                         <p class="text-lg font-semibold">You are ready to start!</p>
                                         <p class="text-sm mt-2">Waiting for other players to click "Start Game"...</p>
@@ -938,7 +938,7 @@ onUnmounted(() => {
                                 </div>
 
                                 <!-- NEW: Waiting indicator for when others are ready but I'm not -->
-                                <div v-if="!isWaitingToStart && !isGameStarted && gameState.playersReady.size > 0 && !gameIsOver" class="basis-full mb-6 text-center">
+                                <div v-if="!isWaitingToStart && !isGameStarted && gameState.playersReady.size > 0 && !gameIsOver && !gameState.waitingForOthers" class="basis-full mb-6 text-center">
                                     <div class="p-4 bg-yellow-900 text-yellow-200 rounded border border-yellow-700">
                                         <div class="text-lg font-semibold mb-3">
                                             {{ gameState.starterName }} is ready to start!

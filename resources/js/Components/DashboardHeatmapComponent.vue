@@ -948,7 +948,7 @@ onMounted(() => {
             height="200"
             :options="radialOptions"
             :series="radialChartData.series"
-          />
+        />
           
           <div v-else-if="isLoadingDetails" class="text-gray-400 mt-2">Loading session details...</div>
           <div v-else class="text-gray-400 mt-2">Select a session to view accuracy</div>

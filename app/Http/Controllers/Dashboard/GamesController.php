@@ -167,8 +167,22 @@ class GamesController extends Controller
         }
 
         // Get difficulty and category IDs from request
-        $difficultyId = $request->get('difficulty_id') ?? 1;
-        $categoryId = $request->get('category_id') ?? 1;
+        $difficultyId = $request->get('difficulty_id');
+        $categoryId = $request->get('category_id');
+
+        // If not provided in request, try to get from game settings cache
+        if (is_null($difficultyId) || is_null($categoryId)) {
+            $settingsKey = "game:{$gameId}:gameSettings";
+            $gameSettings = Cache::get($settingsKey);
+            
+            if ($gameSettings) {
+                $difficultyId = $difficultyId ?? $gameSettings['difficulty_id'] ?? 1;
+                $categoryId = $categoryId ?? $gameSettings['category_id'] ?? 1;
+            } else {
+                $difficultyId = $difficultyId ?? 1;
+                $categoryId = $categoryId ?? 1;
+            }
+        }
 
         // Use game start time to create unique session per game round
         $gameStartKey = "game:{$gameId}:start_time";
