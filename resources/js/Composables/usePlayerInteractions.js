@@ -304,137 +304,100 @@ export function usePlayerInteractions(gameId, auth) {
 
   // Updated submitAnswers function with difficulty and category support
   const submitAnswers = async (answers, playerCount, difficultyId = null, categoryId = null) => {
-    if (!isInGame.value) return { submitted: false, waitingForOthers: false };
-    
-    try {
-      // Prepare AI answers if AI is enabled
-      const aiAnswers = prepareAIAnswersForSubmission();
-      
-      if (playerCount === 1) {
-        // Single player - submit immediately
-        const requestData = {
-          answers: answers,
-          difficulty_id: difficultyId,
-          category_id: categoryId
-        };
+      if (!isInGame.value) return { submitted: false, waitingForOthers: false };
 
-        if (aiModule?.playWithAI.value) {
-          requestData.aiAnswers = aiAnswers;
-          requestData.playWithAI = true;
-        }
+      try {
+          const aiAnswers = prepareAIAnswersForSubmission();
 
-        await axios.post(`/games/${gameId}/submit-answer`, requestData);
-        
-        // Broadcast completion
-        await axios.post(`/api/games/${gameId}/broadcast`, {
-          event: 'game.completed.single',
-          data: {
-            userId: currentUserId.value,
-            userName: currentUserName.value,
-            timestamp: new Date().toISOString()
+          if (playerCount === 1) {
+              // Single player logic - submit immediately
+              const requestData = {
+                  answers: answers,
+                  difficulty_id: difficultyId,
+                  category_id: categoryId
+              };
+
+              if (aiModule?.playWithAI.value) {
+                  requestData.aiAnswers = aiAnswers;
+                  requestData.playWithAI = true;
+              }
+
+              console.log('🚀 Single player submitting:', requestData);
+              await axios.post(`/games/${gameId}/submit-answer`, requestData);
+
+              addFlashMessage('Game completed successfully!', 'success');
+              resetGameState();
+              return { submitted: true, waitingForOthers: false };
+
+          } else {
+              // MULTIPLAYER: Always submit to server immediately, but coordinate UI updates
+              console.log('💾 Multiplayer: Submitting answers immediately');
+
+              const cleanAnswers = answers.map(answer => (answer === undefined ? '' : answer));
+              
+              const requestData = {
+                  answers: cleanAnswers,
+                  difficulty_id: difficultyId,
+                  category_id: categoryId
+              };
+
+              if (aiModule?.playWithAI.value) {
+                  requestData.aiAnswers = aiAnswers;
+                  requestData.playWithAI = true;
+              }
+
+              // SUBMIT TO SERVER IMMEDIATELY FOR ALL PLAYERS
+              console.log('🚀 Multiplayer player submitting to server:', requestData);
+              await axios.post(`/games/${gameId}/submit-answer`, requestData);
+
+              // Check if this is the last player to submit
+              const currentSubmissionCount = gameState.value.playersSubmitted.size;
+              const isLastPlayer = (currentSubmissionCount + 1) >= playerCount;
+
+              // Add this player to the submitted set
+              gameState.value.playersSubmitted.add(currentUserId.value);
+              
+              // Broadcast submission status
+              await axios.post(`/api/games/${gameId}/broadcast`, {
+                  event: 'player.submitted',
+                  data: {
+                      userId: currentUserId.value,
+                      userName: currentUserName.value,
+                      submittedCount: gameState.value.playersSubmitted.size,
+                      requiredCount: playerCount,
+                      difficultyId: difficultyId,
+                      categoryId: categoryId,
+                      timestamp: new Date().toISOString()
+                  }
+              });
+
+              if (isLastPlayer) {
+                  console.log('✅ Last player - broadcasting game completion');
+                  
+                  // Broadcast final completion
+                  await axios.post(`/api/games/${gameId}/broadcast`, {
+                      event: 'game.completed.multiplayer',
+                      data: {
+                          playerCount: playerCount,
+                          timestamp: new Date().toISOString()
+                      }
+                  });
+
+                  addFlashMessage('All players submitted! Game completed!', 'success');
+                  resetGameState();
+                  return { submitted: true, waitingForOthers: false };
+              } else {
+                  // Not the last player - wait for completion event
+                  addFlashMessage(`Your answers submitted! Waiting for other players... (${gameState.value.playersSubmitted.size}/${playerCount})`, 'info');
+                  return { submitted: false, waitingForOthers: true, preSubmitted: true };
+              }
           }
-        });
-        
-        addFlashMessage('Answers submitted successfully!', 'success');
-        
-        // Trigger updates immediately for single player
-        await Promise.all([
-          triggerScoresUpdate(),
-          triggerGameUpdate(),
-          triggerChartsUpdate()
-        ]);
-        
-        resetGameState();
-        return { submitted: true, waitingForOthers: false };
-        
-      } else {
-        // MULTIPLAYER: Store answers with better preservation
-        console.log('💾 Original answers being stored:', answers);
-        
-        // Create a proper deep copy and filter out undefined/null values properly
-        const cleanAnswers = answers.map(answer => {
-          // Convert undefined to empty string, keep null and actual values
-          if (answer === undefined) {
-            return '';
-          }
-          return answer;
-        });
-        
-        console.log('💾 Clean answers being stored:', cleanAnswers);
-        
-        preSubmittedAnswers.value = {
-          answers: cleanAnswers, // Use the cleaned answers
-          difficultyId: difficultyId,
-          categoryId: categoryId
-        };
-        preSubmittedAIAnswers.value = aiAnswers && aiAnswers.length > 0 ? [...aiAnswers] : null;
-        gameState.value.playersSubmitted.add(currentUserId.value);
-
-        console.log('💾 Stored preSubmittedAnswers:', preSubmittedAnswers.value);
-
-        // Broadcast that this player has submitted
-        await axios.post(`/api/games/${gameId}/broadcast`, {
-          event: 'player.submitted',
-          data: {
-            userId: currentUserId.value,
-            userName: currentUserName.value,
-            submittedCount: gameState.value.playersSubmitted.size,
-            requiredCount: playerCount,
-            difficultyId: difficultyId,
-            categoryId: categoryId,
-            timestamp: new Date().toISOString()
-          }
-        });
-
-        // Check if this was the last player to submit
-        if (gameState.value.playersSubmitted.size >= playerCount) {
-          console.log('✅ This was the last player - submitting my own answers immediately');
-          
-          // Immediately submit MY OWN answers since I'm the last player
-          const requestData = {
-            answers: cleanAnswers, // Use the same cleaned answers
-            difficulty_id: difficultyId,
-            category_id: categoryId
-          };
-
-          if (aiModule?.playWithAI.value) {
-            requestData.aiAnswers = aiAnswers;
-            requestData.playWithAI = true;
-          }
-
-          console.log('🚀 Last player submitting:', requestData);
-          await axios.post(`/games/${gameId}/submit-answer`, requestData);
-          
-          // Broadcast final completion
-          await axios.post(`/api/games/${gameId}/broadcast`, {
-            event: 'game.completed.multiplayer',
-            data: {
-              playerCount: playerCount,
-              timestamp: new Date().toISOString()
-            }
-          });
-
-          addFlashMessage('All players submitted! Game completed!', 'success');
-          
-          // Clean up and reset
-          preSubmittedAnswers.value = null;
-          preSubmittedAIAnswers.value = null;
-          resetGameState();
-          
-          return { submitted: true, waitingForOthers: false };
-        } else {
-          // Still waiting for others
-          addFlashMessage(`Waiting for other players to submit... (${gameState.value.playersSubmitted.size}/${playerCount})`, 'info');
-          return { submitted: false, waitingForOthers: true, preSubmitted: true };
-        }
+      } catch (err) {
+          error.value = err;
+          addFlashMessage('Failed to submit answers: ' + (err.response?.data?.message || err.message), 'error');
+          console.error('Failed to submit answers:', err);
+          return { submitted: false, waitingForOthers: false };
       }
-      
-    } catch (err) {
-      error.value = err;
-      addFlashMessage('Failed to submit answers: ' + (err.response?.data?.message || err.message), 'error');
-      console.error('Failed to submit answers:', err);
-      return { submitted: false, waitingForOthers: false };
-    }
   };
 
   // Update the resetGameState function in usePlayerInteractions.js
@@ -744,61 +707,10 @@ export function usePlayerInteractions(gameId, auth) {
     
     if (data.userId !== currentUserId.value) {
       gameState.value.playersSubmitted.add(data.userId);
+
+      // Provide UI feedback to the current user
       addFlashMessage(`${data.userName} submitted their answers! (${data.submittedCount}/${data.requiredCount} submitted)`, 'info');
-      
-      const allPlayersSubmitted = data.submittedCount >= data.requiredCount;
-      const iHavePreSubmitted = preSubmittedAnswers.value !== null;
-      const iWasNotTheLastPlayer = gameState.value.playersSubmitted.size < data.requiredCount;
-      
-      console.log('Auto-submission check:', {
-        allPlayersSubmitted,
-        iHavePreSubmitted,
-        iWasNotTheLastPlayer,
-        mySubmittedCount: gameState.value.playersSubmitted.size,
-        totalRequiredCount: data.requiredCount,
-        storedAnswers: preSubmittedAnswers.value?.answers
-      });
-      
-      // Only auto-submit if ALL conditions are met AND I was NOT the last player
-      if (allPlayersSubmitted && iHavePreSubmitted && iWasNotTheLastPlayer) {
-        console.log('🚀 Auto-submitting as non-last player...');
-        console.log('🚀 Pre-submitted answers to be sent:', preSubmittedAnswers.value.answers);
-        
-        try {
-          const requestData = {
-            answers: preSubmittedAnswers.value.answers,
-            difficulty_id: preSubmittedAnswers.value.difficultyId,
-            category_id: preSubmittedAnswers.value.categoryId
-          };
-
-          if (preSubmittedAIAnswers.value && aiModule?.playWithAI.value) {
-            requestData.aiAnswers = preSubmittedAIAnswers.value;
-            requestData.playWithAI = true;
-          }
-
-          console.log('🚀 Final request data being sent:', requestData);
-          await axios.post(`/games/${gameId}/submit-answer`, requestData);
-          
-          addFlashMessage('Your answers have been auto-submitted! Game completed!', 'success');
-          
-          // Trigger updates
-          await Promise.all([
-            triggerScoresUpdate(),
-            triggerGameUpdate(),
-            triggerChartsUpdate()
-          ]);
-
-          // Clean up
-          preSubmittedAnswers.value = null;
-          preSubmittedAIAnswers.value = null;
-          resetGameState();
-          
-        } catch (err) {
-          console.error('Auto-submission failed:', err);
-          console.error('Error response:', err.response?.data);
-          addFlashMessage('Failed to auto-submit your answers: ' + (err.response?.data?.message || err.message), 'error');
-        }
-      }
+     
     }
   });
 
@@ -818,23 +730,24 @@ export function usePlayerInteractions(gameId, auth) {
         ]);
     });
 
-    // FIXED: Multiplayer game completed - Trigger score updates for ALL players
+    // SIMPLIFIED: Multiplayer game completed - No more auto-submission needed
     gameChannel.bind('game.completed.multiplayer', async (data) => {
-      console.log('🔔 Received game.completed.multiplayer event:', data);
-      
-      // Update for all players who haven't been through the auto-submission process
-      if (preSubmittedAnswers.value === null && !gameState.value.playersSubmitted.has(currentUserId.value)) {
-        addFlashMessage(`Game completed with all ${data.playerCount} players!`, 'success');
-      }
+        console.log('🔔 Received game.completed.multiplayer event:', data);
         
-        // TRIGGER LIVE UPDATES FOR ALL PLAYERS
+        // All players have already submitted their answers individually
+        // This event just triggers UI updates and cleanup
+        
+        addFlashMessage('Game completed! All players have submitted their answers.', 'success');
+        
+        // Trigger live updates for all players
         console.log('🔄 Triggering live updates for multiplayer completion...');
         await Promise.all([
-          triggerScoresUpdate(),
-          triggerGameUpdate(),
-          triggerChartsUpdate()
+            triggerScoresUpdate(),
+            triggerGameUpdate(),
+            triggerChartsUpdate()
         ]);
         
+        // Reset game state for all players
         resetGameState();
     });
 
