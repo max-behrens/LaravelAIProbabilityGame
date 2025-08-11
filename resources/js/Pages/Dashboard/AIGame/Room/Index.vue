@@ -307,6 +307,7 @@ const startGame = async () => {
     currentQuestionIndex.value = 0;
     answers.value = [];
 
+
     try {
         console.log('Starting game with player count:', playerCount.value);
         // Check if this is a multiplayer attempt and validate other players' settings
@@ -329,6 +330,9 @@ const startGame = async () => {
                 return;
             }
         }
+
+        // Reset AI state
+        resetAI();
 
         // Reset session before starting new game
         await axios.post(`/games/${props.gameId}/reset-session`);
@@ -412,6 +416,7 @@ const applyGameSettings = async (settings) => {
     selectedCategory.value = settings.category_id;
     playWithAI.value = settings.play_with_ai;
     
+    
     // Update questions if provided
     if (settings.questions && settings.questions.length > 0) {
         currentGameQuestions.value = settings.questions;
@@ -426,7 +431,8 @@ const applyGameSettings = async (settings) => {
     url.searchParams.set('difficulty_id', settings.difficulty_id);
     url.searchParams.set('category_id', settings.category_id);
     window.history.pushState({}, '', url);
-    
+
+
     addFlashMessage(`Game settings updated to match ${settings.starter_name}'s preferences!`, 'info');
 };
 
@@ -673,9 +679,6 @@ const resetGameState = () => {
     preReadyPlayers.value.clear();
     gameState.value.waitingForOthers = false;
     gameState.value.playersReady.clear();
-    
-    // Reset AI state
-    resetAI();
     
     console.log('Game state fully reset - after reset:', {
         currentQuestionIndex: currentQuestionIndex.value,
