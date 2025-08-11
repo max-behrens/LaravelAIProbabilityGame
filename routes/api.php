@@ -45,7 +45,7 @@ Route::get('/games/{gameId}/all-scores', [GamesController::class, 'getAllScores'
 
 Route::middleware('auth:sanctum')->post('/games/{gameId}/submit-answer', [GamesController::class, 'submitAnswer']);
 
-Route::get('/games/{gameId}/scores', [GamesController::class, 'getScores']);
+Route::get('/games/{gameId}/{difficultyId}/{categoryId}/scores', [GamesController::class, 'getScores']);
 
 Route::get('/games/{gameId}/question-averages', [GamesController::class, 'getQuestionAverages']);
 
@@ -55,7 +55,7 @@ Route::get('/games/{gameId}/players', [GamesController::class, 'getPlayers']);
 
 Route::post('/games/{gameId}/broadcast', [GamesController::class, 'broadcast']);
 
-Route::get('/games/{gameId}/questions', [GamesController::class, 'getQuestions']);
+Route::get('/games/{gameId}/{difficultyId}/{categoryId}/questions', [GamesController::class, 'getQuestions']);
 
 Route::post('/games/{gameId}/store-player-count', [GamesController::class, 'storePlayerCount']);
 
@@ -69,7 +69,7 @@ Route::post('/ai/answer', [AIGameController::class, 'getAIAnswer']);
 
 Route::get('/ai/game/{gameId}/answers', [AIGameController::class, 'getGameAIAnswers']);
 
-Route::get('/games/{gameId}/ai-scores', [AIGameController::class, 'getAIScores']);
+Route::get('/games/{gameId}/{difficultyId}/{categoryId}/ai-scores', [AIGameController::class, 'getAIScores']);
 
 
 

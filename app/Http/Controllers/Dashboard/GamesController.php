@@ -67,9 +67,8 @@ class GamesController extends Controller
         return response()->json($game);
     }
 
-    public function getScores(Request $request)
+    public function getScores($gameId, $difficultyId, $categoryId, Request $request)
     {
-        $gameId = $request->gameId;
         $page = $request->query('page', 1);
 
         // Get filter parameters from the request
@@ -81,7 +80,15 @@ class GamesController extends Controller
         // The user IDs come as a comma-separated string, convert them to an array
         $userIds = $userIds ? explode(',', $userIds) : null;
 
-        $gameScores = $this->gamesService->getGameScores($gameId, $page, $startDate, $endDate, $userIds, $andUsers);
+        // Pass difficulty and category IDs to the service method
+        $gameScores = $this->gamesService->getGameScores(
+            $gameId, 
+            $page, 
+            $startDate, 
+            $endDate, 
+            $userIds, 
+            $andUsers
+        );
 
         Log::info('Game scores retrieved', ['scores' => $gameScores]);
 
@@ -115,11 +122,10 @@ class GamesController extends Controller
     }
 
     // New method to get questions based on difficulty and category
-    public function getQuestions($gameId, Request $request)
+    public function getQuestions($gameId, $difficultyId, $categoryId, Request $request)
     {
-
-        $difficultyId = (int) $request->get('difficulty_id') ?? 1;
-        $categoryId = (int) $request->get('category_id') ?? 1;
+        $difficultyId = (int) $difficultyId;
+        $categoryId = (int) $categoryId;
 
         Log::info('Fetching game questions', [
             'gameId' => $gameId,

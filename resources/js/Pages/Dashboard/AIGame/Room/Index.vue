@@ -168,8 +168,12 @@ const fetchGameScores = async (page = 1) => {
             }
         }
         
+        // Build URL with difficulty and category as route parameters
+        const difficultyId = selectedDifficulty.value || 1;
+        const categoryId = selectedCategory.value || 1;
+        const url = `/api/games/${props.gameId}/${difficultyId}/${categoryId}/scores?${params.toString()}`;
         
-        const response = await axios.get(`/api/games/${props.gameId}/scores?${params.toString()}`);
+        const response = await axios.get(url);
         gameScores.value = response.data.data;
         scoresTotalPages.value = response.data.last_page;
         scoresCurrentPage.value = response.data.current_page;
@@ -202,8 +206,12 @@ const fetchAIScores = async (page = 1) => {
         // Add exclude AI parameter
         params.set('exclude_ai', appliedFilters.value.excludeAI.toString());
         
+        // Build URL with difficulty and category as route parameters
+        const difficultyId = selectedDifficulty.value || 1;
+        const categoryId = selectedCategory.value || 1;
+        const url = `/api/games/${props.gameId}/${difficultyId}/${categoryId}/ai-scores?${params.toString()}`;
         
-        const response = await axios.get(`/api/games/${props.gameId}/ai-scores?${params.toString()}`);
+        const response = await axios.get(url);
         aiScores.value = response.data.data || []; // Ensure it's always an array
         aiScoresTotalPages.value = response.data.last_page || 1;
         aiScoresCurrentPage.value = response.data.current_page || 1;
@@ -217,15 +225,15 @@ const fetchAIScores = async (page = 1) => {
     }
 };
 
-
 const fetchGameQuestions = async (difficultyId = null, categoryId = null) => {
     try {
-        const difficulty = difficultyId || selectedDifficulty.value;
-        const category = categoryId || selectedCategory.value;
+        const difficulty = difficultyId || selectedDifficulty.value || 1;
+        const category = categoryId || selectedCategory.value || 1;
 
-        const urlParams = new URLSearchParams(window.location.search);
+        // Build URL with difficulty and category as route parameters
+        const url = `/api/games/${props.gameId}/${difficulty}/${category}/questions`;
         
-        const response = await axios.get(`/api/games/${props.gameId}/questions?${urlParams.toString()}`);
+        const response = await axios.get(url);
 
         console.log('difficultyId: ' + difficultyId);
         

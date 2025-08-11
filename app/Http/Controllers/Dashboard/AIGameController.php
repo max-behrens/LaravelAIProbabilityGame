@@ -22,9 +22,8 @@ class AIGameController extends Controller
     /**
      * Get AI scores for room.
      */
-    public function getAIScores(Request $request)
+    public function getAIScores($gameId, $difficultyId, $categoryId, Request $request)
     {
-        $gameId = $request->gameId;
         $page = $request->query('page', 1);
 
         // Get filter parameters from the request
@@ -32,7 +31,17 @@ class AIGameController extends Controller
         $endDate = $request->get('end_date');
         $excludeAI = $request->get('exclude_ai', 'true') === 'true';
 
-        $aiScores = $this->aiGameService->getAIGameScores($gameId, $page, $startDate, $endDate, $excludeAI);
+        // Pass difficulty and category IDs to the service method
+        $aiScores = $this->aiGameService->getAIGameScores(
+            $gameId, 
+            $page, 
+            $startDate, 
+            $endDate, 
+            $excludeAI, 
+            (int) $difficultyId, 
+            (int) $categoryId
+        );
+        
         Log::info('AI Game scores retrieved', ['scores' => $aiScores]);
 
         return response()->json($aiScores);

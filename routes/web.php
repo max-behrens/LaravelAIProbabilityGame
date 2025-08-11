@@ -40,9 +40,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/games/{gameId}/validate-multiplayer-start', [GamesController::class, 'validateMultiplayerStart']);
 
 
-            Route::get('/games/{gameId}/scores', [GamesController::class, 'getScores']);
+            Route::get('/games/{gameId}/{difficultyId}/{categoryId}/scores', [GamesController::class, 'getScores']);
 
-            Route::get('/games/{gameId}/ai-scores', [AIGameController::class, 'getAIScores']);
+            Route::get('/games/{gameId}/{difficultyId}/{categoryId}/ai-scores', [AIGameController::class, 'getAIScores']);
 
             Route::get('/games/{gameId}/all-scores', [GamesController::class, 'getAllScores']);
 
@@ -52,7 +52,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             Route::get('/games/{gameId}/players', [GamesController::class, 'getPlayers']);
 
-            Route::get('/games/{gameId}/questions', [GamesController::class, 'getQuestions']);
+            Route::get('/games/{gameId}/{difficultyId}/{categoryId}/questions', [GamesController::class, 'getQuestions']);
 
             
 
