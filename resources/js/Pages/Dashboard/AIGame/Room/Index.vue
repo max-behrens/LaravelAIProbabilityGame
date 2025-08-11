@@ -168,13 +168,6 @@ const fetchGameScores = async (page = 1) => {
             }
         }
         
-        // ADD THESE LINES - Include difficulty and category parameters
-        if (selectedDifficulty.value) {
-            params.set('difficulty_id', selectedDifficulty.value);
-        }
-        if (selectedCategory.value) {
-            params.set('category_id', selectedCategory.value);
-        }
         
         const response = await axios.get(`/api/games/${props.gameId}/scores?${params.toString()}`);
         gameScores.value = response.data.data;
@@ -209,12 +202,6 @@ const fetchAIScores = async (page = 1) => {
         // Add exclude AI parameter
         params.set('exclude_ai', appliedFilters.value.excludeAI.toString());
         
-        if (selectedDifficulty.value) {
-            params.set('difficulty_id', selectedDifficulty.value);
-        }
-        if (selectedCategory.value) {
-            params.set('category_id', selectedCategory.value);
-        }
         
         const response = await axios.get(`/api/games/${props.gameId}/ai-scores?${params.toString()}`);
         aiScores.value = response.data.data || []; // Ensure it's always an array
@@ -237,13 +224,6 @@ const fetchGameQuestions = async (difficultyId = null, categoryId = null) => {
         const category = categoryId || selectedCategory.value;
 
         const urlParams = new URLSearchParams(window.location.search);
-
-        if (difficulty) {
-            urlParams.set('difficulty_id', difficulty);
-        }
-        if (category) {
-            urlParams.set('category_id', category);
-        }
         
         const response = await axios.get(`/api/games/${props.gameId}/questions?${urlParams.toString()}`);
 
@@ -264,11 +244,6 @@ const onDifficultyOrCategoryChange = async () => {
     await fetchGameQuestions(selectedDifficulty.value, selectedCategory.value);
     await fetchGameScores(1);
     await fetchAIScores(1);
-
-    // 2. Update the URL in the browser's address bar
-    const url = new URL(window.location);
-    url.searchParams.set('difficulty_id', selectedDifficulty.value);
-    url.searchParams.set('category_id', selectedCategory.value);
 
     // Use pushState to change the URL without reloading the page
     window.history.pushState({}, '', url);
@@ -425,12 +400,7 @@ const applyGameSettings = async (settings) => {
         // Fallback: fetch questions for these settings
         await fetchGameQuestions(settings.difficulty_id, settings.category_id);
     }
-    
-    // Update URL to reflect new settings
-    const url = new URL(window.location);
-    url.searchParams.set('difficulty_id', settings.difficulty_id);
-    url.searchParams.set('category_id', settings.category_id);
-    window.history.pushState({}, '', url);
+
 
 
     addFlashMessage(`Game settings updated to match ${settings.starter_name}'s preferences!`, 'info');
@@ -799,19 +769,6 @@ const parseFiltersFromUrl = () => {
     // Parse exclude AI - defaults to true if not present
     appliedFilters.value.excludeAI = urlParams.get('exclude_ai') !== 'false';
     
-    const difficultyId = urlParams.get('difficulty_id');
-    if (difficultyId && !isNaN(parseInt(difficultyId))) {
-        selectedDifficulty.value = parseInt(difficultyId);
-    } else {
-        selectedDifficulty.value = 1; // Force default to 1 if URL param is invalid/missing
-    }
-    
-    const categoryId = urlParams.get('category_id');
-    if (categoryId && !isNaN(parseInt(categoryId))) {
-        selectedCategory.value = parseInt(categoryId);
-    } else {
-        selectedCategory.value = 1; // Force default to 1 if URL param is invalid/missing
-    }
 };
 
 const handleFilterChange = (event) => {
