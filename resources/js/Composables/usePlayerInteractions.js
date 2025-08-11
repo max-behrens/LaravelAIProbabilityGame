@@ -724,27 +724,51 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
 
     // AI answered event
     gameChannel.bind('ai.answered', (data) => {
-      console.log('🔔 Received ai.answered event:', data);
+        console.log('🔔 Received ai.answered event:', data);
+        
+        // CRITICAL FIX: Store the AI answer with ALL properties
+        if (aiModule && data.aiAnswer) {
+            // Ensure the aiAnswers object exists for this question index
+            if (!aiModule.aiAnswers.value[data.questionIndex]) {
+                aiModule.aiAnswers.value[data.questionIndex] = {};
+            }
+            
+            // Store ALL the AI answer data
+            aiModule.aiAnswers.value[data.questionIndex] = {
+                answer: data.aiAnswer,
+                score: data.aiScore, 
+                isCorrect: data.isCorrect,
+                cached: false, // Mark as received via broadcast
+                questionIndex: data.questionIndex, // Add question index for reference
+                timestamp: data.timestamp || new Date().toISOString()
+            };
+            
+            console.log('AI answer stored with complete data:', {
+                questionIndex: data.questionIndex,
+                answer: data.aiAnswer,
+                score: data.aiScore,
+                isCorrect: data.isCorrect,
+                storedData: aiModule.aiAnswers.value[data.questionIndex]
+            });
+            
+            // Force reactivity update
+            aiModule.aiAnswers.value = { ...aiModule.aiAnswers.value };
+        } else {
+            console.warn('AI module not available or AI answer data incomplete:', {
+                hasAiModule: !!aiModule,
+                hasAiAnswer: !!data.aiAnswer,
+                data
+            });
+        }
+        
+        // Trigger external callback to progress to next question
+        if (callbacks.value.onQuestionProgress) {
+            callbacks.value.onQuestionProgress(data.questionIndex);
+        }
+        
+        addFlashMessage('AI answered! Moving to next question...', 'success');
+    });
       
-      // Store the AI answer with ALL properties in the aiAnswers ref
-      if (aiModule && data.aiAnswer) {
-          aiModule.aiAnswers.value[data.questionIndex] = {
-              answer: data.aiAnswer,
-              score: data.aiScore, // Preserve the score
-              isCorrect: data.isCorrect, // Preserve other properties
-              cached: false // Default for received answers
-          };
-          console.log('AI answer stored with score:', aiModule.aiAnswers.value[data.questionIndex]);
-      }
-      
-      // Trigger external callback to progress to next question
-      if (callbacks.value.onQuestionProgress) {
-          callbacks.value.onQuestionProgress(data.questionIndex);
-      }
-      
-      addFlashMessage('AI answered! Moving to next question...', 'success');
-  });
-  
   // Updated Pusher event handler for player.submitted with difficulty/category support
   gameChannel.bind('player.submitted', async (data) => {
     console.log('🔔 Received player.submitted event:', data);

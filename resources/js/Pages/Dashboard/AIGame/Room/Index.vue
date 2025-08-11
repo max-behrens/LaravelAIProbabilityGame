@@ -303,6 +303,10 @@ const getCategoryName = (categoryId) => {
 
 // Updated game control functions
 const startGame = async () => {
+
+    currentQuestionIndex.value = 0;
+    answers.value = [];
+
     try {
         console.log('Starting game with player count:', playerCount.value);
         // Check if this is a multiplayer attempt and validate other players' settings
@@ -513,6 +517,8 @@ const nextOrSubmit = async () => {
                                 aiAnswer: aiAnswers.value[currentQuestionIndex.value]?.answer,
                                 aiScore: aiAnswers.value[currentQuestionIndex.value]?.score,
                                 isCorrect: aiAnswers.value[currentQuestionIndex.value]?.isCorrect,
+                                aiData: aiAnswers.value[currentQuestionIndex.value], // Send complete AI object
+                                gameId: props.gameId,
                                 timestamp: new Date().toISOString()
                             }
                         });
@@ -647,18 +653,37 @@ const startNewGame = () => {
 };
 
 const resetGameState = () => {
+    console.log('Resetting game state - before reset:', {
+        currentQuestionIndex: currentQuestionIndex.value,
+        answersLength: answers.value.length,
+        isGameStarted: isGameStarted.value,
+        gameIsOver: gameIsOver.value
+    });
+    
+    // CRITICAL: Reset question index to 0
     currentQuestionIndex.value = 0;
+    
+    // Clear all answers
     answers.value = [];
+    
+    // Reset game state flags
     isGameStarted.value = false;
     gameIsOver.value = false;
-    isWaitingToStart.value = false; // Reset waiting to start state
-    preReadyPlayers.value.clear(); // Clear ready players
+    isWaitingToStart.value = false;
+    preReadyPlayers.value.clear();
     gameState.value.waitingForOthers = false;
-    gameState.value.playersReady.clear(); // Clear ready state
+    gameState.value.playersReady.clear();
+    
+    // Reset AI state
     resetAI();
-    console.log('Game state fully reset - ready for new game');
+    
+    console.log('Game state fully reset - after reset:', {
+        currentQuestionIndex: currentQuestionIndex.value,
+        answersLength: answers.value.length,
+        isGameStarted: isGameStarted.value,
+        gameIsOver: gameIsOver.value
+    });
 };
-
 // Vertical Nav Section:
 
 
@@ -1177,30 +1202,38 @@ onUnmounted(() => {
                                   AI Error: {{ aiError }}
                               </div>
 
-                              <div v-if="!aiLoading && !aiError" class="space-y-2">
-                                <div v-for="(question, index) in currentGameQuestions" :key="question.id" class="text-gray-300">
-                                    <span class="font-medium">Q{{ index + 1 }}:</span>
-                                    <span v-if="hasAIAnswered(index)" class="text-green-400 ml-2">
-                                        {{ aiAnswers[index]?.answer || 'Answer not available' }}
-                                        <span v-if="aiAnswers[index]?.score !== undefined && aiAnswers[index]?.score !== null" 
-                                            class="text-blue-400 ml-1">
-                                            (Score: {{ aiAnswers[index].score }})
+                                <div v-if="!aiLoading && !aiError" class="space-y-2">
+                                    <div v-for="(question, index) in currentGameQuestions" :key="question.id" class="text-gray-300">
+                                        <span class="font-medium">Q{{ index + 1 }}:</span>
+                                        <span v-if="hasAIAnswered(index)" class="text-green-400 ml-2">
+                                            {{ aiAnswers[index]?.answer || 'Answer not available' }}
+                                            <span v-if="aiAnswers[index]?.score !== undefined && aiAnswers[index]?.score !== null" 
+                                                class="text-blue-400 ml-1">
+                                                (Score: {{ aiAnswers[index].score }})
+                                            </span>
                                         </span>
-                                    </span>
-                                    <span v-else-if="index < currentQuestionIndex" class="text-gray-500 ml-2">
-                                        Waiting for AI...
-                                    </span>
-                                    <span v-else class="text-gray-500 ml-2">
-                                        Not answered yet
-                                    </span>
+                                        <span v-else-if="index < currentQuestionIndex || gameIsOver" class="text-gray-500 ml-2">
+                                            <!-- Show different text for completed games -->
+                                            {{ gameIsOver ? 'Game completed' : 'Waiting for AI...' }}
+                                        </span>
+                                        <span v-else class="text-gray-500 ml-2">
+                                            Not answered yet
+                                        </span>
+                                    </div>
                                 </div>
-                              </div>
 
-                              <!-- Debug info (remove in production) -->
-                              <div v-if="playWithAI" class="mt-4 text-xs text-gray-500 bg-gray-900 p-2 rounded">
-                                <p><strong>Debug AI Answers:</strong></p>
-                                <pre>{{ JSON.stringify(debugAIAnswers, null, 2) }}</pre>
-                            </div>
+                                <div v-if="playWithAI" class="mt-4 text-xs text-gray-500 bg-gray-900 p-2 rounded">
+                                    <p><strong>Debug AI Answers:</strong></p>
+                                    <div v-for="(answer, index) in aiAnswers" :key="index" class="mb-1">
+                                        Q{{ parseInt(index) + 1 }}: 
+                                        {{ answer?.answer || 'No answer' }} 
+                                        (Score: {{ answer?.score ?? 'No score' }})
+                                        (Cached: {{ answer?.cached ? 'Yes' : 'No' }})
+                                    </div>
+                                    <p class="mt-2"><strong>Current Question Index:</strong> {{ currentQuestionIndex }}</p>
+                                    <p><strong>Game Is Over:</strong> {{ gameIsOver }}</p>
+                                    <p><strong>Total Questions:</strong> {{ currentGameQuestions.length }}</p>
+                                </div>
                           </div>
 
                           <div class="flex-1 min-w-[300px] p-4 bg-gray-800 rounded shadow">
