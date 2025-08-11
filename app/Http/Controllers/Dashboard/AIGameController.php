@@ -22,7 +22,7 @@ class AIGameController extends Controller
     /**
      * Get AI scores for room.
      */
-    public function getAIScores($gameId, $difficultyId, $categoryId, Request $request)
+    public function getAIScores($gameId, Request $request)
     {
         $page = $request->query('page', 1);
 
@@ -37,9 +37,7 @@ class AIGameController extends Controller
             $page, 
             $startDate, 
             $endDate, 
-            $excludeAI, 
-            (int) $difficultyId, 
-            (int) $categoryId
+            $excludeAI,
         );
         
         Log::info('AI Game scores retrieved', ['scores' => $aiScores]);

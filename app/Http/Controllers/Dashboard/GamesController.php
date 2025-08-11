@@ -67,7 +67,7 @@ class GamesController extends Controller
         return response()->json($game);
     }
 
-    public function getScores($gameId, $difficultyId, $categoryId, Request $request)
+    public function getScores($gameId, Request $request)
     {
         $page = $request->query('page', 1);
 

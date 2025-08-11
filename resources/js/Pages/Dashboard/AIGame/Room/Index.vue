@@ -130,8 +130,8 @@ const showQuestionInput = computed(() => {
     return isGameStarted.value && !isWaitingForOthers.value && !gameIsOver.value && currentGameQuestions.value.length > 0;
 });
 
-console.log('QUESTIONS: ' + JSON.stringify(currentGameQuestions.value));
 
+console.log('NO. PLAYERS: ' + playerCount.value);
 // Format date helper
 const formatDate = (dateString) => {
     if (!dateString) return '';
@@ -168,10 +168,7 @@ const fetchGameScores = async (page = 1) => {
             }
         }
         
-        // Build URL with difficulty and category as route parameters
-        const difficultyId = selectedDifficulty.value || 1;
-        const categoryId = selectedCategory.value || 1;
-        const url = `/api/games/${props.gameId}/${difficultyId}/${categoryId}/scores?${params.toString()}`;
+        const url = `/api/games/${props.gameId}/scores?${params.toString()}`;
         
         const response = await axios.get(url);
         gameScores.value = response.data.data;
@@ -206,10 +203,7 @@ const fetchAIScores = async (page = 1) => {
         // Add exclude AI parameter
         params.set('exclude_ai', appliedFilters.value.excludeAI.toString());
         
-        // Build URL with difficulty and category as route parameters
-        const difficultyId = selectedDifficulty.value || 1;
-        const categoryId = selectedCategory.value || 1;
-        const url = `/api/games/${props.gameId}/${difficultyId}/${categoryId}/ai-scores?${params.toString()}`;
+        const url = `/api/games/${props.gameId}/ai-scores?${params.toString()}`;
         
         const response = await axios.get(url);
         aiScores.value = response.data.data || []; // Ensure it's always an array
@@ -252,11 +246,6 @@ const onDifficultyOrCategoryChange = async () => {
     await fetchGameQuestions(selectedDifficulty.value, selectedCategory.value);
     await fetchGameScores(1);
     await fetchAIScores(1);
-
-    // Use pushState to change the URL without reloading the page
-    window.history.pushState({}, '', url);
-
-    console.log('URL updated to:', url.toString());
 };
 
 // Pagination handler
