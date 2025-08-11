@@ -14,6 +14,18 @@ const props = defineProps({
     type: [String, Number, null],
     required: false,
     default: null
+  },
+  gameTypes: {
+      type: Array,
+      default: () => []
+  },
+  difficulties: {
+      type: Array,
+      default: () => []
+  },
+  categories: {
+      type: Array,
+      default: () => []
   }
 });
 
@@ -33,6 +45,9 @@ const userSearchTerm = ref('');
 const andUsers = ref(false);
 const excludeAI = ref(false);
 const gameType = ref('');
+const difficultyId = ref('');
+const categoryId = ref('');
+
 // Get initial filter values from URL params
 const getInitialFilters = () => {
   try {
@@ -61,6 +76,10 @@ const getInitialFilters = () => {
 
     // Game Type
     gameType.value = urlParams.get('game_type') || '';
+
+    difficultyId.value = urlParams.get('difficulty') || '';
+
+    categoryId.value = urlParams.get('category') || '';
 
 
     excludeAI.value = urlParams.get('ai_excluded') === 'true';
@@ -269,11 +288,26 @@ const filteredUsers = computed(() => {
   }
 });
 
-  const allGameTypes = computed(() => [
-    { value: '1', label: 'Object Detection Game' },
-    { value: '2', label: 'Game of Lies' },
-    // Add more game types as needed
-  ]);
+const allGameTypes = computed(() =>
+  props.gameTypes.map(gt => ({
+    value: String(gt.id),
+    label: gt.name
+  }))
+);
+
+const allDifficulties = computed(() =>
+  props.difficulties.map(diff => ({
+    value: String(diff.id),
+    label: diff.name
+  }))
+);
+
+const allCategories = computed(() =>
+  props.categories.map(cat => ({
+    value: String(cat.id),
+    label: cat.name
+  }))
+);
 
 // Check if user is in room - Fixed to properly handle null values
 const isInRoom = computed(() => {
@@ -311,9 +345,17 @@ const updateUrlParams = () => {
     }
 
     // Game Type
-  if (gameType.value) { // This now correctly handles the '' case for "All"
-    params.set('game_type', gameType.value);
-  }
+    if (gameType.value) { // This now correctly handles the '' case for "All"
+      params.set('game_type', gameType.value);
+    }
+
+    if (difficultyId.value) {
+      params.set('difficulty', difficultyId.value);
+    }
+
+    if (categoryId.value) {
+      params.set('difficulty', categoryId.value);
+    }
 
     // Exclude AI
     if (excludeAI.value) {
@@ -332,7 +374,8 @@ const updateUrlParams = () => {
         andUsers: andUsers.value,
         excludeAI: excludeAI.value,
         gameType: gameType.value,
-
+        difficultyId: difficultyId.value,
+        categoryId: categoryId.value,
       }
     }));
   } catch (error) {
@@ -383,6 +426,24 @@ const activeFiltersDisplay = computed(() => {
     });
   }
 
+    if (difficultyId.value && difficultyId.value !== '') {
+    const difficultyLabel = allDifficulties.value.find(type => type.value === difficultyId.value)?.label || `Type ${difficultyId.value}`;
+    filters.push({
+      type: 'difficultyId',
+      label: `Difficulty: ${difficultyLabel}`,
+      icon: 'game'
+    });
+  }
+
+    if (categoryId.value && categoryId.value !== '') {
+    const categoryLabel = allCategories.value.find(type => type.value === categoryId.value)?.label || `Type ${categoryId.value}`;
+    filters.push({
+      type: 'categoryId',
+      label: `Category: ${categoryLabel}`,
+      icon: 'game'
+    });
+  }
+
   // AI Score Filter
   if (excludeAI.value) {
     filters.push({
@@ -418,13 +479,23 @@ const showGameTypeFilter = computed(() => {
   return window.location.pathname.includes('/dashboard') && !window.location.pathname.includes('/room');
 });
 
+const showDifficultyFilter = computed(() => {
+  // Hide the AI filter on the AI game route, but show it on other dashboard pages.
+  return window.location.pathname.includes('/dashboard') && !window.location.pathname.includes('/aigame');
+});
+
+const showCategoryFilter = computed(() => {
+  // Hide the AI filter on the AI game route, but show it on other dashboard pages.
+  return window.location.pathname.includes('/dashboard') && !window.location.pathname.includes('/aigame');
+});
+
 const excludeAIFilter = computed(() => {
   // Hide the AI filter on the AI game route, but show it on other dashboard pages.
   return window.location.pathname.includes('/dashboard') && !window.location.pathname.includes('/aigame');
 });
 
 // Watch for filter changes
-watch([dateRange, activeUserIds, andUsers, excludeAI, gameType], () => {
+watch([dateRange, activeUserIds, andUsers, excludeAI, gameType, difficultyId, categoryId], () => {
   updateUrlParams();
 }, { deep: true });
 
@@ -613,6 +684,31 @@ onUnmounted(() => {
                           </option>
                         </select>
                       </div>
+                      <div v-if="showDifficultyFilter">
+                        <label class="block text-xs font-medium text-gray-400 mb-2">Difficulty</label>
+                        <select
+                          v-model="difficultyId"
+                          class="w-full p-2 text-xs rounded-md bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        >
+                          <option value="" selected>All Difficulties</option>
+                          <option v-for="type in allDifficulties" :key="type.value" :value="type.value">
+                            {{ type.label }}
+                          </option>
+                        </select>
+                      </div>
+                      <div v-if="showCategoryFilter">
+                        <label class="block text-xs font-medium text-gray-400 mb-2">Category</label>
+                        <select
+                          v-model="categoryId"
+                          class="w-full p-2 text-xs rounded-md bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        >
+                          <option value="" selected>All Categories</option>
+                          <option v-for="type in allCategories" :key="type.value" :value="type.value">
+                            {{ type.label }}
+                          </option>
+                        </select>
+                      </div>
+
                         <div v-if="excludeAIFilter">
                           <label for="excludeAIToggle" class="block text-xs font-medium text-gray-400 mb-2">AI Scores</label>
                           <div class="relative flex items-center justify-between p-2 rounded-md bg-gray-700">

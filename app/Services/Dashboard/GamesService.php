@@ -80,7 +80,16 @@ class GamesService
 
 
 
-    public function getGameScores($gameId, $page = 1, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null, bool $andUsers = false, $perPage = 5)
+    public function getGameScores(
+        $gameId, 
+        $page = 1, 
+        ?string $startDate = null, 
+        ?string $endDate = null, 
+        ?array $userIds = null, 
+        bool $andUsers = false,
+        ?int $difficultyId = null,
+        ?int $categoryId = null,
+        $perPage = 5)
     {
         Log::debug('Fetching paginated game scores', ['gameId' => $gameId, 'page' => $page, 'perPage' => $perPage]);
 
@@ -95,7 +104,8 @@ class GamesService
                 'users.name as user_name',
                 'game_scores.game_id',
                 'game_scores.score',
-                'game_scores.created_at'
+                'game_scores.created_at',
+                'game_scores.answer_json'
             );
 
         // Apply date range filter BEFORE pagination
@@ -120,6 +130,17 @@ class GamesService
 
             $query->whereIn('game_scores.session_id', $sessionsWithAllUsers);
         }
+
+                // Add difficulty filter
+        if ($difficultyId !== null && $difficultyId !== 0) {
+            $query->whereJsonContains('game_scores.answer_json', ['difficulty_id' => $difficultyId]);
+        }
+
+        // Add category filter
+        if ($categoryId !== null && $categoryId !== 0) {
+            $query->whereJsonContains('game_scores.answer_json', ['category_id' => $categoryId]);
+        }
+
 
         // NOW paginate after all filters are applied
         $scores = $query->paginate($perPage, ['*'], 'page', $page);

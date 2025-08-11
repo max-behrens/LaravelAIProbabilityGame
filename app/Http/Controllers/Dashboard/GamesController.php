@@ -76,6 +76,9 @@ class GamesController extends Controller
         $endDate = $request->get('end_date');
         $userIds = $request->get('user_ids');
         $andUsers = $request->get('and_users', 'false') === 'true';
+        $difficultyId = $request->get('difficulty');
+        $categoryId = $request->get('category');
+
 
         // The user IDs come as a comma-separated string, convert them to an array
         $userIds = $userIds ? explode(',', $userIds) : null;
@@ -87,7 +90,9 @@ class GamesController extends Controller
             $startDate, 
             $endDate, 
             $userIds, 
-            $andUsers
+            $andUsers,
+            $difficultyId,
+            $categoryId,
         );
 
         Log::info('Game scores retrieved', ['scores' => $gameScores]);
@@ -103,10 +108,15 @@ class GamesController extends Controller
         $gameDetails = Games::findOrFail($gameId);
         $gameType = $this->gamesService->getGameType($gameDetails);
         $userDetails = User::findOrFail($userId);
+
+        $gameTypes = GameType::orderBy('id')->get(['id', 'name'])->toArray();
         
         // Get all difficulties and categories for dropdowns
         $difficulties = GameTypeDifficulty::orderBy('id')->get(['id', 'name'])->toArray();
         $categories = GameTypeCategory::orderBy('id')->get(['id', 'name'])->toArray();
+
+        Log::info('SHOW ROOM DATA', ['gameTypes' => $gameTypes, 'difficulties' => $difficulties,'categories' => $categories]);
+
 
         return Inertia::render('Dashboard/AIGame/Room/Index', [
             'gameId' => (int) $gameId,

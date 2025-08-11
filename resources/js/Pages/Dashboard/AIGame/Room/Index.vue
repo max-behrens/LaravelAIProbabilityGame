@@ -26,6 +26,7 @@ const props = defineProps({
     gameId: { type: Number, required: true },
     game: Object,
     gameType: Object,
+    gameTypes: Object,
     difficulties: Array,
     categories: Array,
     auth: Object,
@@ -52,6 +53,8 @@ const showVerticalNav = ref(false);
 const isNavigatingProgrammatically = ref(false);
 const currentNavSection = ref(0);
 const excludeAI = ref(true);
+const difficultyId = ref(null);
+const categoryId = ref(null);
 
 const selectedDifficulty = ref(1); // Default to Easy (id: 1)
 const selectedCategory = ref(1);   // Default to Number (id: 1)
@@ -167,6 +170,13 @@ const fetchGameScores = async (page = 1) => {
                 params.set('and_users', 'true');
             }
         }
+
+        if (appliedFilters.value.difficultyId) {
+            params.set('difficulty', appliedFilters.value.difficultyId);
+        }
+        if (appliedFilters.value.categoryId) {
+            params.set('category', appliedFilters.value.categoryId);
+        }
         
         const url = `/api/games/${props.gameId}/scores?${params.toString()}`;
         
@@ -202,6 +212,13 @@ const fetchAIScores = async (page = 1) => {
         
         // Add exclude AI parameter
         params.set('exclude_ai', appliedFilters.value.excludeAI.toString());
+
+        if (appliedFilters.value.difficultyId) {
+            params.set('difficulty', appliedFilters.value.difficultyId);
+        }
+        if (appliedFilters.value.categoryId) {
+            params.set('category', appliedFilters.value.categoryId);
+        }
         
         const url = `/api/games/${props.gameId}/ai-scores?${params.toString()}`;
         
@@ -740,7 +757,9 @@ const appliedFilters = ref({
     dateRange: [null, null],
     userIds: [],
     andUsers: false,
-    excludeAI: true
+    excludeAI: true,
+    difficultyId: null,
+    categoryId: null,
 });
 
 // Add this function to parse URL parameters for filters
@@ -765,6 +784,11 @@ const parseFiltersFromUrl = () => {
     
     // Parse exclude AI - defaults to true if not present
     appliedFilters.value.excludeAI = urlParams.get('exclude_ai') !== 'false';
+
+    appliedFilters.value.difficultyId = urlParams.get('difficulty');
+
+    appliedFilters.value.categoryId = urlParams.get('category');
+
     
 };
 
@@ -773,7 +797,9 @@ const handleFilterChange = (event) => {
         dateRange: event.detail.dateRange || [null, null],
         userIds: event.detail.userIds || [],
         andUsers: event.detail.andUsers || false,
-        excludeAI: event.detail.excludeAI !== undefined ? event.detail.excludeAI : true
+        excludeAI: event.detail.excludeAI !== undefined ? event.detail.excludeAI : true,
+        difficultyId: event.detail.difficultyId || null,
+        categoryId: event.detail.categoryId || null
     };
     
     // Refresh scores when filters change
@@ -896,7 +922,7 @@ onUnmounted(() => {
     <Head title="AI Game Room" />
 
     <BreezeAuthenticatedLayout>
-        <GameAuthenticatedLayout :currentGameId="props.gameId">
+        <GameAuthenticatedLayout :currentGameId="props.gameId" :gameTypes="props.gameTypes" :difficulties="props.difficulties" :categories="props.categories">
 
 
                 <!-- VERTICAL NAV -->
@@ -1252,6 +1278,8 @@ onUnmounted(() => {
                                         <tr class="bg-gray-700">
                                             <th class="p-2 border-b">Player</th>
                                             <th class="p-2 border-b">Game Session</th>
+                                            <th class="p-2 border-b">Difficulty</th>
+                                            <th class="p-2 border-b">Category</th>
                                             <th class="p-2 border-b">Score</th>
                                             <th class="p-2 border-b">Date Created</th>
                                         </tr>
@@ -1260,6 +1288,12 @@ onUnmounted(() => {
                                         <tr v-for="score in gameScores" :key="score.id">
                                             <td class="p-2 border-b text-white">{{ score.user?.name }}</td>
                                             <td class="p-2 border-b text-white">{{ score.session_id }}</td>
+                                            <td class="p-2 border-b text-white">
+                                            {{ score.answer_json.difficulty_id }}
+                                            </td>
+                                            <td class="p-2 border-b text-white">
+                                            {{ score.answer_json.category_id }}
+                                            </td>
                                             <td class="p-2 border-b text-white">{{ score.score }}</td>
                                             <td class="p-2 border-b text-white">{{ formatDate(score.created_at) }}</td>
                                         </tr>
