@@ -41,6 +41,7 @@ const isLoading = ref(false);
 const dateRange = ref([null, null]);
 const activeUserIds = ref([]);
 const allUsers = ref([]);
+const allGameTypes = ref([]);
 const userSearchTerm = ref('');
 const andUsers = ref(false);
 const excludeAI = ref(false);
@@ -202,6 +203,32 @@ const clearDateFilter = () => {
   showDateModal.value = false;
 };
 
+
+const fetchGameTypes = async () => {
+  if (isLoading.value) return;
+
+  try {
+    isLoading.value = true;
+    const response = await axios.get(`/dashboard/game-types`);
+
+    // Correctly access the nested 'data' array and map it to 'value' and 'label'
+    if (response.data && response.data.data && Array.isArray(response.data.data)) {
+      allGameTypes.value = response.data.data.map(gameType => ({
+        value: String(gameType.id),
+        label: gameType.name
+      }));
+    } else {
+      console.warn('Unexpected game types response format:', response.data);
+      allGameTypes.value = [];
+    }
+  } catch (error) {
+    console.error('Failed to fetch game types:', error);
+    allGameTypes.value = [];
+  } finally {
+    isLoading.value = false;
+  }
+};
+
 // User filter functions
 const fetchUsers = async () => {
   if (isLoading.value) return;
@@ -288,12 +315,6 @@ const filteredUsers = computed(() => {
   }
 });
 
-const allGameTypes = computed(() =>
-  props.gameTypes.map(gt => ({
-    value: String(gt.id),
-    label: gt.name
-  }))
-);
 
 const allDifficulties = computed(() =>
   props.difficulties.map(diff => ({
@@ -354,7 +375,7 @@ const updateUrlParams = () => {
     }
 
     if (categoryId.value) {
-      params.set('difficulty', categoryId.value);
+      params.set('category', categoryId.value);
     }
 
     // Exclude AI
@@ -504,6 +525,7 @@ onMounted(async () => {
     initializeTheme();
     getInitialFilters();
     await fetchUsers();
+    await fetchGameTypes();
   } catch (error) {
     console.error('Error during component mount:', error);
   }

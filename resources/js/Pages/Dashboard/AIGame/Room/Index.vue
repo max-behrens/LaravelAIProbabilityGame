@@ -26,7 +26,6 @@ const props = defineProps({
     gameId: { type: Number, required: true },
     game: Object,
     gameType: Object,
-    gameTypes: Object,
     difficulties: Array,
     categories: Array,
     auth: Object,
@@ -922,7 +921,7 @@ onUnmounted(() => {
     <Head title="AI Game Room" />
 
     <BreezeAuthenticatedLayout>
-        <GameAuthenticatedLayout :currentGameId="props.gameId" :gameTypes="props.gameTypes" :difficulties="props.difficulties" :categories="props.categories">
+        <GameAuthenticatedLayout :currentGameId="props.gameId" :difficulties="props.difficulties" :categories="props.categories">
 
 
                 <!-- VERTICAL NAV -->
@@ -1219,33 +1218,40 @@ onUnmounted(() => {
                                 </div>
                           </div>
 
-                          <div class="flex-1 min-w-[300px] p-4 bg-gray-800 rounded shadow">
-                                <h3 class="font-semibold text-lg mb-2">AI Scores</h3>
-                                <table class="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr class="bg-gray-700">
-                                            <th class="p-2 border-b">Model</th>
-                                            <th class="p-2 border-b">Game Session</th>
-                                            <th class="p-2 border-b">Score</th>
-                                            <th class="p-2 border-b">Date Created</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr v-for="score in aiScores" :key="score.id">
-                                            <td class="p-2 border-b text-white">Normal</td>
-                                            <td class="p-2 border-b text-white">{{ score.session_id }}</td>
-                                            <td class="p-2 border-b text-white">{{ score.score }}</td>
-                                            <td class="p-2 border-b text-white">{{ formatDate(score.created_at) }}</td>
-                                        </tr>
-                                        <tr v-if="aiScores.length === 0">
-                                            <td colspan="4" class="p-2 text-center text-gray-400">No scores available
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                                <DynamicPagination :currentPage="aiScoresCurrentPage" :totalPages="aiScoresTotalPages"
-                                    @change-page="changeAIScoresPage" />
-                            </div>
+                        <div class="flex-1 min-w-[300px] p-4 bg-gray-800 rounded shadow">
+                            <h3 class="font-semibold text-lg mb-2">AI Scores</h3>
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-700">
+                                        <th class="p-2 border-b">Model</th>
+                                        <th class="p-2 border-b">Game Session</th>
+                                        <th class="p-2 border-b">Difficulty</th>
+                                        <th class="p-2 border-b">Category</th>
+                                        <th class="p-2 border-b">Score</th>
+                                        <th class="p-2 border-b">Date Created</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="score in aiScores" :key="score.id">
+                                        <td class="p-2 border-b text-white">Normal</td>
+                                        <td class="p-2 border-b text-white">{{ score.session_id }}</td>
+                                        <td class="p-2 border-b text-white">
+                                            {{ score.answer_json?.difficulty_name || score.answer_json?.difficulty_name || 'N/A' }}
+                                        </td>
+                                        <td class="p-2 border-b text-white">
+                                            {{ score.answer_json?.category_name || score.answer_json?.category_name || 'N/A' }}
+                                        </td>
+                                        <td class="p-2 border-b text-white">{{ score.score }}</td>
+                                        <td class="p-2 border-b text-white">{{ formatDate(score.created_at) }}</td>
+                                    </tr>
+                                    <tr v-if="aiScores.length === 0">
+                                        <td colspan="6" class="p-2 text-center text-gray-400">No scores available</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <DynamicPagination :currentPage="aiScoresCurrentPage" :totalPages="aiScoresTotalPages"
+                                @change-page="changeAIScoresPage" />
+                        </div>
                       </div>
 
 
@@ -1289,17 +1295,16 @@ onUnmounted(() => {
                                             <td class="p-2 border-b text-white">{{ score.user?.name }}</td>
                                             <td class="p-2 border-b text-white">{{ score.session_id }}</td>
                                             <td class="p-2 border-b text-white">
-                                            {{ score.answer_json.difficulty_id }}
+                                                {{ score.answer_json?.difficulty_name || score.answer_json?.difficulty_name || 'N/A' }}
                                             </td>
                                             <td class="p-2 border-b text-white">
-                                            {{ score.answer_json.category_id }}
+                                                {{ score.answer_json?.category_name || score.answer_json?.category_name || 'N/A' }}
                                             </td>
                                             <td class="p-2 border-b text-white">{{ score.score }}</td>
                                             <td class="p-2 border-b text-white">{{ formatDate(score.created_at) }}</td>
                                         </tr>
                                         <tr v-if="gameScores.length === 0">
-                                            <td colspan="4" class="p-2 text-center text-gray-400">No scores available
-                                            </td>
+                                            <td colspan="6" class="p-2 text-center text-gray-400">No scores available</td>
                                         </tr>
                                     </tbody>
                                 </table>

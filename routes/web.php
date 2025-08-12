@@ -44,7 +44,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             Route::get('/games/{gameId}/ai-scores', [AIGameController::class, 'getAIScores']);
 
-            Route::get('/games/{gameId}/all-scores', [GamesController::class, 'getAllScores']);
+            Route::get('/games/{gameId}/game-heatmap-scores', [GamesController::class, 'getHeatmapScores']);
 
             Route::get('/games/{gameId}/question-averages', [GamesController::class, 'getQuestionAverages']);
 
@@ -96,6 +96,9 @@ Route::prefix('dashboard')
         Route::get('/cumulative-heatmap', [IndexController::class, 'getCumulativeHeatMap']);
         Route::get('/cumulative-bargraph', [IndexController::class, 'getCumulativeBarGraph']);
         Route::get('/users', [IndexController::class, 'getAllUsers']);
+
+        // Game Auth Menu
+        Route::get('/game-types', [GamesController::class, 'getGameTypes']);
 
 
         Route::get('/games', [GamesController::class, 'index']);

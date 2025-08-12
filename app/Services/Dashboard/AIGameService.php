@@ -13,14 +13,19 @@ use Illuminate\Support\Facades\DB;
 class AIGameService
 {
 
-    public function getAIGameScores($gameId, $page = 1, ?string $startDate = null, ?string $endDate = null, bool $excludeAI = true, $perPage = 5)
+    public function getAIGameScores($gameId, $page = 1, ?string $startDate = null, ?string $endDate = null, bool $excludeAI = true, ?int $difficultyId = null, ?int $categoryId = null, $perPage = 5)
     {
-        // If excludeAI is true, return empty paginated results
         if ($excludeAI) {
             return null;
         }
 
-        Log::debug('Fetching paginated AI game scores', ['gameId' => $gameId, 'page' => $page, 'perPage' => $perPage]);
+        Log::debug('Fetching AI scores', [
+            'gameId' => $gameId, 
+            'page' => $page, 
+            'difficultyId' => $difficultyId,
+            'categoryId' => $categoryId
+        ]);
+
         $query = AIScore::query()
             ->where('ai_scores.game_id', $gameId)
             ->orderBy('ai_scores.created_at', 'desc')
@@ -29,20 +34,108 @@ class AIGameService
                 'ai_scores.session_id',
                 'ai_scores.game_id',
                 'ai_scores.score',
-                'ai_scores.created_at'
+                'ai_scores.created_at',
+                'ai_scores.answer_json'
             );
-        // Apply date range filter BEFORE pagination
+
         if ($startDate && $endDate) {
-            $query->whereBetween('ai_scores.created_at', [$startDate, $endDate]); // Fixed: was game_scores.created_at
+            $query->whereBetween('ai_scores.created_at', [$startDate, $endDate]);
         }
-        // NOW paginate after all filters are applied
+
+
+        if ($difficultyId !== null) {
+            Log::debug('Applying difficulty filter', ['difficultyId' => $difficultyId]);
+            $query->where(function($query) use ($difficultyId) {
+                // Try regular JSON extraction first
+                $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.difficulty_id")) = ?', [(string)$difficultyId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.difficulty_id")) = ?', [(int)$difficultyId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.difficulty_id")) AS UNSIGNED) = ?', [(int)$difficultyId])
+                    // Try double-encoded JSON extraction
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.difficulty_id")) = ?', [(string)$difficultyId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.difficulty_id")) = ?', [(int)$difficultyId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.difficulty_id")) AS UNSIGNED) = ?', [(int)$difficultyId]);
+            });
+        }
+
+        if ($categoryId !== null) {
+            Log::debug('Applying category filter', ['categoryId' => $categoryId]);
+            $query->where(function($query) use ($categoryId) {
+                // Try regular JSON extraction first
+                $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.category_id")) = ?', [(string)$categoryId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.category_id")) = ?', [(int)$categoryId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId])
+                    // Try double-encoded JSON extraction
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.category_id")) = ?', [(string)$categoryId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.category_id")) = ?', [(int)$categoryId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId]);
+            });
+        }
+
+
         $scores = $query->paginate($perPage, ['*'], 'page', $page);
-        Log::debug('Fetched AI scores', ['scores' => $scores->items()]);
-        $scores->getCollection()->transform(function ($score) {
-            // Remove this user transformation for AI scores since there's no user_id
-            Log::debug('Transformed AI score', ['score' => $score]);
+
+        Log::debug('Fetched AI scores raw', ['scores' => $scores->items()]);
+
+        // Get all unique difficulty and category IDs from the scores
+        $difficultyIds = [];
+        $categoryIds = [];
+        
+        foreach ($scores->items() as $score) {
+            $answerData = is_string($score->answer_json) ? json_decode($score->answer_json, true) : $score->answer_json;
+            if (isset($answerData['difficulty_id'])) {
+                $difficultyIds[] = $answerData['difficulty_id'];
+            }
+            if (isset($answerData['category_id'])) {
+                $categoryIds[] = $answerData['category_id'];
+            }
+        }
+
+        // Fetch difficulty and category names in bulk
+        $difficulties = collect();
+        $categories = collect();
+        
+        if (!empty($difficultyIds)) {
+            $difficulties = \DB::table('game_type_difficulties')
+                ->whereIn('id', array_unique($difficultyIds))
+                ->pluck('name', 'id');
+        }
+        
+        if (!empty($categoryIds)) {
+            $categories = \DB::table('game_type_categories')
+                ->whereIn('id', array_unique($categoryIds))
+                ->pluck('name', 'id');
+        }
+
+        Log::debug('AI Difficulties and Categories', [
+            'difficulties' => $difficulties->toArray(),
+            'categories' => $categories->toArray()
+        ]);
+
+        $scores->getCollection()->transform(function ($score) use ($difficulties, $categories) {
+            if ($score->answer_json) {
+                $answerData = is_string($score->answer_json) ? json_decode($score->answer_json, true) : $score->answer_json;
+
+                // Use the fetched names or fall back to ID-based names
+                if (isset($answerData['difficulty_id'])) {
+                    $answerData['difficulty_name'] = $difficulties->get($answerData['difficulty_id']) 
+                        ?? 'Difficulty #' . $answerData['difficulty_id'];
+                } else {
+                    $answerData['difficulty_name'] = 'N/A';
+                }
+
+                if (isset($answerData['category_id'])) {
+                    $answerData['category_name'] = $categories->get($answerData['category_id']) 
+                        ?? 'Category #' . $answerData['category_id'];
+                } else {
+                    $answerData['category_name'] = 'N/A';
+                }
+
+                $score->answer_json = $answerData;
+            }
+
             return $score;
         });
+
         return $scores;
     }
 
@@ -154,6 +247,15 @@ class AIGameService
     
         $gameQuestions = $gameQuestionsQuery->get();
         $answerJson = [];
+
+        // Add difficulty_id and category_id to answer_json for reference
+        if ($difficultyId !== null) {
+            $answerJson['difficulty_id'] = $difficultyId;
+        }
+        if ($categoryId !== null) {
+            $answerJson['category_id'] = $categoryId;
+        }
+        
         $totalScore = 0;
         foreach ($gameQuestions as $index => $question) {
             $submittedAnswer = $answers[$index] ?? null;
@@ -171,23 +273,18 @@ class AIGameService
                 $isCorrect = strpos($submittedAnswerCleaned, $correctAnswerCleaned) !== false;
             }
             $scoreAwarded = $isCorrect ? ($question->score_awarded ?? 0) : 0;
+
             $answerJson[$question->id] = [
                 'question_number' => $index + 1,
                 'question' => $question->question,
                 'submitted' => $submittedAnswer,
                 'correct_answer' => $question->answer,
                 'is_correct' => $isCorrect,
-                'score_awarded' => $scoreAwarded
+                'score_awarded' => $scoreAwarded,
             ];
             $totalScore += $scoreAwarded;
         }
-        // Add difficulty_id and category_id to answer_json for reference
-        if ($difficultyId !== null) {
-            $answerJson['difficulty_id'] = $difficultyId;
-        }
-        if ($categoryId !== null) {
-            $answerJson['category_id'] = $categoryId;
-        }
+
         $aiScore = AIScore::create([
             'game_id' => $game->id,
             'answer_json' => json_encode($answerJson),
@@ -196,6 +293,7 @@ class AIGameService
         ]);
         Log::info('AI answers saved successfully', [
             'gameId' => $gameId,
+            'answerJson' => $answerJson,
             'sessionId' => $sessionId,
             'aiScoreId' => $aiScore->id,
             'totalScore' => $totalScore,

@@ -41,7 +41,7 @@ Route::get('/chart-data', function () {
 
 Route::get('/games/{gameId}/score-trends', [GamesController::class, 'getScoreTrendStats']);
 
-Route::get('/games/{gameId}/all-scores', [GamesController::class, 'getAllScores']);
+Route::get('/games/{gameId}/game-heatmap-scores', [GamesController::class, 'getHeatmapScores']);
 
 Route::middleware('auth:sanctum')->post('/games/{gameId}/submit-answer', [GamesController::class, 'submitAnswer']);
 
@@ -83,6 +83,8 @@ Route::get('/dashboard/session-details/{sessionId}', [IndexController::class, 'g
 Route::get('/dashboard/cumulative-bargraph', [IndexController::class, 'getCumulativeBarGraph']);
 
 Route::get('/users', [IndexController::class, 'getAllUsers']);
+
+Route::get('/game-types', [GamesController::class, 'getGameTypes']);
 
 
 

@@ -25,23 +25,25 @@ class AIGameController extends Controller
     public function getAIScores($gameId, Request $request)
     {
         $page = $request->query('page', 1);
-
         // Get filter parameters from the request
         $startDate = $request->get('start_date');
         $endDate = $request->get('end_date');
         $excludeAI = $request->get('exclude_ai', 'true') === 'true';
-
+        $difficultyId = $request->get('difficulty'); 
+        $categoryId = $request->get('category');     
+        
         // Pass difficulty and category IDs to the service method
         $aiScores = $this->aiGameService->getAIGameScores(
-            $gameId, 
-            $page, 
-            $startDate, 
-            $endDate, 
+            $gameId,
+            $page,
+            $startDate,
+            $endDate,
             $excludeAI,
+            $difficultyId,  
+            $categoryId     
         );
-        
+    
         Log::info('AI Game scores retrieved', ['scores' => $aiScores]);
-
         return response()->json($aiScores);
     }
 

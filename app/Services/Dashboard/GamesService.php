@@ -78,20 +78,24 @@ class GamesService
     }
 
 
-
-
     public function getGameScores(
-        $gameId, 
-        $page = 1, 
-        ?string $startDate = null, 
-        ?string $endDate = null, 
-        ?array $userIds = null, 
+        $gameId,
+        $page = 1,
+        ?string $startDate = null,
+        ?string $endDate = null,
+        ?array $userIds = null,
         bool $andUsers = false,
         ?int $difficultyId = null,
         ?int $categoryId = null,
         $perPage = 5)
     {
-        Log::debug('Fetching paginated game scores', ['gameId' => $gameId, 'page' => $page, 'perPage' => $perPage]);
+        Log::debug('Fetching paginated game scores', [
+            'gameId' => $gameId, 
+            'page' => $page, 
+            'perPage' => $perPage,
+            'difficultyId' => $difficultyId,
+            'categoryId' => $categoryId
+        ]);
 
         $query = GameScore::query()
             ->join('users', 'game_scores.player_id', '=', 'users.id')
@@ -108,17 +112,14 @@ class GamesService
                 'game_scores.answer_json'
             );
 
-        // Apply date range filter BEFORE pagination
         if ($startDate && $endDate) {
             $query->whereBetween('game_scores.created_at', [$startDate, $endDate]);
         }
 
-        // Apply user ID filter (OR logic) BEFORE pagination
         if (!empty($userIds) && !$andUsers) {
             $query->whereIn('game_scores.player_id', $userIds);
         }
 
-        // Handle AND logic BEFORE pagination
         if (!empty($userIds) && $andUsers) {
             $sessionsWithAllUsers = GameScore::query()
                 ->where('game_id', $gameId)
@@ -131,29 +132,102 @@ class GamesService
             $query->whereIn('game_scores.session_id', $sessionsWithAllUsers);
         }
 
-                // Add difficulty filter
-        if ($difficultyId !== null && $difficultyId !== 0) {
-            $query->whereJsonContains('game_scores.answer_json', ['difficulty_id' => $difficultyId]);
+        if ($difficultyId !== null) {
+            Log::debug('Applying difficulty filter', ['difficultyId' => $difficultyId]);
+            $query->where(function($query) use ($difficultyId) {
+                // Try regular JSON extraction first
+                $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.difficulty_id")) = ?', [(string)$difficultyId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.difficulty_id")) = ?', [(int)$difficultyId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.difficulty_id")) AS UNSIGNED) = ?', [(int)$difficultyId])
+                    // Try double-encoded JSON extraction
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.difficulty_id")) = ?', [(string)$difficultyId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.difficulty_id")) = ?', [(int)$difficultyId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.difficulty_id")) AS UNSIGNED) = ?', [(int)$difficultyId]);
+            });
         }
 
-        // Add category filter
-        if ($categoryId !== null && $categoryId !== 0) {
-            $query->whereJsonContains('game_scores.answer_json', ['category_id' => $categoryId]);
+        if ($categoryId !== null) {
+            Log::debug('Applying category filter', ['categoryId' => $categoryId]);
+            $query->where(function($query) use ($categoryId) {
+                // Try regular JSON extraction first
+                $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.category_id")) = ?', [(string)$categoryId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.category_id")) = ?', [(int)$categoryId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId])
+                    // Try double-encoded JSON extraction
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.category_id")) = ?', [(string)$categoryId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.category_id")) = ?', [(int)$categoryId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId]);
+            });
         }
 
-
-        // NOW paginate after all filters are applied
         $scores = $query->paginate($perPage, ['*'], 'page', $page);
 
-        Log::debug('Fetched scores', ['scores' => $scores->items()]);
+        Log::debug('Fetched scores raw', ['scores' => $scores->items()]);
 
-        $scores->getCollection()->transform(function ($score) {
+        // Get all unique difficulty and category IDs from the scores
+        $difficultyIds = [];
+        $categoryIds = [];
+        
+        foreach ($scores->items() as $score) {
+            $answerData = is_string($score->answer_json) ? json_decode($score->answer_json, true) : $score->answer_json;
+            if (isset($answerData['difficulty_id'])) {
+                $difficultyIds[] = $answerData['difficulty_id'];
+            }
+            if (isset($answerData['category_id'])) {
+                $categoryIds[] = $answerData['category_id'];
+            }
+        }
+
+        // Fetch difficulty and category names in bulk
+        $difficulties = collect();
+        $categories = collect();
+        
+        if (!empty($difficultyIds)) {
+            $difficulties = \DB::table('game_type_difficulties')
+                ->whereIn('id', array_unique($difficultyIds))
+                ->pluck('name', 'id');
+        }
+        
+        if (!empty($categoryIds)) {
+            $categories = \DB::table('game_type_categories')
+                ->whereIn('id', array_unique($categoryIds))
+                ->pluck('name', 'id');
+        }
+
+        Log::debug('Difficulties and Categories', [
+            'difficulties' => $difficulties->toArray(),
+            'categories' => $categories->toArray()
+        ]);
+
+        $scores->getCollection()->transform(function ($score) use ($difficulties, $categories) {
             $score->user = [
                 'id' => $score->user_id,
                 'name' => $score->user_name,
             ];
-            Log::debug('Transformed score', ['score' => $score]);
+
+            if ($score->answer_json) {
+                $answerData = is_string($score->answer_json) ? json_decode($score->answer_json, true) : $score->answer_json;
+
+                // Use the fetched names or fall back to ID-based names
+                if (isset($answerData['difficulty_id'])) {
+                    $answerData['difficulty_name'] = $difficulties->get($answerData['difficulty_id']) 
+                        ?? 'Difficulty #' . $answerData['difficulty_id'];
+                } else {
+                    $answerData['difficulty_name'] = 'N/A';
+                }
+
+                if (isset($answerData['category_id'])) {
+                    $answerData['category_name'] = $categories->get($answerData['category_id']) 
+                        ?? 'Category #' . $answerData['category_id'];
+                } else {
+                    $answerData['category_name'] = 'N/A';
+                }
+
+                $score->answer_json = $answerData;
+            }
+
             unset($score->user_name);
+
             return $score;
         });
 
@@ -235,6 +309,15 @@ class GamesService
         Log::debug('Session created', ['sessionId' => $sessionId, 'user' => $userId]);
 
         $answerJson = [];
+
+        // Add difficulty_id and category_id to answer_json for reference
+        if ($difficultyId !== null) {
+            $answerJson['difficulty_id'] = $difficultyId;
+        }
+        if ($categoryId !== null) {
+            $answerJson['category_id'] = $categoryId;
+        }
+
         $totalScore = 0;
 
         foreach ($gameQuestions as $index => $question) {
@@ -254,13 +337,6 @@ class GamesService
             $totalScore += $scoreAwarded;
         }
 
-        // Add difficulty_id and category_id to answer_json for reference
-        if ($difficultyId !== null) {
-            $answerJson['difficulty_id'] = $difficultyId;
-        }
-        if ($categoryId !== null) {
-            $answerJson['category_id'] = $categoryId;
-        }
 
         GameScore::create([
             'game_id' => $game->id,
@@ -288,7 +364,16 @@ class GamesService
 
     // Game Room Charts methods:
 
-    public function playerAverages(int $gameId, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null, bool $andUsers = false, bool $excludeAI = true)
+    public function playerAverages(
+        int $gameId, 
+        ?string $startDate = null, 
+        ?string $endDate = null, 
+        ?array $userIds = null, 
+        bool $andUsers = false, 
+        bool $excludeAI = true,
+        ?int $difficultyId = null,
+        ?int $categoryId = null
+    )
     {
         Log::debug('Calculating player averages with filters', [
             'gameId' => $gameId,
@@ -336,7 +421,31 @@ class GamesService
             $userAveragesQuery->whereIn('game_scores.session_id', $sessionsToConsider);
         }
 
-        
+        // Add difficulty filter to user averages query
+        if ($difficultyId !== null) {
+            Log::debug('Applying difficulty filter', ['difficultyId' => $difficultyId]);
+            $userAveragesQuery->where(function($query) use ($difficultyId) {
+                $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.difficulty_id")) = ?', [(string)$difficultyId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.difficulty_id")) = ?', [(int)$difficultyId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.difficulty_id")) AS UNSIGNED) = ?', [(int)$difficultyId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.difficulty_id")) = ?', [(string)$difficultyId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.difficulty_id")) = ?', [(int)$difficultyId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.difficulty_id")) AS UNSIGNED) = ?', [(int)$difficultyId]);
+            });
+        }
+
+        if ($categoryId !== null) {
+            Log::debug('Applying category filter', ['categoryId' => $categoryId]);
+            $userAveragesQuery->where(function($query) use ($categoryId) {
+                $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.category_id")) = ?', [(string)$categoryId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.category_id")) = ?', [(int)$categoryId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.category_id")) = ?', [(string)$categoryId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.category_id")) = ?', [(int)$categoryId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId]);
+            });
+        }
+
         $userAverages = $userAveragesQuery
             ->select('users.id', 'users.name', DB::raw('AVG(game_scores.score) as average_score'))
             ->groupBy('users.id', 'users.name')
@@ -345,6 +454,43 @@ class GamesService
                 return (array) $item;
             })
             ->toArray();
+
+        // Get count data for each user (difficulty_category combinations)
+        // Always get ALL games for each user, regardless of current filters
+        $userIds = array_column($userAverages, 'id');
+        
+        if (!empty($userIds)) {
+            // Base query for counts - NO FILTERS applied here to get complete breakdown
+            $countsQuery = DB::table('game_scores')
+                ->where('game_id', $gameId)
+                ->whereIn('player_id', $userIds);
+
+            // Get raw counts data for ALL games
+            $countsData = $countsQuery
+                ->select('player_id', 'answer_json')
+                ->get();
+
+            // Process counts by user and difficulty/category combination
+            $userCounts = [];
+            foreach ($countsData as $row) {
+                $answerData = is_string($row->answer_json) ? json_decode($row->answer_json, true) : $row->answer_json;
+                $diffId = $answerData['difficulty_id'] ?? null;
+                $catId = $answerData['category_id'] ?? null;
+                
+                if ($diffId !== null && $catId !== null) {
+                    $key = "{$diffId}_{$catId}";
+                    if (!isset($userCounts[$row->player_id])) {
+                        $userCounts[$row->player_id] = [];
+                    }
+                    $userCounts[$row->player_id][$key] = ($userCounts[$row->player_id][$key] ?? 0) + 1;
+                }
+            }
+
+            // Add counts to user averages
+            foreach ($userAverages as &$user) {
+                $user['counts'] = $userCounts[$user['id']] ?? [];
+            }
+        }
 
         // Only include AI scores if excludeAI is false
         if (!$excludeAI) {
@@ -356,22 +502,62 @@ class GamesService
             if ($startDate && $endDate) {
                 $aiAverageQuery->whereBetween('created_at', [$startDate, $endDate]);
             }
+
+            if ($difficultyId !== null) {
+                $aiAverageQuery->where(function($query) use ($difficultyId) {
+                    $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.difficulty_id")) = ?', [(string)$difficultyId])
+                        ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.difficulty_id")) = ?', [(int)$difficultyId])
+                        ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.difficulty_id")) AS UNSIGNED) = ?', [(int)$difficultyId])
+                        ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.difficulty_id")) = ?', [(string)$difficultyId])
+                        ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.difficulty_id")) = ?', [(int)$difficultyId])
+                        ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.difficulty_id")) AS UNSIGNED) = ?', [(int)$difficultyId]);
+                });
+            }
+
+            if ($categoryId !== null) {
+                $aiAverageQuery->where(function($query) use ($categoryId) {
+                    $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.category_id")) = ?', [(string)$categoryId])
+                        ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.category_id")) = ?', [(int)$categoryId])
+                        ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId])
+                        ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.category_id")) = ?', [(string)$categoryId])
+                        ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.category_id")) = ?', [(int)$categoryId])
+                        ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId]);
+                });
+            }
             
             // Only include AI scores if there are sessions that match the human player filters
             if ($sessionsToConsider) {
                 $aiAverageQuery->whereIn('session_id', $sessionsToConsider);
             }
 
-
             $aiAverage = $aiAverageQuery
                 ->select(DB::raw("'AI' as name"), DB::raw('AVG(score) as average_score'))
                 ->first();
             
             if ($aiAverage && $aiAverage->average_score !== null) {
+                // Get AI counts for ALL games (no filters)
+                $aiCountsData = DB::table('ai_scores')
+                    ->where('game_id', $gameId)
+                    ->select('answer_json')
+                    ->get();
+
+                $aiCounts = [];
+                foreach ($aiCountsData as $row) {
+                    $answerData = is_string($row->answer_json) ? json_decode($row->answer_json, true) : $row->answer_json;
+                    $diffId = $answerData['difficulty_id'] ?? null;
+                    $catId = $answerData['category_id'] ?? null;
+                    
+                    if ($diffId !== null && $catId !== null) {
+                        $key = "{$diffId}_{$catId}";
+                        $aiCounts[$key] = ($aiCounts[$key] ?? 0) + 1;
+                    }
+                }
+
                 $userAverages[] = [
                     'id' => 'ai',
                     'name' => 'AI',
                     'average_score' => $aiAverage->average_score,
+                    'counts' => $aiCounts,
                 ];
             }
         }
@@ -382,25 +568,73 @@ class GamesService
     }
 
 
-    public function totalScore($gameId)
+    public function totalScore($gameId, $difficultyId, $categoryId)
     {
-        Log::debug('Calculating total score for game', ['gameId' => $gameId]);
+        Log::debug('Calculating total score for game', [
+            'gameId' => $gameId,
+            'difficultyId' => $difficultyId,
+            'categoryId' => $categoryId
+        ]);
 
         $game = Games::findOrFail($gameId);
-        $gameQuestions = $game->gameType->gameQuestions()->get();
 
-        $totalScore = 0;
+        // ---- Main totalScore (based on filters) ----
+        $mainQuery = $game->gameType->gameQuestions();
 
-        foreach ($gameQuestions as $question) {
-            $totalScore += $question->score_awarded;
+        if (!is_null($difficultyId)) {
+            $mainQuery->where('difficulty_id', $difficultyId);
 
+            // Only loop through one set of questions.
+            if (is_null($categoryId)) {
+                $mainQuery->where('category_id', 1);
+            }
+        }
+        if (!is_null($categoryId)) {
+            $mainQuery->where('category_id', $categoryId);    
+            
+            // Only loop through one set of questions.
+            if (is_null($difficultyId)) {
+                $mainQuery->where('difficulty_id', 1);
+            }
         }
 
-        return $totalScore;
-    }
-    
+        $totalScore = $mainQuery->sum('score_awarded');
 
-    public function getAllGameScores($gameId, ?string $startDate = null, ?string $endDate = null, ?array $userIds = null, bool $andUsers = false, bool $excludeAI = true)
+        // ---- Always calculate totals per difficulty ----
+        $easyTotal = $game->gameType->gameQuestions()
+            ->where('category_id', 1)
+            ->where('difficulty_id', 1)
+            ->sum('score_awarded');
+
+        $mediumTotal = $game->gameType->gameQuestions()
+            ->where('category_id', 1)
+            ->where('difficulty_id', 2)
+            ->sum('score_awarded');
+
+        $hardTotal = $game->gameType->gameQuestions()
+            ->where('category_id', 1)
+            ->where('difficulty_id', 3)
+            ->sum('score_awarded');
+
+        return [
+            'totalScore'     => $totalScore,
+            'totalEasy'      => $easyTotal,
+            'totalMedium'    => $mediumTotal,
+            'totalDifficult' => $hardTotal
+        ];
+    }
+
+
+    public function getGameHeatmapScores(
+        int $gameId, 
+        ?string $startDate = null, 
+        ?string $endDate = null, 
+        ?array $userIds = null, 
+        bool $andUsers = false, 
+        bool $excludeAI = true, 
+        ?int $difficultyId = null,
+        ?int $categoryId = null
+    )
     {
         Log::debug('Fetching all AI game scores with filters', [
             'gameId' => $gameId,
@@ -447,6 +681,35 @@ class GamesService
 
             $userScoresQuery->whereIn('game_scores.session_id', $sessionsWithAllUsers);
         }
+
+        if ($difficultyId !== null) {
+            Log::debug('Applying difficulty filter', ['difficultyId' => $difficultyId]);
+            $userScoresQuery->where(function($query) use ($difficultyId) {
+                // Try regular JSON extraction first
+                $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.difficulty_id")) = ?', [(string)$difficultyId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.difficulty_id")) = ?', [(int)$difficultyId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.difficulty_id")) AS UNSIGNED) = ?', [(int)$difficultyId])
+                    // Try double-encoded JSON extraction
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.difficulty_id")) = ?', [(string)$difficultyId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.difficulty_id")) = ?', [(int)$difficultyId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.difficulty_id")) AS UNSIGNED) = ?', [(int)$difficultyId]);
+            });
+        }
+
+        if ($categoryId !== null) {
+            Log::debug('Applying category filter', ['categoryId' => $categoryId]);
+            $userScoresQuery->where(function($query) use ($categoryId) {
+                // Try regular JSON extraction first
+                $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.category_id")) = ?', [(string)$categoryId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.category_id")) = ?', [(int)$categoryId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId])
+                    // Try double-encoded JSON extraction
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.category_id")) = ?', [(string)$categoryId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.category_id")) = ?', [(int)$categoryId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId]);
+            });
+        }
+        
 
         // Get and map user scores to arrays
         $userScores = $userScoresQuery->orderBy('game_scores.created_at', 'desc')->get()->map(function ($score) {
@@ -498,6 +761,34 @@ class GamesService
 
                     $aiScoresQuery->whereIn('session_id', $sessionsWithAnyUser);
                 }
+            }
+
+            if ($difficultyId !== null) {
+                Log::debug('Applying difficulty filter', ['difficultyId' => $difficultyId]);
+                $aiScoresQuery->where(function($query) use ($difficultyId) {
+                    // Try regular JSON extraction first
+                    $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.difficulty_id")) = ?', [(string)$difficultyId])
+                        ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.difficulty_id")) = ?', [(int)$difficultyId])
+                        ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.difficulty_id")) AS UNSIGNED) = ?', [(int)$difficultyId])
+                        // Try double-encoded JSON extraction
+                        ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.difficulty_id")) = ?', [(string)$difficultyId])
+                        ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.difficulty_id")) = ?', [(int)$difficultyId])
+                        ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.difficulty_id")) AS UNSIGNED) = ?', [(int)$difficultyId]);
+                });
+            }
+
+            if ($categoryId !== null) {
+                Log::debug('Applying category filter', ['categoryId' => $categoryId]);
+                $aiScoresQuery->where(function($query) use ($categoryId) {
+                    // Try regular JSON extraction first
+                    $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.category_id")) = ?', [(string)$categoryId])
+                        ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.category_id")) = ?', [(int)$categoryId])
+                        ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId])
+                        // Try double-encoded JSON extraction
+                        ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.category_id")) = ?', [(string)$categoryId])
+                        ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.category_id")) = ?', [(int)$categoryId])
+                        ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId]);
+                });
             }
 
             $aiScores = $aiScoresQuery->get()->map(function ($score) {
@@ -575,12 +866,12 @@ class GamesService
 
         // Add difficulty filter
         if ($difficultyId !== null && $difficultyId !== 0) {
-            $query->whereJsonContains('game_scores.answer_json', ['difficulty_id' => $difficultyId]);
+            $query->where('ai_scores.answer_json->category_id', $categoryId);
         }
 
         // Add category filter
         if ($categoryId !== null && $categoryId !== 0) {
-            $query->whereJsonContains('game_scores.answer_json', ['category_id' => $categoryId]);
+            $query->where('ai_scores.answer_json->category_id', $categoryId);
         }
 
         $results = $query->get();
@@ -694,10 +985,10 @@ class GamesService
         }
 
         if ($difficultyId !== null && $difficultyId !== 0) {
-            $query->whereJsonContains('game_scores.answer_json', ['difficulty_id' => $difficultyId]);
+            $query->where('ai_scores.answer_json->category_id', $categoryId);
         }
         if ($categoryId !== null && $categoryId !== 0) {
-            $query->whereJsonContains('game_scores.answer_json', ['category_id' => $categoryId]);
+            $query->where('ai_scores.answer_json->category_id', $categoryId);
         }
 
 

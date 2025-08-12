@@ -24,6 +24,8 @@ const dateRange = ref([null, null]);
 const userIds = ref([]);
 const andUsers = ref(false);
 const excludeAI = ref(false);
+const difficultyId = ref(null);
+const categoryId = ref(null);
 
 // Get initial filter values from URL
 const getInitialFilters = () => {
@@ -44,6 +46,9 @@ const getInitialFilters = () => {
   
   // AND users
   andUsers.value = urlParams.get('and_users') === 'true';
+
+  difficultyId.value = urlParams.get('difficulty');
+  categoryId.value = urlParams.get('category');
 };
 
 // Fetch all game scores for heatmap with filters
@@ -66,7 +71,14 @@ const fetchAllGameScores = async () => {
     // Add exclude AI parameter - defaults to true
     params.set('exclude_ai', excludeAI.value.toString());
 
-    const url = `/games/${props.gameId}/all-scores${params.toString() ? '?' + params.toString() : ''}`;
+    if (difficultyId.value) {
+      params.set('difficulty', difficultyId.value);
+    }
+    if (categoryId.value) {
+      params.set('category', categoryId.value);
+    }
+
+    const url = `/games/${props.gameId}/game-heatmap-scores${params.toString() ? '?' + params.toString() : ''}`;
     const response = await axios.get(url);
     
     allGameScores.value = response.data;
@@ -244,6 +256,28 @@ const chartOptions = ref({
       const dataPoint = w.globals.initialSeries[seriesIndex].data[dataPointIndex];
       const attempts = dataPoint?.attempts ?? 1;
       const avgScore = dataPoint?.avgScore ?? 0;
+      
+      // Find the corresponding score data to get difficulty/category info
+      const playerScores = allGameScores.value;
+      let difficultyInfo = 'N/A';
+      let categoryInfo = 'N/A';
+      
+      if (playerScores.length > 0) {
+        // Get difficulty/category from the most recent score (you could also aggregate this)
+        const recentScore = playerScores[0];
+        if (recentScore.answer_json) {
+          let answerData = recentScore.answer_json;
+          if (typeof answerData === 'string') {
+            try {
+              answerData = JSON.parse(answerData);
+            } catch (e) {
+              console.warn('Could not parse answer_json:', e);
+            }
+          }
+          difficultyInfo = answerData?.difficulty_id || 'N/A';
+          categoryInfo = answerData?.category_id || 'N/A';
+        }
+      }
 
       return `<div style="padding:8px; background-color:#1e1e1e; color:#cccccc; border-radius:4px;">
         <strong>${player}</strong><br/>
@@ -251,6 +285,8 @@ const chartOptions = ref({
         Average Score: <strong>${avgScore.toFixed(2)}</strong><br/>
         No. Attempts: <strong>${attempts}</strong><br/>
         Success Rate: <strong>${successRate.toFixed(0)}%</strong><br/>
+        Difficulty: <strong>${difficultyInfo}</strong><br/>
+        Category: <strong>${categoryInfo}</strong><br/>
       </div>`;
     }
   },
@@ -301,12 +337,21 @@ const chartOptions = ref({
 
 // Listen for filter changes from GameAuthenticated layout
 const handleFilterChange = (event) => {
-  const { dateRange: newDateRange, userIds: newUserIds, andUsers: newAndUsers, excludeAI: newExcludeAI } = event.detail;
+  const { 
+    dateRange: newDateRange, 
+    userIds: newUserIds, 
+    andUsers: newAndUsers, 
+    excludeAI: newExcludeAI,
+    difficultyId: newDifficultyId, 
+    categoryId: newCategoryId      
+  } = event.detail;
   
   dateRange.value = newDateRange;
   userIds.value = newUserIds;
   andUsers.value = newAndUsers;
   excludeAI.value = newExcludeAI !== undefined ? newExcludeAI : true;
+  difficultyId.value = newDifficultyId; 
+  categoryId.value = newCategoryId;     
   
   // Refresh data
   fetchAllGameScores();

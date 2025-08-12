@@ -101,6 +101,17 @@ class GamesController extends Controller
     }
 
 
+    public function getGameTypes()
+    {
+        $gameTypes = GameType::orderBy('id')->get(['id', 'name']);
+
+        return response()->json([
+            'data' => $gameTypes
+        ]);
+    }
+
+
+
     public function showRoom($gameId, $userId)
     {
         Log::info('Loading game room', ['gameId' => $gameId, 'userId' => $userId]);
@@ -108,14 +119,12 @@ class GamesController extends Controller
         $gameDetails = Games::findOrFail($gameId);
         $gameType = $this->gamesService->getGameType($gameDetails);
         $userDetails = User::findOrFail($userId);
-
-        $gameTypes = GameType::orderBy('id')->get(['id', 'name'])->toArray();
         
         // Get all difficulties and categories for dropdowns
         $difficulties = GameTypeDifficulty::orderBy('id')->get(['id', 'name'])->toArray();
         $categories = GameTypeCategory::orderBy('id')->get(['id', 'name'])->toArray();
 
-        Log::info('SHOW ROOM DATA', ['gameTypes' => $gameTypes, 'difficulties' => $difficulties,'categories' => $categories]);
+        Log::info('SHOW ROOM DATA', ['difficulties' => $difficulties,'categories' => $categories]);
 
 
         return Inertia::render('Dashboard/AIGame/Room/Index', [
@@ -323,7 +332,7 @@ class GamesController extends Controller
 
     // Game Room Stats Methods:
 
-    public function getAllScores(Request $request, $gameId)
+    public function getHeatmapScores(Request $request, $gameId)
     {
         Log::info('Fetching all game scores', ['gameId' => $gameId, 'filters' => $request->all()]);
         // Get filter parameters from the request
@@ -332,11 +341,23 @@ class GamesController extends Controller
         $userIds = $request->get('user_ids');
         $andUsers = $request->get('and_users', 'false') === 'true';
         $excludeAI = $request->get('exclude_ai', 'true') === 'true';
+        $difficultyId = $request->get('difficulty'); 
+        $categoryId = $request->get('category');  
+        
         // The user IDs come as a comma-separated string, convert them to an array
         $userIds = $userIds ? explode(',', $userIds) : null;
-    
+
         // Pass all filter parameters to the service method
-        $allScores = $this->gamesService->getAllGameScores($gameId, $startDate, $endDate, $userIds, $andUsers, $excludeAI); // Add excludeAI parameter
+        $allScores = $this->gamesService->getGameHeatmapScores(
+            $gameId, 
+            $startDate, 
+            $endDate, 
+            $userIds, 
+            $andUsers, 
+            $excludeAI,
+            $difficultyId, 
+            $categoryId   
+        );
         return response()->json($allScores);
     }
 
@@ -349,11 +370,24 @@ class GamesController extends Controller
         $userIds = $request->get('user_ids');
         $andUsers = $request->get('and_users', 'false') === 'true';
         $excludeAI = $request->get('exclude_ai', 'true') === 'true';
+        $difficultyId = $request->get('difficulty'); 
+        $categoryId = $request->get('category'); 
+        
         // The user IDs come as a comma-separated string, convert them to an array
         $userIds = $userIds ? explode(',', $userIds) : null;
+        
         // Pass all filter parameters to the service methods
-        $players = $this->gamesService->playerAverages($gameId, $startDate, $endDate, $userIds, $andUsers, $excludeAI); // Add excludeAI parameter
-        $totalGameScore = $this->gamesService->totalScore($gameId);
+        $players = $this->gamesService->playerAverages(
+            $gameId, 
+            $startDate, 
+            $endDate, 
+            $userIds, 
+            $andUsers, 
+            $excludeAI,
+            $difficultyId, 
+            $categoryId   
+        );
+        $totalGameScore = $this->gamesService->totalScore($gameId, $difficultyId, $categoryId);
         return response()->json([
             'players' => $players,
             'totalScore' => $totalGameScore,
