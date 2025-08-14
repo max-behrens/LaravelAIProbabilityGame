@@ -59,6 +59,13 @@ const selectedDifficulty = ref(1); // Default to Easy (id: 1)
 const selectedCategory = ref(1);   // Default to Number (id: 1)
 const currentGameQuestions = ref([]);
 
+const playerSearchQuery = ref('');
+const aiSearchQuery = ref('');
+const playerSortField = ref('created_at');
+const playerSortDirection = ref('desc');
+const aiSortField = ref('created_at');
+const aiSortDirection = ref('desc');
+
 // Initialize player interactions first
 const {
     players,
@@ -151,7 +158,7 @@ const fetchCurrentGame = async () => {
     }
 };
 
-const fetchGameScores = async (page = 1) => {
+const fetchGameScores = async (page = 1, sortField = null, sortDirection = null) => {
     try {
         const params = new URLSearchParams({
             page: page.toString()
@@ -177,6 +184,12 @@ const fetchGameScores = async (page = 1) => {
             params.set('category', appliedFilters.value.categoryId);
         }
         
+        // Add sorting parameters
+        if (sortField || playerSortField.value) {
+            params.set('sort_field', sortField || playerSortField.value);
+            params.set('sort_direction', sortDirection || playerSortDirection.value);
+        }
+        
         const url = `/api/games/${props.gameId}/scores?${params.toString()}`;
         
         const response = await axios.get(url);
@@ -189,7 +202,7 @@ const fetchGameScores = async (page = 1) => {
     }
 };
 
-const fetchAIScores = async (page = 1) => {
+const fetchAIScores = async (page = 1, sortField = null, sortDirection = null) => {
     try {
         // If AI is excluded, set empty array and return early
         if (appliedFilters.value.excludeAI) {
@@ -219,6 +232,12 @@ const fetchAIScores = async (page = 1) => {
             params.set('category', appliedFilters.value.categoryId);
         }
         
+        // Add sorting parameters
+        if (sortField || aiSortField.value) {
+            params.set('sort_field', sortField || aiSortField.value);
+            params.set('sort_direction', sortDirection || aiSortDirection.value);
+        }
+        
         const url = `/api/games/${props.gameId}/ai-scores?${params.toString()}`;
         
         const response = await axios.get(url);
@@ -234,6 +253,7 @@ const fetchAIScores = async (page = 1) => {
         aiScoresCurrentPage.value = 1;
     }
 };
+
 
 const fetchGameQuestions = async (difficultyId = null, categoryId = null) => {
     try {
@@ -258,10 +278,10 @@ const fetchGameQuestions = async (difficultyId = null, categoryId = null) => {
 const onDifficultyOrCategoryChange = async () => {
     console.log('Difficulty/Category changed:', selectedDifficulty.value, selectedCategory.value);
     
-    // 1. Fetch the new questions and scores
+    // 1. Fetch the new questions and scores (maintaining current sort)
     await fetchGameQuestions(selectedDifficulty.value, selectedCategory.value);
-    await fetchGameScores(1);
-    await fetchAIScores(1);
+    await fetchGameScores(1, playerSortField.value, playerSortDirection.value);
+    await fetchAIScores(1, aiSortField.value, aiSortDirection.value);
 };
 
 // Pagination handler
@@ -288,6 +308,62 @@ const getCategoryName = (categoryId) => {
     const category = props.categories.find(c => c.id === categoryId);
     return category ? category.name : 'Unknown';
 };
+
+// Player & AI Scores Tables Filtering:
+
+const filteredAndSortedGameScores = computed(() => {
+    let filtered = gameScores.value;
+    
+    if (playerSearchQuery.value.trim()) {
+        const query = playerSearchQuery.value.toLowerCase().trim();
+        filtered = filtered.filter(score => 
+            score.session_id.toString().includes(query)
+        );
+    }
+    
+    return filtered;
+});
+
+const filteredAndSortedAIScores = computed(() => {
+    let filtered = aiScores.value;
+    
+    if (aiSearchQuery.value.trim()) {
+        const query = aiSearchQuery.value.toLowerCase().trim();
+        filtered = filtered.filter(score => 
+            score.session_id.toString().includes(query)
+        );
+    }
+    
+    return filtered;
+});
+
+const sortPlayerTable = (field) => {
+    if (playerSortField.value === field) {
+        playerSortDirection.value = playerSortDirection.value === 'desc' ? 'asc' : 'desc';
+    } else {
+        playerSortField.value = field;
+        playerSortDirection.value = 'desc';
+    }
+
+    fetchGameScores(1, playerSortField.value, playerSortDirection.value);
+};
+
+const sortAITable = (field) => {
+    if (aiSortField.value === field) {
+        aiSortDirection.value = aiSortDirection.value === 'desc' ? 'asc' : 'desc';
+    } else {
+        aiSortField.value = field;
+        aiSortDirection.value = 'desc';
+    }
+
+    fetchAIScores(1, aiSortField.value, aiSortDirection.value);
+};
+
+const calculatePercentage = (score) => {
+    const maxScore = score.answer_json?.max_score ? parseInt(score.answer_json.max_score) : 10;
+    return ((score.score / maxScore) * 100).toFixed(1);
+};
+
 
 // Updated game control functions
 const startGame = async () => {
@@ -806,9 +882,9 @@ const handleFilterChange = (event) => {
         categoryId: event.detail.categoryId || null
     };
     
-    // Refresh scores when filters change
-    fetchGameScores(1);
-    fetchAIScores(1);
+    // Refresh scores when filters change (maintaining current sort)
+    fetchGameScores(1, playerSortField.value, playerSortDirection.value);
+    fetchAIScores(1, aiSortField.value, aiSortDirection.value);
 };
 
 watch(() => gameState.value.gameInProgress, (newVal, oldVal) => {
@@ -1240,41 +1316,91 @@ onUnmounted(() => {
                                 </div>
                           </div>
 
-                        <div class="flex-1 min-w-[300px] p-4 bg-gray-800 rounded shadow">
-                            <h3 class="font-semibold text-lg mb-2">AI Scores</h3>
-                            <table class="w-full text-left border-collapse">
-                                <thead>
-                                    <tr class="bg-gray-700">
-                                        <th class="p-2 border-b">Model</th>
-                                        <th class="p-2 border-b">Game Session</th>
-                                        <th class="p-2 border-b">Difficulty</th>
-                                        <th class="p-2 border-b">Category</th>
-                                        <th class="p-2 border-b">Score</th>
-                                        <th class="p-2 border-b">Date Created</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="score in aiScores" :key="score.id">
-                                        <td class="p-2 border-b text-white">Normal</td>
-                                        <td class="p-2 border-b text-white">{{ score.session_id }}</td>
-                                        <td class="p-2 border-b text-white">
-                                            {{ score.answer_json?.difficulty_name || score.answer_json?.difficulty_name || 'N/A' }}
-                                        </td>
-                                        <td class="p-2 border-b text-white">
-                                            {{ score.answer_json?.category_name || score.answer_json?.category_name || 'N/A' }}
-                                        </td>
-                                        <td class="p-2 border-b text-white">{{ score.score }}</td>
-                                        <td class="p-2 border-b text-white">{{ formatDate(score.created_at) }}</td>
-                                    </tr>
-                                    <tr v-if="aiScores.length === 0">
-                                        <td colspan="6" class="p-2 text-center text-gray-400">No scores available</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                            <DynamicPagination :currentPage="aiScoresCurrentPage" :totalPages="aiScoresTotalPages"
-                                @change-page="changeAIScoresPage" />
+                            <div class="flex-1 min-w-[300px] p-4 bg-gray-800 rounded shadow">
+                                <h3 class="font-semibold text-lg mb-4">AI Scores</h3>
+                                
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr class="bg-gray-700">
+                                                <th class="p-2 border-b">Model</th>
+                                                <th class="p-2 border-b">
+                                                    <div class="flex flex-row items-center gap-2">
+                                                        <span>Game Session</span>
+                                                        <input 
+                                                            v-model="aiSearchQuery"
+                                                            type="text"
+                                                            placeholder="Filter by session..."
+                                                            class="px-2 py-1 text-xs bg-gray-600 placeholder-gray-300 text-white rounded border border-gray-500 focus:border-blue-400 focus:outline-none"
+                                                            @click.stop
+                                                        />
+                                                    </div>
+                                                </th>
+                                                <th class="p-2 border-b">Difficulty</th>
+                                                <th class="p-2 border-b">Category</th>
+                                                <th class="p-2 border-b cursor-pointer hover:bg-gray-600 transition-colors" 
+                                                    @click="sortAITable('score')">
+                                                    <div class="flex items-center">
+                                                        Score
+                                                        <svg class="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path v-if="aiSortField === 'score' && aiSortDirection === 'desc'"
+                                                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+                                                            <path v-else-if="aiSortField === 'score' && aiSortDirection === 'asc'"
+                                                                d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z"/>
+                                                            <path v-else
+                                                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+                                                        </svg>
+                                                    </div>
+                                                </th>
+                                                <th class="p-2 border-b cursor-pointer transition-colors" 
+                                                    >
+                                                    <div class="flex items-center">
+                                                        % Score
+                                                    </div>
+                                                </th>
+                                                <th class="p-2 border-b cursor-pointer hover:bg-gray-600 transition-colors" 
+                                                    @click="sortAITable('created_at')">
+                                                    <div class="flex items-center">
+                                                        Date Created
+                                                        <svg class="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path v-if="aiSortField === 'created_at' && aiSortDirection === 'desc'"
+                                                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+                                                            <path v-else-if="aiSortField === 'created_at' && aiSortDirection === 'asc'"
+                                                                d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z"/>
+                                                            <path v-else
+                                                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+                                                        </svg>
+                                                    </div>
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="score in filteredAndSortedAIScores" :key="score.id">
+                                                <td class="p-2 border-b text-white">Normal</td>
+                                                <td class="p-2 border-b text-white">{{ score.session_id }}</td>
+                                                <td class="p-2 border-b text-white">
+                                                    {{ score.answer_json?.difficulty_name || 'N/A' }}
+                                                </td>
+                                                <td class="p-2 border-b text-white">
+                                                    {{ score.answer_json?.category_name || 'N/A' }}
+                                                </td>
+                                                <td class="p-2 border-b text-white">{{ score.score }}</td>
+                                                <td class="p-2 border-b text-white">{{ calculatePercentage(score) }}%</td>
+                                                <td class="p-2 border-b text-white">{{ formatDate(score.created_at) }}</td>
+                                            </tr>
+                                            <tr v-if="filteredAndSortedAIScores.length === 0">
+                                                <td colspan="7" class="p-2 text-center text-gray-400">
+                                                    {{ aiSearchQuery.trim() ? 'No matching scores found' : 'No scores available' }}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <DynamicPagination :currentPage="aiScoresCurrentPage" :totalPages="aiScoresTotalPages"
+                                    @change-page="changeAIScoresPage" />
+                            </div>
                         </div>
-                      </div>
+
 
 
                         <div class="flex flex-wrap gap-6 w-full">
@@ -1300,36 +1426,85 @@ onUnmounted(() => {
                             </div>
 
                             <div class="flex-1 min-w-[300px] p-4 bg-gray-800 rounded shadow">
-                                <h3 class="font-semibold text-lg mb-2">Player Scores</h3>
-                                <table class="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr class="bg-gray-700">
-                                            <th class="p-2 border-b">Player</th>
-                                            <th class="p-2 border-b">Game Session</th>
-                                            <th class="p-2 border-b">Difficulty</th>
-                                            <th class="p-2 border-b">Category</th>
-                                            <th class="p-2 border-b">Score</th>
-                                            <th class="p-2 border-b">Date Created</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr v-for="score in gameScores" :key="score.id">
-                                            <td class="p-2 border-b text-white">{{ score.user?.name }}</td>
-                                            <td class="p-2 border-b text-white">{{ score.session_id }}</td>
-                                            <td class="p-2 border-b text-white">
-                                                {{ score.answer_json?.difficulty_name || score.answer_json?.difficulty_name || 'N/A' }}
-                                            </td>
-                                            <td class="p-2 border-b text-white">
-                                                {{ score.answer_json?.category_name || score.answer_json?.category_name || 'N/A' }}
-                                            </td>
-                                            <td class="p-2 border-b text-white">{{ score.score }}</td>
-                                            <td class="p-2 border-b text-white">{{ formatDate(score.created_at) }}</td>
-                                        </tr>
-                                        <tr v-if="gameScores.length === 0">
-                                            <td colspan="6" class="p-2 text-center text-gray-400">No scores available</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                                <h3 class="font-semibold text-lg mb-4">Player Scores</h3>
+                                
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr class="bg-gray-700">
+                                                <th class="p-2 border-b">Player</th>
+                                                <th class="p-2 border-b">
+                                                    <div class="flex flex-row items-center gap-2">
+                                                        <span>Game Session</span>
+                                                        <input 
+                                                            v-model="playerSearchQuery"
+                                                            type="text"
+                                                            placeholder="Filter by session..."
+                                                            class="px-2 py-1 text-xs bg-gray-600 placeholder-gray-300 text-white rounded border border-gray-500 focus:border-blue-400 focus:outline-none"
+                                                            @click.stop
+                                                        />
+                                                    </div>
+                                                </th>
+                                                <th class="p-2 border-b">Difficulty</th>
+                                                <th class="p-2 border-b">Category</th>
+                                                <th class="p-2 border-b cursor-pointer hover:bg-gray-600 transition-colors" 
+                                                    @click="sortPlayerTable('score')">
+                                                    <div class="flex items-center">
+                                                        Score
+                                                        <svg class="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path v-if="playerSortField === 'score' && playerSortDirection === 'desc'"
+                                                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+                                                            <path v-else-if="playerSortField === 'score' && playerSortDirection === 'asc'"
+                                                                d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z"/>
+                                                            <path v-else
+                                                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+                                                        </svg>
+                                                    </div>
+                                                </th>
+                                                <th class="p-2 border-b cursor-pointer transition-colors" 
+                                                    >
+                                                    <div class="flex items-center">
+                                                        % Score
+                                                    </div>
+                                                </th>
+                                                <th class="p-2 border-b cursor-pointer hover:bg-gray-600 transition-colors" 
+                                                    @click="sortPlayerTable('created_at')">
+                                                    <div class="flex items-center">
+                                                        Date Created
+                                                        <svg class="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path v-if="playerSortField === 'created_at' && playerSortDirection === 'desc'"
+                                                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+                                                            <path v-else-if="playerSortField === 'created_at' && playerSortDirection === 'asc'"
+                                                                d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z"/>
+                                                            <path v-else
+                                                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+                                                        </svg>
+                                                    </div>
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="score in filteredAndSortedGameScores" :key="score.id">
+                                                <td class="p-2 border-b text-white">{{ score.user?.name }}</td>
+                                                <td class="p-2 border-b text-white">{{ score.session_id }}</td>
+                                                <td class="p-2 border-b text-white">
+                                                    {{ score.answer_json?.difficulty_name || 'N/A' }}
+                                                </td>
+                                                <td class="p-2 border-b text-white">
+                                                    {{ score.answer_json?.category_name || 'N/A' }}
+                                                </td>
+                                                <td class="p-2 border-b text-white">{{ score.score }}</td>
+                                                <td class="p-2 border-b text-white">{{ calculatePercentage(score) }}%</td>
+                                                <td class="p-2 border-b text-white">{{ formatDate(score.created_at) }}</td>
+                                            </tr>
+                                            <tr v-if="filteredAndSortedGameScores.length === 0">
+                                                <td colspan="7" class="p-2 text-center text-gray-400">
+                                                    {{ playerSearchQuery.trim() ? 'No matching scores found' : 'No scores available' }}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                                 <DynamicPagination :currentPage="scoresCurrentPage" :totalPages="scoresTotalPages"
                                     @change-page="changeScoresPage" />
                             </div>

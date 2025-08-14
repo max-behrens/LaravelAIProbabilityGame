@@ -78,6 +78,7 @@ class GamesService
     }
 
 
+
     public function getGameScores(
         $gameId,
         $page = 1,
@@ -87,20 +88,23 @@ class GamesService
         bool $andUsers = false,
         ?int $difficultyId = null,
         ?int $categoryId = null,
-        $perPage = 5)
+        $perPage = 5,
+        string $sortField = 'created_at',
+        string $sortDirection = 'desc')
     {
         Log::debug('Fetching paginated game scores', [
             'gameId' => $gameId, 
             'page' => $page, 
             'perPage' => $perPage,
             'difficultyId' => $difficultyId,
-            'categoryId' => $categoryId
+            'categoryId' => $categoryId,
+            'sortField' => $sortField,
+            'sortDirection' => $sortDirection
         ]);
 
         $query = GameScore::query()
             ->join('users', 'game_scores.player_id', '=', 'users.id')
             ->where('game_scores.game_id', $gameId)
-            ->orderBy('game_scores.created_at', 'desc')
             ->select(
                 'game_scores.id',
                 'game_scores.session_id',
@@ -142,6 +146,16 @@ class GamesService
             $this->applyJsonIdFilter($query, 'game_scores', 'category_id', $categoryId);
         }
 
+        // Apply sorting
+        $validSortFields = ['score', 'created_at'];
+        $validSortDirections = ['asc', 'desc'];
+        
+        if (in_array($sortField, $validSortFields) && in_array($sortDirection, $validSortDirections)) {
+            $query->orderBy('game_scores.' . $sortField, $sortDirection);
+        } else {
+            // Default sorting
+            $query->orderBy('game_scores.created_at', 'desc');
+        }
 
         $scores = $query->paginate($perPage, ['*'], 'page', $page);
 
@@ -182,7 +196,8 @@ class GamesService
             'categories' => $categories->toArray()
         ]);
 
-        $scores->getCollection()->transform(function ($score) use ($difficulties, $categories) {
+        $scores->getCollection()->transform(function ($score) use ($difficulties, $categories, $gameId) {
+                Log::debug('Transforming score', ['score_id' => $score->id, 'has_answer_json' => isset($score->answer_json)]);
             $score->user = [
                 'id' => $score->user_id,
                 'name' => $score->user_name,
@@ -206,6 +221,32 @@ class GamesService
                     $answerData['category_name'] = 'N/A';
                 }
 
+                 // Add max score based on difficulty
+                if (isset($answerData['difficulty_id'])) {
+                    $difficultyId = (int)$answerData['difficulty_id'];
+                    $totalScores = $this->totalScore($gameId, null, 1);
+
+
+
+                    switch ($difficultyId) {
+                        case 1:
+                            $answerData['max_score'] = $totalScores['totalEasy'];
+                            break;
+                        case 2:
+                            $answerData['max_score'] = $totalScores['totalMedium'];
+                            break;
+                        case 3:
+                            $answerData['max_score'] = $totalScores['totalDifficult'];
+                            break;
+                        default:
+                            $answerData['max_score'] = $totalScores['totalEasy']; // fallback
+                    }
+                } else {
+                    $answerData['max_score'] = $totalScores['totalEasy']; // fallback
+                }
+
+                        Log::debug('Score with max_score', ['score_id' => $score->id, 'max_score' => $answerData['max_score'], 'difficulty_id' => $answerData['difficulty_id'] ?? 'none']);
+
                 $score->answer_json = $answerData;
             }
 
@@ -213,6 +254,7 @@ class GamesService
 
             return $score;
         });
+
 
         return $scores;
     }

@@ -29,9 +29,13 @@ class AIGameController extends Controller
         $startDate = $request->get('start_date');
         $endDate = $request->get('end_date');
         $excludeAI = $request->get('exclude_ai', 'true') === 'true';
-        $difficultyId = $request->get('difficulty'); 
-        $categoryId = $request->get('category');     
+        $difficultyId = $request->get('difficulty');
+        $categoryId = $request->get('category');
         
+        // Get sorting parameters
+        $sortField = $request->get('sort_field', 'created_at');
+        $sortDirection = $request->get('sort_direction', 'desc');
+    
         // Pass difficulty and category IDs to the service method
         $aiScores = $this->aiGameService->getAIGameScores(
             $gameId,
@@ -40,9 +44,12 @@ class AIGameController extends Controller
             $endDate,
             $excludeAI,
             $difficultyId,  
-            $categoryId     
+            $categoryId,
+            5, // perPage
+            $sortField,
+            $sortDirection
         );
-    
+
         Log::info('AI Game scores retrieved', ['scores' => $aiScores]);
         return response()->json($aiScores);
     }

@@ -8,12 +8,31 @@ use App\Models\AIScore;
 use App\Models\Games;
 use App\Models\GameType;
 use App\Models\GameQuestion;
+use App\Services\Dashboard\GamesService;
 use Illuminate\Support\Facades\DB;
 
 class AIGameService
 {
 
-    public function getAIGameScores($gameId, $page = 1, ?string $startDate = null, ?string $endDate = null, bool $excludeAI = true, ?int $difficultyId = null, ?int $categoryId = null, $perPage = 5)
+    protected $gamesService;
+
+    public function __construct(GamesService $gamesService)
+    {
+        $this->gamesService = $gamesService;
+    }
+
+
+    public function getAIGameScores(
+        $gameId, 
+        $page = 1, 
+        ?string $startDate = null, 
+        ?string $endDate = null, 
+        bool $excludeAI = true, 
+        ?int $difficultyId = null, 
+        ?int $categoryId = null, 
+        $perPage = 5,
+        string $sortField = 'created_at',
+        string $sortDirection = 'desc')
     {
         if ($excludeAI) {
             return null;
@@ -23,12 +42,13 @@ class AIGameService
             'gameId' => $gameId, 
             'page' => $page, 
             'difficultyId' => $difficultyId,
-            'categoryId' => $categoryId
+            'categoryId' => $categoryId,
+            'sortField' => $sortField,
+            'sortDirection' => $sortDirection
         ]);
 
         $query = AIScore::query()
             ->where('ai_scores.game_id', $gameId)
-            ->orderBy('ai_scores.created_at', 'desc')
             ->select(
                 'ai_scores.id',
                 'ai_scores.session_id',
@@ -41,7 +61,6 @@ class AIGameService
         if ($startDate && $endDate) {
             $query->whereBetween('ai_scores.created_at', [$startDate, $endDate]);
         }
-
 
         if ($difficultyId !== null) {
             Log::debug('Applying difficulty filter', ['difficultyId' => $difficultyId]);
@@ -71,6 +90,16 @@ class AIGameService
             });
         }
 
+        // Apply sorting
+        $validSortFields = ['score', 'created_at'];
+        $validSortDirections = ['asc', 'desc'];
+        
+        if (in_array($sortField, $validSortFields) && in_array($sortDirection, $validSortDirections)) {
+            $query->orderBy('ai_scores.' . $sortField, $sortDirection);
+        } else {
+            // Default sorting
+            $query->orderBy('ai_scores.created_at', 'desc');
+        }
 
         $scores = $query->paginate($perPage, ['*'], 'page', $page);
 
@@ -111,7 +140,7 @@ class AIGameService
             'categories' => $categories->toArray()
         ]);
 
-        $scores->getCollection()->transform(function ($score) use ($difficulties, $categories) {
+        $scores->getCollection()->transform(function ($score) use ($difficulties, $categories, $gameId) {
             if ($score->answer_json) {
                 $answerData = is_string($score->answer_json) ? json_decode($score->answer_json, true) : $score->answer_json;
 
@@ -128,6 +157,27 @@ class AIGameService
                         ?? 'Category #' . $answerData['category_id'];
                 } else {
                     $answerData['category_name'] = 'N/A';
+                }
+
+                 // Add max score based on difficulty
+                if (isset($answerData['difficulty_id'])) {
+                    $difficultyId = (int)$answerData['difficulty_id'];
+                    $totalScores = $this->gamesService->totalScore($gameId, null, 1);
+                    switch ($difficultyId) {
+                        case 1:
+                            $answerData['max_score'] = $totalScores['totalEasy'];
+                            break;
+                        case 2:
+                            $answerData['max_score'] = $totalScores['totalMedium'];
+                            break;
+                        case 3:
+                            $answerData['max_score'] = $totalScores['totalDifficult'];
+                            break;
+                        default:
+                            $answerData['max_score'] = $totalScores['totalEasy']; // fallback
+                    }
+                } else {
+                    $answerData['max_score'] = $totalScores['totalEasy']; // fallback
                 }
 
                 $score->answer_json = $answerData;
