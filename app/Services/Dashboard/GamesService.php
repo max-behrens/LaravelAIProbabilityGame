@@ -757,6 +757,8 @@ class GamesService
             'endDate' => $endDate,
             'userIds' => $userIds,
             'andUsers' => $andUsers,
+            'difficultyId' => $difficultyId,
+            'categoryId' => $categoryId,
         ]);
 
         // Base query for user scores
@@ -797,6 +799,7 @@ class GamesService
             $userScoresQuery->whereIn('game_scores.session_id', $sessionsWithAllUsers);
         }
 
+        // Only apply difficulty filter if it's explicitly set (not null)
         if ($difficultyId !== null) {
             Log::debug('Applying difficulty filter', ['difficultyId' => $difficultyId]);
             $userScoresQuery->where(function($query) use ($difficultyId) {
@@ -811,6 +814,7 @@ class GamesService
             });
         }
 
+        // Only apply category filter if it's explicitly set (not null)
         if ($categoryId !== null) {
             Log::debug('Applying category filter', ['categoryId' => $categoryId]);
             $userScoresQuery->where(function($query) use ($categoryId) {
@@ -878,8 +882,9 @@ class GamesService
                 }
             }
 
+            // Only apply difficulty filter if it's explicitly set (not null)
             if ($difficultyId !== null) {
-                Log::debug('Applying difficulty filter', ['difficultyId' => $difficultyId]);
+                Log::debug('Applying difficulty filter to AI scores', ['difficultyId' => $difficultyId]);
                 $aiScoresQuery->where(function($query) use ($difficultyId) {
                     // Try regular JSON extraction first
                     $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.difficulty_id")) = ?', [(string)$difficultyId])
@@ -892,8 +897,9 @@ class GamesService
                 });
             }
 
+            // Only apply category filter if it's explicitly set (not null)
             if ($categoryId !== null) {
-                Log::debug('Applying category filter', ['categoryId' => $categoryId]);
+                Log::debug('Applying category filter to AI scores', ['categoryId' => $categoryId]);
                 $aiScoresQuery->where(function($query) use ($categoryId) {
                     // Try regular JSON extraction first
                     $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.category_id")) = ?', [(string)$categoryId])
@@ -928,7 +934,6 @@ class GamesService
 
         return $mergedScores;
     }
-
 
 
     /**

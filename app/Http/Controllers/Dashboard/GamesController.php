@@ -358,7 +358,11 @@ class GamesController extends Controller
             $difficultyId, 
             $categoryId   
         );
-        return response()->json($allScores);
+        $totalGameScore = $this->gamesService->totalScore($gameId, $difficultyId, $categoryId);
+        return response()->json([
+            'allScores' => $allScores,
+            'totalScore' => $totalGameScore,
+        ]);
     }
 
     public function getScoreTrendStats(Request $request, int $gameId)

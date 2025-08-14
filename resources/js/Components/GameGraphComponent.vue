@@ -12,11 +12,12 @@ const props = defineProps({
 
 const chartCanvas = ref(null);
 let chartInstance = null;
-const playersData = ref([]);
+const allGameScores = ref([]);
 const totalGameScore = ref(null);
-const excludeAI = ref(true);
+const excludeAI = ref(false);
 const difficultyId = ref(null);
 const categoryId = ref(null);
+const isLoading = ref(false);
 
 // Filter states - will be updated by event listener
 const dateRange = ref([null, null]);
@@ -48,8 +49,11 @@ const getInitialFilters = () => {
   categoryId.value = urlParams.get('category');
 };
 
-// Fetch player averages with filters
-const fetchScoreTrendStats = async () => {
+// Fetch all game data from single source
+const fetchAllData = async () => {
+  if (isLoading.value) return;
+  
+  isLoading.value = true;
   try {
     const params = new URLSearchParams();
     
@@ -65,76 +69,131 @@ const fetchScoreTrendStats = async () => {
       params.set('and_users', andUsers.value.toString());
     }
 
-    // Add exclude AI parameter - defaults to true
+    // Add exclude AI parameter
     params.set('exclude_ai', excludeAI.value.toString());
 
-    if (difficultyId.value) {
+    // Add filters - matching heatmap component exactly
+    if (difficultyId.value !== null && difficultyId.value !== '') {
       params.set('difficulty', difficultyId.value);
     }
-    if (categoryId.value) {
+    if (categoryId.value !== null && categoryId.value !== '') {
       params.set('category', categoryId.value);
     }
 
-    const url = `/api/games/${props.gameId}/score-trends${params.toString() ? '?' + params.toString() : ''}`;
-    const response = await axios.get(url);
+    console.log('Fetching data with params:', params.toString());
     
-    playersData.value = response.data.players;
-    totalGameScore.value = response.data.totalScore;
+    // Fetch both heatmap scores and total score
+    const [scoresResponse, totalResponse] = await Promise.all([
+      axios.get(`/games/${props.gameId}/game-heatmap-scores${params.toString() ? '?' + params.toString() : ''}`),
+      axios.get(`/api/games/${props.gameId}/score-trends${params.toString() ? '?' + params.toString() : ''}`)
+    ]);
+    
+    allGameScores.value = scoresResponse.data.allScores || [];
+    totalGameScore.value = totalResponse.data.totalScore;
+    
+    console.log('Loaded data:', {
+      gameScores: allGameScores.value.length,
+      totalScore: totalGameScore.value
+    });
+    
   } catch (error) {
-    console.error('Error fetching player averages:', error);
-    playersData.value = [];
+    console.error('Error fetching data:', error);
+    allGameScores.value = [];
     totalGameScore.value = null;
+  } finally {
+    isLoading.value = false;
   }
 };
 
-// Helper function to format count data for tooltip
-const formatCountData = (player) => {
-  if (!player.counts) return [];
-  
-  const labels = [];
-  
-  // Always show complete breakdown by difficulty, regardless of current filters
-  const easyCounts = Object.keys(player.counts)
-    .filter(key => key.startsWith('1_'))
-    .reduce((sum, key) => sum + (player.counts[key] || 0), 0);
-  const mediumCounts = Object.keys(player.counts)
-    .filter(key => key.startsWith('2_'))
-    .reduce((sum, key) => sum + (player.counts[key] || 0), 0);
-  const hardCounts = Object.keys(player.counts)
-    .filter(key => key.startsWith('3_'))
-    .reduce((sum, key) => sum + (player.counts[key] || 0), 0);
-  
-  // Show total games first
-  const totalGames = easyCounts + mediumCounts + hardCounts;
-  if (totalGames > 0) {
-    labels.push(`Total Games Played: ${totalGames}`);
-    
-    // Show breakdown by difficulty
-    if (easyCounts > 0) labels.push(`Easy Games: ${easyCounts}`);
-    if (mediumCounts > 0) labels.push(`Medium Games: ${mediumCounts}`);
-    if (hardCounts > 0) labels.push(`Hard Games: ${hardCounts}`);
+// Calculate player averages from allGameScores
+const calculatePlayerAverages = () => {
+  if (!allGameScores.value || allGameScores.value.length === 0) {
+    return [];
   }
-  
-  return labels;
+
+  const playerStats = {};
+  const playerCounts = {};
+
+  // Process all scores to calculate averages and counts
+  allGameScores.value.forEach(score => {
+    const playerName = score.user?.name || 'Anonymous';
+    const playerScore = parseFloat(score.score) || 0;
+
+    // Initialize player if not exists
+    if (!playerStats[playerName]) {
+      playerStats[playerName] = {
+        name: playerName,
+        totalScore: 0,
+        gameCount: 0,
+        scores: []
+      };
+      playerCounts[playerName] = { 1: 0, 2: 0, 3: 0 }; // Easy, Medium, Hard
+    }
+
+    // Add to totals
+    playerStats[playerName].totalScore += playerScore;
+    playerStats[playerName].gameCount++;
+    playerStats[playerName].scores.push(playerScore);
+
+    // Count by difficulty (for tooltip breakdown)
+    let answers = score.answer_json;
+    if (answers) {
+      if (typeof answers === 'string') {
+        try {
+          while (typeof answers === 'string') {
+            answers = JSON.parse(answers);
+          }
+        } catch (e) {
+          console.warn('Error parsing answer_json:', e);
+          return;
+        }
+      }
+
+      const diffId = answers?.difficulty_id;
+      const catId = answers?.category_id;
+      
+      if (diffId) {
+        // Only count if category filter matches (or no category filter)
+        if (categoryId.value === null || categoryId.value === '' || catId == categoryId.value) {
+          playerCounts[playerName][diffId] = (playerCounts[playerName][diffId] || 0) + 1;
+        }
+      }
+    }
+  });
+
+  // Convert to array and calculate averages
+  return Object.values(playerStats).map(player => ({
+    ...player,
+    average_score: player.gameCount > 0 ? player.totalScore / player.gameCount : 0,
+    attemptCounts: playerCounts[player.name]
+  }));
+};
+
+// Get attempt counts for a player (for tooltip)
+const getPlayerAttemptCounts = (playerName) => {
+  const players = calculatePlayerAverages();
+  const player = players.find(p => p.name === playerName);
+  return player?.attemptCounts || { 1: 0, 2: 0, 3: 0 };
 };
 
 // Draw or update the chart
-// Frontend: Updated drawChart function section for success rate calculation
 const drawChart = () => {
-  if (!chartCanvas.value) return;
+  if (!chartCanvas.value || isLoading.value) return;
   const ctx = chartCanvas.value.getContext('2d');
 
   if (chartInstance) {
     chartInstance.destroy();
   }
-  if (playersData.value.length === 0) return;
 
-  // Precompute success rates for each player
-  const playerDataWithRates = playersData.value.map(player => {
+  const playersData = calculatePlayerAverages();
+  if (playersData.length === 0) return;
+ 
+  // Calculate success rates for each player
+  const playerDataWithRates = playersData.map(player => {
     let maxScore = null;
     let successRate = null;
 
-    if (difficultyId.value && !categoryId.value) {
+    if (difficultyId.value) {
       // Difficulty filter only - use specific difficulty max
       const difficultyIndex = parseInt(difficultyId.value, 10) - 1;
       const maxes = [
@@ -142,24 +201,29 @@ const drawChart = () => {
         totalGameScore.value?.totalMedium,
         totalGameScore.value?.totalDifficult
       ];
-      maxScore = maxes[difficultyIndex] ?? (225 / 3);
-      
-    } else if (!difficultyId.value && categoryId.value) {
-      // Category filter only - use weighted average based on difficulty distribution
-      maxScore = player.weightedMaxScore ?? (225 / 3);
-      
-    } else if (!difficultyId.value && !categoryId.value) {
-      // No filters - overall success rate using weighted average
-      maxScore = player.weightedMaxScore ?? 75; // Assuming 75 is typical per-difficulty max
+      maxScore = maxes[difficultyIndex] ?? 75;
       
     } else {
-      // Both filters set - use specific combination max
-      maxScore = totalGameScore.value?.totalScore ?? (225 / 3);
+      // No difficulty filter - use weighted average or default
+      const counts = player.attemptCounts;
+      const totalGames = counts[1] + counts[2] + counts[3];
+      
+      if (totalGames > 0 && totalGameScore.value) {
+        // Calculate weighted max based on games played
+        const weightedMax = (
+          (counts[1] * (totalGameScore.value.totalEasy || 75)) +
+          (counts[2] * (totalGameScore.value.totalMedium || 75)) +
+          (counts[3] * (totalGameScore.value.totalDifficult || 75))
+        ) / totalGames;
+        maxScore = weightedMax;
+      } else {
+        maxScore = 75; // Default fallback
+      }
     }
 
     successRate = maxScore && player.average_score !== null 
       ? (player.average_score / maxScore) * 100 
-      : null;
+      : 0;
 
     return {
       ...player,
@@ -168,7 +232,6 @@ const drawChart = () => {
     };
   });
 
-  // Rest of chart code remains the same...
   chartInstance = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -204,7 +267,6 @@ const drawChart = () => {
             label: function (context) {
               try {
                 const player = playerDataWithRates[context.dataIndex];
-                console.log('Tooltip player data:', player); // Debug log
                 
                 if (!player) {
                   return ['No data available'];
@@ -216,7 +278,7 @@ const drawChart = () => {
 
                 const labels = [];
 
-                // Always show success rate first
+                // Success rate label
                 const successRateLabel = (() => {
                   if (!difficultyId.value && !categoryId.value) {
                     return 'Overall Success Rate';
@@ -236,19 +298,25 @@ const drawChart = () => {
                 labels.push(`${successRateLabel}: ${successRateValue}%`);
                 labels.push(`Average Score: ${avg}`);
                 
-                // Show appropriate max score
-                if (player.maxScore !== undefined && player.maxScore !== null) {
+                // Show Max Possible when difficulty filter is active
+                if (difficultyId.value && player.maxScore !== undefined && player.maxScore !== null) {
                   labels.push(`Max Possible: ${Number(player.maxScore).toFixed(2)}`);
                 }
 
-                // Count data breakdown
-                try {
-                  const countLabels = formatCountData(player);
-                  if (countLabels.length > 0) {
-                    labels.push('', ...countLabels);
-                  }
-                } catch (countError) {
-                  console.warn('Error formatting count data:', countError);
+                // Show attempt counts
+                const attemptCounts = player.attemptCounts || { 1: 0, 2: 0, 3: 0 };
+                let totalAttempts = attemptCounts[1] + attemptCounts[2] + attemptCounts[3];
+                
+                console.log('Tooltip - Player:', player.name, 'Counts:', attemptCounts, 'Total:', totalAttempts);
+                
+                if (totalAttempts > 0) {
+                  labels.push(''); // Empty line for separation
+                  labels.push(`Total Games Played: ${totalAttempts}`);
+                  
+                  // Show breakdown by difficulty
+                  if (attemptCounts[1] > 0) labels.push(`Easy Games: ${attemptCounts[1]}`);
+                  if (attemptCounts[2] > 0) labels.push(`Medium Games: ${attemptCounts[2]}`);
+                  if (attemptCounts[3] > 0) labels.push(`Hard Games: ${attemptCounts[3]}`);
                 }
 
                 return labels;
@@ -264,10 +332,8 @@ const drawChart = () => {
   });
 };
 
-
-
-// Update handleFilterChange function
-const handleFilterChange = (event) => {
+// Handle filter changes
+const handleFilterChange = async (event) => {
   const { 
     dateRange: newDateRange, 
     userIds: newUserIds, 
@@ -284,34 +350,50 @@ const handleFilterChange = (event) => {
   difficultyId.value = newDifficultyId; 
   categoryId.value = newCategoryId;     
   
-  // Refresh data and chart
-  fetchScoreTrendStats().then(() => {
-    drawChart();
+  console.log('Filter changed:', {
+    difficulty: difficultyId.value,
+    category: categoryId.value,
+    excludeAI: excludeAI.value
   });
+  
+  try {
+    await fetchAllData();
+    drawChart();
+  } catch (error) {
+    console.error('Error refreshing data after filter change:', error);
+  }
 };
 
 // Watch for gameId changes
 watch(
   () => props.gameId,
   async () => {
-    await fetchScoreTrendStats();
-    drawChart();
+    console.log('GameId changed, refreshing data');
+    try {
+      await fetchAllData();
+      drawChart();
+    } catch (error) {
+      console.error('Error refreshing data after gameId change:', error);
+    }
   }
 );
 
-// Initial chart render
+// Initial setup
 onMounted(async () => {
   getInitialFilters();
   
-  // Add event listener for filter changes
   window.addEventListener('gameFiltersChanged', handleFilterChange);
   
-  await fetchScoreTrendStats();
-  drawChart();
+  console.log('Component mounted, loading initial data');
+  try {
+    await fetchAllData();
+    drawChart();
+  } catch (error) {
+    console.error('Error loading initial data:', error);
+  }
 });
 
 onUnmounted(() => {
-  // Clean up event listener
   window.removeEventListener('gameFiltersChanged', handleFilterChange);
   
   if (chartInstance) {
@@ -319,11 +401,16 @@ onUnmounted(() => {
   }
 });
 
-// Expose method to refresh chart externally
+// Expose refresh method
 defineExpose({
   refreshChart: async () => {
-    await fetchScoreTrendStats();
-    drawChart();
+    console.log('External refresh called');
+    try {
+      await fetchAllData();
+      drawChart();
+    } catch (error) {
+      console.error('Error during external refresh:', error);
+    }
   },
 });
 </script>
@@ -332,7 +419,10 @@ defineExpose({
   <div class="p-4 bg-gray-800 rounded shadow flex flex-col">
     <h3 class="font-semibold text-lg mb-2">Score Trends</h3>
     <div class="flex-1 flex items-center justify-center">
-      <div v-if="playersData.length === 0" class="text-center text-gray-400">
+      <div v-if="isLoading" class="text-center text-gray-400">
+        Loading chart data...
+      </div>
+      <div v-else-if="calculatePlayerAverages().length === 0" class="text-center text-gray-400">
         No player data available for the selected filters.
       </div>
       <canvas

@@ -14,10 +14,10 @@ const props = defineProps({
   },
 });
 
-
 // Reactive state
 const allGameScores = ref([]);
 const questionTotals = ref({});
+const totalGameScore = ref(null);
 
 // Filter states - will be updated by event listener
 const dateRange = ref([null, null]);
@@ -71,17 +71,19 @@ const fetchAllGameScores = async () => {
     // Add exclude AI parameter - defaults to true
     params.set('exclude_ai', excludeAI.value.toString());
 
-    if (difficultyId.value) {
+    // Only add filters if they have valid values
+    if (difficultyId.value !== null && difficultyId.value !== '') {
       params.set('difficulty', difficultyId.value);
     }
-    if (categoryId.value) {
+    if (categoryId.value !== null && categoryId.value !== '') {
       params.set('category', categoryId.value);
     }
 
     const url = `/games/${props.gameId}/game-heatmap-scores${params.toString() ? '?' + params.toString() : ''}`;
     const response = await axios.get(url);
     
-    allGameScores.value = response.data;
+    allGameScores.value = response.data.allScores;
+    totalGameScore.value = response.data.totalScore;
     calculateQuestionTotals();
   } catch (error) {
     console.error('Error fetching all game scores:', error);
@@ -118,6 +120,96 @@ const calculateQuestionTotals = () => {
   questionTotals.value = totals;
 };
 
+// Get total score for a specific difficulty (per question)
+const getTotalScoreForDifficulty = (difficulty) => {
+  if (!totalGameScore.value) return 0;
+  
+  const difficultyMap = {
+    1: totalGameScore.value.totalEasy,
+    2: totalGameScore.value.totalMedium,
+    3: totalGameScore.value.totalDifficult
+  };
+  
+  const totalForDifficulty = difficultyMap[difficulty] || 0;
+  
+  // Divide by number of questions to get per-question total
+  const questionCount = getQuestionCount();
+  return questionCount > 0 ? totalForDifficulty / questionCount : 0;
+};
+
+// Get the number of questions in the game
+const getQuestionCount = () => {
+  // Use props.gameQuestions if available
+  if (props.gameQuestions && props.gameQuestions.length > 0) {
+    return props.gameQuestions.length;
+  }
+  
+  // Fallback: count unique questions from allGameScores
+  const questionNumbers = new Set();
+  allGameScores.value.forEach(score => {
+    let answers = score.answer_json;
+    if (!answers) return;
+    
+    if (typeof answers === 'string') {
+      try {
+        while (typeof answers === 'string') {
+          answers = JSON.parse(answers);
+        }
+      } catch {
+        return;
+      }
+    }
+
+    Object.values(answers).forEach(answer => {
+      const qNum = answer?.question_number;
+      if (qNum) {
+        questionNumbers.add(qNum);
+      }
+    });
+  });
+  
+  return questionNumbers.size || 1; // Default to 1 to avoid division by zero
+};
+
+// Get attempt counts for a player filtered by difficulty and category
+const getPlayerAttemptCounts = (playerName) => {
+  console.log('Player Name: ' + JSON.stringify(playerName));
+  const counts = { 1: 0, 2: 0, 3: 0 }; // Easy, Medium, Hard
+  
+  allGameScores.value.forEach(score => {
+    const scorePlayerName = score.user?.name || 'Anonymous';
+    if (scorePlayerName !== playerName) return;
+
+    let answers = score.answer_json;
+    if (!answers) return;
+
+    if (typeof answers === 'string') {
+      try {
+        while (typeof answers === 'string') {
+          answers = JSON.parse(answers);
+        }
+      } catch {
+        return;
+      }
+    }
+
+    // Get difficulty and category from answer_json
+    const diffId = answers?.difficulty_id;
+    const catId = answers?.category_id;
+    
+    if (!diffId) return;
+
+    // Apply category filter if set
+    if (categoryId.value !== null && catId != categoryId.value) {
+      return;
+    }
+
+    counts[diffId] = (counts[diffId] || 0) + 1;
+  });
+
+  return counts;
+};
+
 // Heatmap series data
 const getQuestionAveragesByUser = () => {
   if (allGameScores.value.length === 0) {
@@ -129,7 +221,7 @@ const getQuestionAveragesByUser = () => {
   const userAttempts = {};
   const questionCorrectCounts = {};
 
-  // Build max scores from props.gameQuestions first
+  // Build max scores from props.gameQuestions first (per question)
   props.gameQuestions?.forEach(question => {
     const questionNumber = question.question_number || question.id;
     const label = `Q${questionNumber}`;
@@ -173,10 +265,6 @@ const getQuestionAveragesByUser = () => {
         return;
       }
 
-      // if (!maxScoresByQuestion[label] && answer?.score_awarded) {
-      //   maxScoresByQuestion[label] = answer.score_awarded;
-      // }
-
       if (!questionCorrectCounts[playerName][label]) {
         questionCorrectCounts[playerName][label] = 0;
       }
@@ -191,7 +279,6 @@ const getQuestionAveragesByUser = () => {
       grouped[playerName][label].totalPlayerScore += scoreValue;
       grouped[playerName][label].count++;
     });
-
   });
 
   // Build series
@@ -205,19 +292,62 @@ const getQuestionAveragesByUser = () => {
         .map(([label, { totalPlayerScore, count }]) => {
           const correctCount = questionCorrectCounts[playerName][label] || 0;
           const successRate = playerAttempts > 0 ? (correctCount / playerAttempts) * 100 : 0;
+          const avgScore = count > 0 ? totalPlayerScore / count : 0;
+          
+          // Get the appropriate total score per question based on difficulty filter
+          let totalScore = maxScoresByQuestion[label] || 0;
+          if (difficultyId.value !== null) {
+            totalScore = getTotalScoreForDifficulty(parseInt(difficultyId.value));
+          }
           
           return {
             x: label,
-            y: successRate,
-            avgScore: count > 0 ? totalPlayerScore / count : 0,
-            totalScore: maxScoresByQuestion[label] || 0,
+            y: difficultyId.value !== null ? successRate : avgScore, // Show success rate only when difficulty filter is active
+            avgScore: avgScore,
+            totalScore: totalScore,
             playerTotalScore: totalPlayerScore,
             attempts: playerAttempts,
             successRate: successRate,
+            attemptCounts: getPlayerAttemptCounts(playerName),
           };
         }),
     };
   });
+};
+
+// Get difficulty and category info for tooltip
+const getDifficultyAndCategoryInfo = () => {
+  if (allGameScores.value.length === 0) {
+    return { difficultyInfo: 'N/A', categoryInfo: 'N/A' };
+  }
+
+  // Check if filters are applied
+  const hasFilters = difficultyId.value !== null;
+  
+  if (!hasFilters) {
+    // No filters applied, don't show difficulty/category in tooltip
+    return null;
+  }
+
+  // Get difficulty/category from the most recent score when filters are applied
+  const recentScore = allGameScores.value[0];
+  let difficultyInfo = 'N/A';
+  let categoryInfo = 'N/A';
+  
+  if (recentScore && recentScore.answer_json) {
+    let answerData = recentScore.answer_json;
+    if (typeof answerData === 'string') {
+      try {
+        answerData = JSON.parse(answerData);
+      } catch (e) {
+        console.warn('Could not parse answer_json:', e);
+      }
+    }
+    difficultyInfo = answerData?.difficulty_id || 'N/A';
+    categoryInfo = answerData?.category_id || 'N/A';
+  }
+
+  return { difficultyInfo, categoryInfo };
 };
 
 // Chart Options
@@ -252,42 +382,53 @@ const chartOptions = ref({
     custom({ series, seriesIndex, dataPointIndex, w }) {
       const player = w.globals.seriesNames[seriesIndex];
       const question = w.globals.labels[dataPointIndex];
-      const successRate = series[seriesIndex][dataPointIndex];
+      const yValue = series[seriesIndex][dataPointIndex];
       const dataPoint = w.globals.initialSeries[seriesIndex].data[dataPointIndex];
       const attempts = dataPoint?.attempts ?? 1;
       const avgScore = dataPoint?.avgScore ?? 0;
+      const successRate = dataPoint?.successRate ?? 0;
+      const totalScore = dataPoint?.totalScore ?? 0;
+      const attemptCounts = dataPoint?.attemptCounts || { 1: 0, 2: 0, 3: 0 };
       
-      // Find the corresponding score data to get difficulty/category info
-      const playerScores = allGameScores.value;
-      let difficultyInfo = 'N/A';
-      let categoryInfo = 'N/A';
+      // Get difficulty/category info only if filters are applied
+      const filterInfo = getDifficultyAndCategoryInfo();
       
-      if (playerScores.length > 0) {
-        // Get difficulty/category from the most recent score (you could also aggregate this)
-        const recentScore = playerScores[0];
-        if (recentScore.answer_json) {
-          let answerData = recentScore.answer_json;
-          if (typeof answerData === 'string') {
-            try {
-              answerData = JSON.parse(answerData);
-            } catch (e) {
-              console.warn('Could not parse answer_json:', e);
-            }
-          }
-          difficultyInfo = answerData?.difficulty_id || 'N/A';
-          categoryInfo = answerData?.category_id || 'N/A';
-        }
-      }
-
-      return `<div style="padding:8px; background-color:#1e1e1e; color:#cccccc; border-radius:4px;">
+      let tooltipContent = `<div style="padding:8px; background-color:#1e1e1e; color:#cccccc; border-radius:4px;">
         <strong>${player}</strong><br/>
         <strong>${question}</strong><br/>
-        Average Score: <strong>${avgScore.toFixed(2)}</strong><br/>
-        No. Attempts: <strong>${attempts}</strong><br/>
-        Success Rate: <strong>${successRate.toFixed(0)}%</strong><br/>
-        Difficulty: <strong>${difficultyInfo}</strong><br/>
-        Category: <strong>${categoryInfo}</strong><br/>
-      </div>`;
+        Average Score: <strong>${avgScore.toFixed(2)}</strong><br/>`;
+
+      // Only show success rate if difficulty filter is active
+      tooltipContent += `Success Rate: <strong>${successRate.toFixed(0)}%</strong><br/>`;
+      
+      // Show denominator (per question total)
+      if (difficultyId.value !== null) {
+        tooltipContent += `Max Per Question: <strong>${totalScore.toFixed(2)}</strong><br/>`;
+      }
+
+      // Show attempt counts by difficulty (filtered by category if categoryId is set)
+      let totalAttempts = attemptCounts[1] + attemptCounts[2] + attemptCounts[3];
+      tooltipContent += `No. Attempts: <strong>${totalAttempts}</strong><br/>`;
+      
+      if (attemptCounts[1] > 0) {
+        tooltipContent += `Easy: <strong>${attemptCounts[1]}</strong><br/>`;
+      }
+      if (attemptCounts[2] > 0) {
+        tooltipContent += `Medium: <strong>${attemptCounts[2]}</strong><br/>`;
+      }
+      if (attemptCounts[3] > 0) {
+        tooltipContent += `Hard: <strong>${attemptCounts[3]}</strong><br/>`;
+      }
+
+      // Only add difficulty/category info if filters are applied
+      if (filterInfo) {
+        tooltipContent += `Difficulty: <strong>${filterInfo.difficultyInfo}</strong><br/>
+        Category: <strong>${filterInfo.categoryInfo}</strong><br/>`;
+      }
+
+      tooltipContent += `</div>`;
+
+      return tooltipContent;
     }
   },
   plotOptions: {
@@ -316,7 +457,15 @@ const chartOptions = ref({
         ? avgScore.toString() 
         : avgScore.toFixed(2);
       
-      return `${formattedAvgScore} / ${totalScore}`;
+      // Show denominator as per-question total when difficulty filter is active
+      if (difficultyId.value !== null && totalScore > 0) {
+        const formattedTotalScore = (totalScore % 1 === 0) 
+          ? totalScore.toString() 
+          : totalScore.toFixed(2);
+        return `${formattedAvgScore} / ${formattedTotalScore}`;
+      } else {
+        return formattedAvgScore;
+      }
     },
     style: {
       fontSize: '16px',
@@ -350,8 +499,10 @@ const handleFilterChange = (event) => {
   userIds.value = newUserIds;
   andUsers.value = newAndUsers;
   excludeAI.value = newExcludeAI !== undefined ? newExcludeAI : true;
-  difficultyId.value = newDifficultyId; 
-  categoryId.value = newCategoryId;     
+  
+  // Only set if they have valid values, otherwise set to null
+  difficultyId.value = (newDifficultyId !== undefined && newDifficultyId !== '') ? newDifficultyId : null;
+  categoryId.value = (newCategoryId !== undefined && newCategoryId !== '') ? newCategoryId : null;
   
   // Refresh data
   fetchAllGameScores();
