@@ -119,6 +119,7 @@ const formatCountData = (player) => {
 };
 
 // Draw or update the chart
+// Frontend: Updated drawChart function section for success rate calculation
 const drawChart = () => {
   if (!chartCanvas.value) return;
   const ctx = chartCanvas.value.getContext('2d');
@@ -131,66 +132,43 @@ const drawChart = () => {
   // Precompute success rates for each player
   const playerDataWithRates = playersData.value.map(player => {
     let maxScore = null;
+    let successRate = null;
 
-    if (difficultyId.value) {
-      // difficulty filter is set: pick the max for that difficulty
+    if (difficultyId.value && !categoryId.value) {
+      // Difficulty filter only - use specific difficulty max
       const difficultyIndex = parseInt(difficultyId.value, 10) - 1;
       const maxes = [
         totalGameScore.value?.totalEasy,
         totalGameScore.value?.totalMedium,
         totalGameScore.value?.totalDifficult
       ];
-
-      maxScore = maxes[difficultyIndex] ?? null;
-
-      return {
-        ...player,
-        successRate: maxScore ? (player.average_score / maxScore) * 100 : null,
-        maxScore
-      };
+      maxScore = maxes[difficultyIndex] ?? (225 / 3);
+      
+    } else if (!difficultyId.value && categoryId.value) {
+      // Category filter only - use weighted average based on difficulty distribution
+      maxScore = player.weightedMaxScore ?? (225 / 3);
+      
+    } else if (!difficultyId.value && !categoryId.value) {
+      // No filters - overall success rate using weighted average
+      maxScore = player.weightedMaxScore ?? 75; // Assuming 75 is typical per-difficulty max
+      
     } else {
-      // no difficulty filter: average max across all difficulties
-      const maxes = [
-        totalGameScore.value?.totalEasy,
-        totalGameScore.value?.totalMedium,
-        totalGameScore.value?.totalDifficult
-      ].filter(v => v != null);
-
-      if (maxes.length === 0) {
-        return { ...player, successRate: null, maxScore: null };
-      }
-
-      maxScore = maxes.reduce((a, b) => a + b, 0) / maxes.length;
-
-      // Calculate success rates per difficulty using actual scores in player.counts
-      const difficultyIds = [1, 2, 3];
-      const successRates = difficultyIds.map(diffId => {
-        const maxForDiff = totalGameScore.value?.[`total${diffId === 1 ? 'Easy' : diffId === 2 ? 'Medium' : 'Difficult'}`];
-        if (!maxForDiff) return null;
-
-        // Sum player's score for this difficulty
-        const playerScoreForDiff = Object.entries(player.counts || {})
-          .filter(([key]) => key.startsWith(`${diffId}_`))
-          .reduce((sum, [, val]) => sum + val, 0);
-
-        if (playerScoreForDiff === 0) return null;
-
-        return playerScoreForDiff / maxForDiff;
-      }).filter(rate => rate !== null);
-
-      const avgSuccessRate = successRates.length > 0
-        ? (successRates.reduce((a, b) => a + b, 0) / successRates.length) * 100
-        : null;
-
-      return {
-        ...player,
-        successRate: avgSuccessRate,
-        maxScore
-      };
+      // Both filters set - use specific combination max
+      maxScore = totalGameScore.value?.totalScore ?? (225 / 3);
     }
+
+    successRate = maxScore && player.average_score !== null 
+      ? (player.average_score / maxScore) * 100 
+      : null;
+
+    return {
+      ...player,
+      successRate,
+      maxScore
+    };
   });
 
-
+  // Rest of chart code remains the same...
   chartInstance = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -224,31 +202,60 @@ const drawChart = () => {
         tooltip: {
           callbacks: {
             label: function (context) {
-              const player = playerDataWithRates[context.dataIndex];
-              const avg = player.average_score !== undefined && player.average_score !== null
-                ? Number(player.average_score).toFixed(2)
-                : 'N/A';
-
-              const labels = [];
-
-              // If no diff/cat filter → show overall success rate
-              if (!difficultyId.value && !categoryId.value) {
-                labels.push(`Overall Success Rate: ${player.successRate?.toFixed(2) ?? 'N/A'}%`);
-              } else {
-                labels.push(`Max Game Score: ${totalGameScore.value?.totalScore ?? 'N/A'}`);
-                labels.push(`Average Score: ${avg}`);
-                if (player.maxScore) {
-                  labels.push(`Success Rate: ${player.successRate?.toFixed(2) ?? 'N/A'}%`);
+              try {
+                const player = playerDataWithRates[context.dataIndex];
+                console.log('Tooltip player data:', player); // Debug log
+                
+                if (!player) {
+                  return ['No data available'];
                 }
-              }
 
-              // Count data breakdown
-              const countLabels = formatCountData(player);
-              if (countLabels.length > 0) {
-                labels.push('', ...countLabels);
-              }
+                const avg = player.average_score !== undefined && player.average_score !== null
+                  ? Number(player.average_score).toFixed(2)
+                  : 'N/A';
 
-              return labels;
+                const labels = [];
+
+                // Always show success rate first
+                const successRateLabel = (() => {
+                  if (!difficultyId.value && !categoryId.value) {
+                    return 'Overall Success Rate';
+                  } else if (!difficultyId.value && categoryId.value) {
+                    return 'Category Success Rate';
+                  } else if (difficultyId.value && !categoryId.value) {
+                    return 'Difficulty Success Rate';
+                  } else {
+                    return 'Success Rate';
+                  }
+                })();
+                
+                const successRateValue = player.successRate !== undefined && player.successRate !== null
+                  ? player.successRate.toFixed(2)
+                  : 'N/A';
+                
+                labels.push(`${successRateLabel}: ${successRateValue}%`);
+                labels.push(`Average Score: ${avg}`);
+                
+                // Show appropriate max score
+                if (player.maxScore !== undefined && player.maxScore !== null) {
+                  labels.push(`Max Possible: ${Number(player.maxScore).toFixed(2)}`);
+                }
+
+                // Count data breakdown
+                try {
+                  const countLabels = formatCountData(player);
+                  if (countLabels.length > 0) {
+                    labels.push('', ...countLabels);
+                  }
+                } catch (countError) {
+                  console.warn('Error formatting count data:', countError);
+                }
+
+                return labels;
+              } catch (error) {
+                console.error('Tooltip error:', error);
+                return ['Error loading tooltip data'];
+              }
             }
           }
         }

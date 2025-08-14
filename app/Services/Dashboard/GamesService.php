@@ -465,7 +465,19 @@ class GamesService
                 ->where('game_id', $gameId)
                 ->whereIn('player_id', $userIds);
 
-            // Get raw counts data for ALL games
+            // Apply category filter to counts if selected
+            if ($categoryId !== null) {
+                $countsQuery->where(function($query) use ($categoryId) {
+                    $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.category_id")) = ?', [(string)$categoryId])
+                        ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.category_id")) = ?', [(int)$categoryId])
+                        ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(game_scores.answer_json, "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId])
+                        ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.category_id")) = ?', [(string)$categoryId])
+                        ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.category_id")) = ?', [(int)$categoryId])
+                        ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(game_scores.answer_json), "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId]);
+                });
+            }
+
+            // Get raw counts data
             $countsData = $countsQuery
                 ->select('player_id', 'answer_json')
                 ->get();
@@ -489,6 +501,52 @@ class GamesService
             // Add counts to user averages
             foreach ($userAverages as &$user) {
                 $user['counts'] = $userCounts[$user['id']] ?? [];
+            }
+
+            if (($difficultyId === null && $categoryId !== null) || 
+                ($difficultyId === null && $categoryId === null)) {
+                
+                foreach ($userAverages as &$user) {
+                    $weightedMaxScore = 0;
+                    $totalGames = 0;
+                    
+                    // Get the total scores for each difficulty
+                    $gameScores = $this->totalScore($gameId, null, null);
+                    $easyMax = $gameScores['totalEasy'];
+                    $mediumMax = $gameScores['totalMedium']; 
+                    $hardMax = $gameScores['totalDifficult'];
+                    
+                    if (!empty($user['counts'])) {
+                        // Calculate weighted average based on actual games played
+                        foreach ($user['counts'] as $key => $count) {
+                            [$diffId, $catId] = explode('_', $key);
+                            
+                            // Apply category filter if set
+                            if ($categoryId !== null && $catId != $categoryId) {
+                                continue;
+                            }
+                            
+                            // Get max score for this difficulty
+                            $maxForDifficulty = match((int)$diffId) {
+                                1 => $easyMax,
+                                2 => $mediumMax,  
+                                3 => $hardMax,
+                                default => 75 // fallback
+                            };
+                            
+                            $weightedMaxScore += ($maxForDifficulty * $count);
+                            $totalGames += $count;
+                        }
+                        
+                        if ($totalGames > 0) {
+                            $user['weightedMaxScore'] = $weightedMaxScore / $totalGames;
+                        } else {
+                            $user['weightedMaxScore'] = 75; // fallback
+                        }
+                    } else {
+                        $user['weightedMaxScore'] = 75; // fallback
+                    }
+                }
             }
         }
 
@@ -535,9 +593,23 @@ class GamesService
                 ->first();
             
             if ($aiAverage && $aiAverage->average_score !== null) {
-                // Get AI counts for ALL games (no filters)
-                $aiCountsData = DB::table('ai_scores')
-                    ->where('game_id', $gameId)
+                // Get AI counts - apply category filter if set
+                $aiCountsQuery = DB::table('ai_scores')
+                    ->where('game_id', $gameId);
+
+                // Apply category filter to AI counts if selected
+                if ($categoryId !== null) {
+                    $aiCountsQuery->where(function($query) use ($categoryId) {
+                        $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.category_id")) = ?', [(string)$categoryId])
+                            ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.category_id")) = ?', [(int)$categoryId])
+                            ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(ai_scores.answer_json, "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId])
+                            ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.category_id")) = ?', [(string)$categoryId])
+                            ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.category_id")) = ?', [(int)$categoryId])
+                            ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(ai_scores.answer_json), "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId]);
+                    });
+                }
+
+                $aiCountsData = $aiCountsQuery
                     ->select('answer_json')
                     ->get();
 
@@ -559,6 +631,49 @@ class GamesService
                     'average_score' => $aiAverage->average_score,
                     'counts' => $aiCounts,
                 ];
+
+                if (($difficultyId === null && $categoryId !== null) || 
+                    ($difficultyId === null && $categoryId === null)) {
+                    
+                    // Get reference to the AI user we just added
+                    $aiUserIndex = count($userAverages) - 1;
+                    $weightedMaxScore = 0;
+                    $totalGames = 0;
+                    
+                    $gameScores = $this->totalScore($gameId, null, null);
+                    $easyMax = $gameScores['totalEasy'];
+                    $mediumMax = $gameScores['totalMedium']; 
+                    $hardMax = $gameScores['totalDifficult'];
+                    
+                    if (!empty($userAverages[$aiUserIndex]['counts'])) {
+                        foreach ($userAverages[$aiUserIndex]['counts'] as $key => $count) {
+                            [$diffId, $catId] = explode('_', $key);
+                            
+                            // Apply category filter if set
+                            if ($categoryId !== null && $catId != $categoryId) {
+                                continue;
+                            }
+                            
+                            $maxForDifficulty = match((int)$diffId) {
+                                1 => $easyMax,
+                                2 => $mediumMax,  
+                                3 => $hardMax,
+                                default => 75
+                            };
+                            
+                            $weightedMaxScore += ($maxForDifficulty * $count);
+                            $totalGames += $count;
+                        }
+                        
+                        if ($totalGames > 0) {
+                            $userAverages[$aiUserIndex]['weightedMaxScore'] = $weightedMaxScore / $totalGames;
+                        } else {
+                            $userAverages[$aiUserIndex]['weightedMaxScore'] = 75;
+                        }
+                    } else {
+                        $userAverages[$aiUserIndex]['weightedMaxScore'] = 75;
+                    }
+                }
             }
         }
         
