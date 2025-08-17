@@ -575,7 +575,7 @@ onUnmounted(() => {
                   </div>
 
                   <transition name="fade-slide-y">
-                      <div v-if="showAdvancedFilters" class="mb-6">
+                      <div v-if="showAdvancedFilters" class="mb-6 px-6">
                           <div class="bg-gray-800 p-6 rounded-lg shadow-md space-y-6">
                               <!-- User Filter Section -->
                               <div>

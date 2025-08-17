@@ -302,7 +302,7 @@ const getQuestionAveragesByUser = () => {
           
           return {
             x: label,
-            y: difficultyId.value !== null ? successRate : avgScore, // Show success rate only when difficulty filter is active
+            y: successRate, // Show success rate only when difficulty filter is active
             avgScore: avgScore,
             totalScore: totalScore,
             playerTotalScore: totalPlayerScore,
