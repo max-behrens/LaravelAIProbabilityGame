@@ -25,7 +25,9 @@ use App\Models\Games;
 |
 */
 
-Route::get('/', IndexController::class)->name('index');
+Route::get('/', function () {
+    return redirect()->route('login');
+});
 
 Route::get('/403', [ErrorController::class, 'unauthorized'])->name('errors.403');
 
