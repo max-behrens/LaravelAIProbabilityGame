@@ -20,6 +20,10 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+  gameTypes: {
+    type: Array,
+    default: () => []
+  },
   currentFilters: {
     type: Object,
     default: () => ({})
@@ -48,6 +52,8 @@ const appliedFilters = computed(() => ({
   excludeAI: !props.currentFilters.include_ai,
   difficultyId: props.currentFilters.difficulty || null,
   categoryId: props.currentFilters.category || null,
+  gameType: props.currentFilters.game_type || null,
+  perPage: props.currentFilters.per_page || 15,
 }));
 
 // Handle filter changes from GameAuthenticated layout
@@ -83,6 +89,9 @@ const handleFilterChange = (event) => {
   }
   if (filters.categoryId) {
     params.category = filters.categoryId;
+  }
+  if (filters.gameType) {
+    params.game_type = filters.gameType;
   }
 
   // Use Inertia to update the page
@@ -189,6 +198,9 @@ const fetchLeaderboard = (page = null) => {
   if (appliedFilters.value.categoryId) {
     params.category = appliedFilters.value.categoryId;
   }
+  if (appliedFilters.value.gameType) {
+    params.game_type = appliedFilters.value.gameType;
+  }
 
   Inertia.get('/dashboard/leaderboard', params, {
     preserveScroll: true,
@@ -239,12 +251,22 @@ watch(perPage, () => {
 
 // Watch for prop changes (when filters are applied from GameAuthenticated layout)
 watch(() => props.currentFilters, (newFilters, oldFilters) => {
-  // Update local state to match new filters
-  searchQuery.value = newFilters.search || '';
-  includeAI.value = newFilters.include_ai || false;
-  sortField.value = newFilters.sort_field || 'score';
-  sortDirection.value = newFilters.sort_direction || 'desc';
-  perPage.value = newFilters.per_page || 15;
+  // Update local state to match new filters, but don't override with defaults
+  if (newFilters.search !== undefined) {
+    searchQuery.value = newFilters.search || '';
+  }
+  if (newFilters.include_ai !== undefined) {
+    includeAI.value = newFilters.include_ai || false;
+  }
+  if (newFilters.sort_field !== undefined) {
+    sortField.value = newFilters.sort_field || 'score';
+  }
+  if (newFilters.sort_direction !== undefined) {
+    sortDirection.value = newFilters.sort_direction || 'desc';
+  }
+  if (newFilters.per_page !== undefined) {
+    perPage.value = newFilters.per_page || 15;
+  }
 }, { deep: true });
 
 // Lifecycle
@@ -262,7 +284,11 @@ onUnmounted(() => {
 <template>
   <Head title="Leaderboard" />
   <BreezeAuthenticatedLayout>
-    <GameAuthenticatedLayout>
+    <GameAuthenticatedLayout 
+      :difficulties="props.difficulties" 
+      :categories="props.categories"
+      :gameTypes="props.gameTypes"
+    >
       <div class="py-4 mb-6 px-2">
         <div class="main-width mx-auto sm:px-6 lg:px-8">
           <!-- Header Section -->
@@ -343,9 +369,6 @@ onUnmounted(() => {
                         </svg>
                       </div>
                     </th>
-                    <th v-if="includeAI" class="px-6 py-4 font-semibold text-white">
-                      AI Model
-                    </th>
                     <th class="px-6 py-4 font-semibold text-white">
                       Game Type
                     </th>
@@ -399,19 +422,11 @@ onUnmounted(() => {
                           class="w-2 h-2 rounded-full"
                           :class="score.score_type === 'ai' ? 'bg-blue-500' : 'bg-green-500'"
                         ></div>
-                        <span class="text-white font-medium">{{ score.user.name }}</span>
+                        <span class="text-white font-medium">
+                          {{ score.user.name }}
+                          <span v-if="includeAI && score.user.name === 'AI'" class="text-gray-400"> - Normal</span>
+                        </span>
                       </div>
-                    </td>
-
-                    <!-- AI Model (only when AI toggle is on) -->
-                    <td v-if="includeAI" class="px-6 py-4">
-                      <span 
-                        v-if="score.score_type === 'ai'" 
-                        class="px-2 py-1 text-xs font-medium bg-blue-600 text-white rounded-full"
-                      >
-                        {{ score.name || 'GPT-4' }}
-                      </span>
-                      <span v-else class="text-gray-500">-</span>
                     </td>
 
                     <!-- Game Type -->
@@ -477,7 +492,7 @@ onUnmounted(() => {
 
                   <!-- Empty State -->
                   <tr v-if="!filteredScores.length && !isLoading">
-                    <td :colspan="includeAI ? 8 : 7" class="px-6 py-12 text-center">
+                    <td colspan="8" class="px-6 py-12 text-center">
                       <div class="text-gray-400">
                         <svg class="mx-auto h-12 w-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>

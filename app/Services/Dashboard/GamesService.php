@@ -273,7 +273,7 @@ class GamesService
         ?array $userIds = null, 
         bool $andUsers = false, 
         ?int $gameType = null,
-        $perPage = 15,
+        $perPage = null,
         ?int $difficultyId = null,
         ?int $categoryId = null,
         bool $includeAI = false,
