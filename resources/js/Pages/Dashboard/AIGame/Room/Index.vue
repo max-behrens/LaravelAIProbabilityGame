@@ -299,71 +299,6 @@ const showSinglePlayerAIWarning = computed(() => {
     return playerCount.value === 1 && !playWithAI.value;
 });
 
-const getDifficultyName = (difficultyId) => {
-    const difficulty = props.difficulties.find(d => d.id === difficultyId);
-    return difficulty ? difficulty.name : 'Unknown';
-};
-
-const getCategoryName = (categoryId) => {
-    const category = props.categories.find(c => c.id === categoryId);
-    return category ? category.name : 'Unknown';
-};
-
-// Player & AI Scores Tables Filtering:
-
-const filteredAndSortedGameScores = computed(() => {
-    let filtered = gameScores.value;
-    
-    if (playerSearchQuery.value.trim()) {
-        const query = playerSearchQuery.value.toLowerCase().trim();
-        filtered = filtered.filter(score => 
-            score.session_id.toString().includes(query)
-        );
-    }
-    
-    return filtered;
-});
-
-const filteredAndSortedAIScores = computed(() => {
-    let filtered = aiScores.value;
-    
-    if (aiSearchQuery.value.trim()) {
-        const query = aiSearchQuery.value.toLowerCase().trim();
-        filtered = filtered.filter(score => 
-            score.session_id.toString().includes(query)
-        );
-    }
-    
-    return filtered;
-});
-
-const sortPlayerTable = (field) => {
-    if (playerSortField.value === field) {
-        playerSortDirection.value = playerSortDirection.value === 'desc' ? 'asc' : 'desc';
-    } else {
-        playerSortField.value = field;
-        playerSortDirection.value = 'desc';
-    }
-
-    fetchGameScores(1, playerSortField.value, playerSortDirection.value);
-};
-
-const sortAITable = (field) => {
-    if (aiSortField.value === field) {
-        aiSortDirection.value = aiSortDirection.value === 'desc' ? 'asc' : 'desc';
-    } else {
-        aiSortField.value = field;
-        aiSortDirection.value = 'desc';
-    }
-
-    fetchAIScores(1, aiSortField.value, aiSortDirection.value);
-};
-
-const calculatePercentage = (score) => {
-    const maxScore = score.answer_json?.max_score ? parseInt(score.answer_json.max_score) : 10;
-    return ((score.score / maxScore) * 100).toFixed(1);
-};
-
 
 // Updated game control functions
 const startGame = async () => {
@@ -831,6 +766,74 @@ const updateNavigation = () => {
         }
     }
 };
+
+
+
+const getDifficultyName = (difficultyId) => {
+    const difficulty = props.difficulties.find(d => d.id === difficultyId);
+    return difficulty ? difficulty.name : 'Unknown';
+};
+
+const getCategoryName = (categoryId) => {
+    const category = props.categories.find(c => c.id === categoryId);
+    return category ? category.name : 'Unknown';
+};
+
+// Player & AI Scores Tables Filtering:
+
+const filteredAndSortedGameScores = computed(() => {
+    let filtered = gameScores.value;
+    
+    if (playerSearchQuery.value.trim()) {
+        const query = playerSearchQuery.value.toLowerCase().trim();
+        filtered = filtered.filter(score => 
+            score.session_id.toString().includes(query)
+        );
+    }
+    
+    return filtered;
+});
+
+const filteredAndSortedAIScores = computed(() => {
+    let filtered = aiScores.value;
+    
+    if (aiSearchQuery.value.trim()) {
+        const query = aiSearchQuery.value.toLowerCase().trim();
+        filtered = filtered.filter(score => 
+            score.session_id.toString().includes(query)
+        );
+    }
+    
+    return filtered;
+});
+
+const sortPlayerTable = (field) => {
+    if (playerSortField.value === field) {
+        playerSortDirection.value = playerSortDirection.value === 'desc' ? 'asc' : 'desc';
+    } else {
+        playerSortField.value = field;
+        playerSortDirection.value = 'desc';
+    }
+
+    fetchGameScores(1, playerSortField.value, playerSortDirection.value);
+};
+
+const sortAITable = (field) => {
+    if (aiSortField.value === field) {
+        aiSortDirection.value = aiSortDirection.value === 'desc' ? 'asc' : 'desc';
+    } else {
+        aiSortField.value = field;
+        aiSortDirection.value = 'desc';
+    }
+
+    fetchAIScores(1, aiSortField.value, aiSortDirection.value);
+};
+
+const calculatePercentage = (score) => {
+    const maxScore = score.answer_json?.max_score ? parseInt(score.answer_json.max_score) : 10;
+    return ((score.score / maxScore) * 100).toFixed(1);
+};
+
 
 
 const appliedFilters = ref({

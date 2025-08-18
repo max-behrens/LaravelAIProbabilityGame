@@ -502,17 +502,17 @@ const showGameTypeFilter = computed(() => {
 
 const showDifficultyFilter = computed(() => {
   // Hide the AI filter on the AI game route, but show it on other dashboard pages.
-  return window.location.pathname.includes('/dashboard') && !window.location.pathname.includes('/aigame');
+  return window.location.pathname.includes('/dashboard') && window.location.pathname.includes('/leaderboard') &&  !window.location.pathname.includes('/aigame');
 });
 
 const showCategoryFilter = computed(() => {
   // Hide the AI filter on the AI game route, but show it on other dashboard pages.
-  return window.location.pathname.includes('/dashboard') && !window.location.pathname.includes('/aigame');
+  return window.location.pathname.includes('/dashboard') && window.location.pathname.includes('/leaderboard') && !window.location.pathname.includes('/aigame');
 });
 
 const excludeAIFilter = computed(() => {
   // Hide the AI filter on the AI game route, but show it on other dashboard pages.
-  return window.location.pathname.includes('/dashboard') && !window.location.pathname.includes('/aigame');
+  return window.location.pathname.includes('/dashboard') && !window.location.pathname.includes('leaderboard') && !window.location.pathname.includes('/aigame');
 });
 
 const handleToggleGameFilters = () => {
@@ -806,7 +806,7 @@ onUnmounted(() => {
         </transition>
 
         <div class="flex-1 pt-4">
-          <div class="flex items-center mb-4">
+          <div class="flex items-center">
             <button
               @click="toggleNavigation"
               class="game-menu-width inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:bg-gray-700 focus:text-white transition duration-150 ease-in-out"

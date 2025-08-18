@@ -146,33 +146,72 @@ class GamesController extends Controller
 
     public function showLeaderboard(Request $request)
     {
-        
         $page = $request->query('page', 1);
         $startDate = $request->get('start_date');
         $endDate = $request->get('end_date');
         $userIds = $request->get('user_ids');
         $andUsers = $request->get('and_users', 'false') === 'true';
         $gameType = $request->get('game_type');
+        $perPage = $request->get('per_page', 15);
+        $difficultyId = $request->get('difficulty');
+        $categoryId = $request->get('category');
+        $includeAI = $request->get('include_ai', 'false') === 'true';
+        $searchQuery = $request->get('search');
+        $sortField = $request->get('sort_field', 'score');
+        $sortDirection = $request->get('sort_direction', 'desc');
 
         // Convert user IDs from comma-separated string to array
         $userIds = $userIds ? explode(',', $userIds) : null;
 
-        // Get paginated games directly from service
-        $games = $this->gamesService->getLeaderboardGames($page, $startDate, $endDate, $userIds, $andUsers, $gameType, $perPage);
+        // Get paginated leaderboard data from service
+        $leaderboardData = $this->gamesService->getLeaderboardGames(
+            $page,
+            $startDate,
+            $endDate,
+            $userIds,
+            $andUsers,
+            $gameType,
+            $perPage,
+            $difficultyId,
+            $categoryId,
+            $includeAI,
+            $searchQuery,
+            $sortField,
+            $sortDirection
+        );
+
         // Get all difficulties and categories for dropdowns
         $difficulties = GameTypeDifficulty::orderBy('id')->get(['id', 'name'])->toArray();
         $categories = GameTypeCategory::orderBy('id')->get(['id', 'name'])->toArray();
 
-        Log::info('Leaderboard Games', [
-            'games' => $games,
+        Log::info('Leaderboard Data', [
+            'data' => $leaderboardData,
+            'includeAI' => $includeAI,
+            'filters' => [
+                'difficulty' => $difficultyId,
+                'category' => $categoryId,
+                'search' => $searchQuery
+            ]
         ]);
 
-
         return Inertia::render('Dashboard/AIGame/Leaderboard/Index', [
-            'games' => $games,
+            'leaderboardData' => $leaderboardData,
             'difficulties' => $difficulties,
             'categories' => $categories,
             'auth' => ['user' => auth()->user()],
+            'currentFilters' => [
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'user_ids' => $userIds,
+                'and_users' => $andUsers,
+                'game_type' => $gameType,
+                'difficulty' => $difficultyId,
+                'category' => $categoryId,
+                'include_ai' => $includeAI,
+                'search' => $searchQuery,
+                'sort_field' => $sortField,
+                'sort_direction' => $sortDirection
+            ]
         ]);
     }
 

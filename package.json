@@ -10,8 +10,6 @@
     "devDependencies": {
         "@angular/cli": "^19.1.8",
         "@angular/compiler-cli": "^19.1.7",
-        "@inertiajs/inertia": "^0.11.0",
-        "@inertiajs/inertia-vue3": "^0.6.0",
         "@inertiajs/progress": "^0.2.7",
         "@ngtools/webpack": "^19.1.8",
         "@tailwindcss/forms": "^0.5.2",
@@ -32,6 +30,9 @@
         "@fortawesome/fontawesome-svg-core": "^6.7.2",
         "@fortawesome/free-brands-svg-icons": "^6.7.2",
         "@fortawesome/vue-fontawesome": "^3.0.8",
+        "@inertiajs/inertia": "^0.11.1",
+        "@inertiajs/inertia-vue3": "^0.6.0",
+        "@inertiajs/vue3": "^2.1.2",
         "@vitejs/plugin-react": "^4.3.4",
         "@vitejs/plugin-vue": "^5.2.1",
         "@vuepic/vue-datepicker": "^11.0.2",

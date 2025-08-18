@@ -14,6 +14,8 @@ const showingNavigationDropdown = ref(false);
 const showLogoutModal = ref(false);
 const isDark = ref(false);
 const isScrolled = ref(false);
+const navigationDropdownRef = ref(null);
+
 
 const logout = () => {
   showLogoutModal.value = false;
@@ -24,6 +26,12 @@ const logout = () => {
   });
 };
 
+
+const handleClickOutside = (event) => {
+  if (navigationDropdownRef.value && !navigationDropdownRef.value.contains(event.target)) {
+    showingNavigationDropdown.value = false;
+  }
+};
 
 // Theme management
 const initializeTheme = () => {
@@ -66,6 +74,9 @@ onMounted(() => {
 
   // Add scroll listener
   window.addEventListener('scroll', handleScroll);
+
+    document.addEventListener('click', handleClickOutside);
+
   
   // Initial check
   handleScroll();
@@ -74,6 +85,8 @@ onMounted(() => {
 // Clean up scroll listener when component unmounts
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', handleScroll);
+    document.removeEventListener('click', handleClickOutside);
+
 });
 </script>
 
@@ -82,12 +95,12 @@ onBeforeUnmount(() => {
     <div class="bg-gray-900 flex-grow flex flex-col">
       <!-- Sticky Navigation with dynamic background -->
       <nav 
-        class="fixed top-0 left-0 right-0 !z-50 border-b border-gray-700 transition-all duration-300 h-16"
+        class="fixed top-0 left-0 right-0 z-50 border-b border-gray-700 transition-all duration-300 h-16"
         :class="isScrolled ? 'bg-gray-700 backdrop-blur-md' : 'bg-gray-800'"
       >
         <!-- Primary Navigation Menu -->
          <div class="flex flex-row justify-between">
-            <div class="main-width mx-auto px-4 lg:px-6 lg:px-8">
+            <div class="main-width mx-auto px-4 lg:px-6">
               <div class="flex justify-between items-center h-16">
                 <!-- Logo -->
                 <div class="shrink-0 flex items-center mr-2">
@@ -193,8 +206,9 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
+
         <!-- Responsive Navigation Menu -->
-        <div :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }" class="lg:hidden bg-gray-800">
+        <div :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }" class="lg:hidden bg-gray-800 relative z-50">
           <div class="pt-2 pb-3 space-y-1">
             <BreezeResponsiveNavLink
               :href="route('dashboard')"
@@ -351,17 +365,33 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </transition>
+
+      <transition name="overlay">
+        <div
+          v-if="showingNavigationDropdown"
+          class="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
+          @click="showingNavigationDropdown = false"
+        ></div>
+      </transition>
     </div>
   </div>
 </template>
 
-<style>
+<style scoped>
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.1s ease;
 }
 .fade-enter-from,
 .fade-leave-to {
+  opacity: 0;
+}
+.overlay-enter-active,
+.overlay-leave-active {
+  transition: opacity 0.3s ease;
+}
+.overlay-enter-from,
+.overlay-leave-to {
   opacity: 0;
 }
 </style>
