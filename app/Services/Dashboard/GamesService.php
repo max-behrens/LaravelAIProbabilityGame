@@ -29,8 +29,6 @@ class GamesService
 
         $gameType = (int) $gameType;
 
-        Log::info('GAME TYPE: ' . $gameType);
-
         $query = \DB::table('games')
             ->leftJoin('game_scores', 'game_scores.game_id', '=', 'games.id')
             ->leftjoin('games_user', 'games_user.game_id', '=', 'games.id')
@@ -76,6 +74,8 @@ class GamesService
 
         return $games;
     }
+
+
 
 
 
@@ -257,6 +257,32 @@ class GamesService
 
 
         return $scores;
+    }
+
+
+    /**
+     * The leaderboard fetches all Player & all AI Scores across all games.
+     *
+     * @param \Illuminate\Database\Query\Builder $query
+     * 
+     */
+    public function getLeaderboardGames(
+        $page = 1, 
+        ?string $startDate = null,
+        ?string $endDate = null, 
+        ?array $userIds = null, 
+        bool $andUsers = false, 
+        ?int $gameType = null,
+        $perPage = 5)
+    {
+        Log::debug('Fetching leaderboard games', [
+            'page' => $page,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'userIds' => $userIds,
+            'andUsers' => $andUsers,
+            'gameType' => $gameType
+        ]);
     }
 
 

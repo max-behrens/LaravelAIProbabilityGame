@@ -115,8 +115,13 @@ Route::prefix('dashboard')
             ]);
         })->name('ai-game');
 
+
         Route::get('/room/{game}/{user}', [GamesController::class, 'showRoom'])
         ->name('room')
+        ->middleware('auth');
+
+        Route::get('/leaderboard', [GamesController::class, 'showLeaderboard'])
+        ->name('leaderboard')
         ->middleware('auth');
         
 

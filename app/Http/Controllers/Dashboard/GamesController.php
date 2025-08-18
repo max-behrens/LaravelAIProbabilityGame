@@ -144,6 +144,38 @@ class GamesController extends Controller
         ]);
     }
 
+    public function showLeaderboard(Request $request)
+    {
+        
+        $page = $request->query('page', 1);
+        $startDate = $request->get('start_date');
+        $endDate = $request->get('end_date');
+        $userIds = $request->get('user_ids');
+        $andUsers = $request->get('and_users', 'false') === 'true';
+        $gameType = $request->get('game_type');
+
+        // Convert user IDs from comma-separated string to array
+        $userIds = $userIds ? explode(',', $userIds) : null;
+
+        // Get paginated games directly from service
+        $games = $this->gamesService->getLeaderboardGames($page, $startDate, $endDate, $userIds, $andUsers, $gameType, $perPage);
+        // Get all difficulties and categories for dropdowns
+        $difficulties = GameTypeDifficulty::orderBy('id')->get(['id', 'name'])->toArray();
+        $categories = GameTypeCategory::orderBy('id')->get(['id', 'name'])->toArray();
+
+        Log::info('Leaderboard Games', [
+            'games' => $games,
+        ]);
+
+
+        return Inertia::render('Dashboard/AIGame/Leaderboard/Index', [
+            'games' => $games,
+            'difficulties' => $difficulties,
+            'categories' => $categories,
+            'auth' => ['user' => auth()->user()],
+        ]);
+    }
+
     // New method to get questions based on difficulty and category
     public function getQuestions($gameId, $difficultyId, $categoryId, Request $request)
     {
