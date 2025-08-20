@@ -502,12 +502,12 @@ const showGameTypeFilter = computed(() => {
 
 const showDifficultyFilter = computed(() => {
   // Hide the AI filter on the AI game route, but show it on other dashboard pages.
-  return window.location.pathname.includes('/dashboard') && window.location.pathname.includes('/leaderboard') &&  !window.location.pathname.includes('/aigame');
+  return window.location.pathname.includes('/dashboard') && !window.location.pathname.includes('/aigame');
 });
 
 const showCategoryFilter = computed(() => {
   // Hide the AI filter on the AI game route, but show it on other dashboard pages.
-  return window.location.pathname.includes('/dashboard') && window.location.pathname.includes('/leaderboard') && !window.location.pathname.includes('/aigame');
+  return window.location.pathname.includes('/dashboard') && !window.location.pathname.includes('/aigame');
 });
 
 const excludeAIFilter = computed(() => {
