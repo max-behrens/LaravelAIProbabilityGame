@@ -856,8 +856,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full text-white">
-    <div class="w-1/2 px-4 border-r border-gray-700">
+  <div class="flex flex-col md:flex-row h-full text-white">
+    <div class="w-full md:w-1/2 px-4 border-r border-gray-700">
       <div class="h-full flex flex-col">
 
         <div class="text-white !text-center">Percentage Scores</div>
@@ -937,7 +937,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="w-1/2 flex flex-col">
+    <div class="w-full md:w-1/2 flex flex-col">
       <div class="p-4 border-b border-gray-600">
                       
         <div class="w-full h-48 flex flex-row items-center justify-center">

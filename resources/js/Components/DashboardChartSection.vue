@@ -438,13 +438,14 @@ onUnmounted(() => {
 
 <template>
   <section class="py-3 bg-gray-800 rounded-lg">
-      <div class="container mx-auto px-20">
+      <div class="container mx-auto px-4 lg:px-20">
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-2">
               <div class="lg:col-span-3">
-                  <div class="flex justify-center gap-4 mb-6 px-6">
+                  <!-- Mobile: Stack filters vertically, Desktop: Keep horizontal -->
+                  <div class="flex flex-col lg:flex-row justify-center gap-2 lg:gap-4 mb-6 px-2 lg:px-6">
 
-                    
-                      <div class="flex items-center gap-2 min-w-[180px] max-w-xs mr-20">
+                      <!-- Chart Toggle - Full width on mobile -->
+                      <div class="flex items-center gap-2 w-full lg:min-w-[180px] lg:max-w-xs lg:mr-20">
                           <button
                               @click="toggleChart"
                               :class="[
@@ -453,21 +454,21 @@ onUnmounted(() => {
                                   chartToggleColor + ' hover:brightness-90'
                               ]"
                           >
-                              <!-- Left 50% - Title and Description -->
+                              <!-- Left - Title and Description -->
                               <div class="flex-1 text-left p-2">
                                   <div class="font-medium truncate">{{ currentChart.title }}</div>
                                   <div class="text-xs opacity-75 truncate text-wrap">{{ currentChart.description }}</div>
                               </div>
-                              <!-- Right 50% - Icon -->
+                              <!-- Right - Icon -->
                               <div class="flex-shrink-0 p-2">
-                                  <component :is="currentChart.icon" class="w-10 h-10" />
+                                  <component :is="currentChart.icon" class="w-8 h-8 lg:w-10 lg:h-10" />
                               </div>
                           </button>
                           
                           <button
                             @click="toggleChart"
                             :class="[
-                                'flex justify-center items-center p-3 mt-2 rounded-lg shadow-md text-white cursor-pointer h-12 w-12',
+                                'flex justify-center items-center p-3 mt-0 lg:mt-2 rounded-lg shadow-md text-white cursor-pointer h-12 w-12',
                                 'transition-all duration-300 ease-in-out hover:brightness-90',
                             ]"
                           >
@@ -479,7 +480,8 @@ onUnmounted(() => {
                           </button>
                       </div>
 
-                      <div class="mb-2">
+                      <!-- Date Filter - Full width on mobile -->
+                      <div class="mb-2 w-full lg:w-auto">
                           <button
                               @click="showDateModal = true"
                               :class="[
@@ -494,63 +496,65 @@ onUnmounted(() => {
                           </button>
                       </div>
 
+                      <!-- Game Filters - Stack on mobile, side by side on desktop -->
+                      <div class="flex flex-col lg:flex-col space-y-2 flex-grow w-full lg:min-w-[180px] lg:max-w-xs">
+                          <button
+                              v-for="(filter, index) in gameFilters"
+                              :key="filter.id"
+                              :class="[
+                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
+                                  'transition-all duration-300 ease-in-out',
+                                  optionColors[index] + ' hover:brightness-90',
+                                  activeGameId === filter.id ? 'bg-blue-700 ring-2 ring-gray-400' : ''
+                              ]"
+                              @click="selectGameFilter(filter.id)"
+                          >
+                              <component :is="gameIcons[index]" class="w-5 h-5 shrink-0" />
+                              <span class="font-medium truncate">{{ filter.name }}</span>
+                          </button>
+                      </div>
 
-                    <div class="flex flex-col space-y-2 flex-grow min-w-[180px] max-w-xs">
-                        <button
-                            v-for="(filter, index) in gameFilters"
-                            :key="filter.id"
-                            :class="[
-                                'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
-                                'transition-all duration-300 ease-in-out',
-                                optionColors[index] + ' hover:brightness-90',
-                                activeGameId === filter.id ? 'bg-blue-700 ring-2 ring-gray-400' : ''
-                            ]"
-                            @click="selectGameFilter(filter.id)"
-                        >
-                            <component :is="gameIcons[index]" class="w-5 h-5 shrink-0" />
-                            <span class="font-medium truncate">{{ filter.name }}</span>
-                        </button>
-                    </div>
+                      <!-- Difficulty and Category - Stack on mobile -->
+                      <div class="flex flex-col space-y-2 w-full lg:flex-grow lg:h-full">
+                          <!-- Difficulty Filter Button -->
+                          <button
+                              @click="rotateDifficulty"
+                              :class="[
+                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
+                                  'transition-all duration-300 ease-in-out',
+                                  'bg-green-600/50 hover:brightness-90',
+                                  difficultyId ? 'bg-green-700 ring-2 ring-green-400' : ''
+                              ]"
+                          >
+                              <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                              </svg>
+                              <span class="font-medium truncate">
+                                  {{ difficultyId ? difficulties.find(d => d.id === difficultyId)?.name : 'All Difficulties' }}
+                              </span>
+                          </button>
 
-                    <div class="flex flex-col space-y-2 flex-grow h-full">
-                      <!-- Difficulty Filter Button -->
-                      <button
-                          @click="rotateDifficulty"
-                          :class="[
-                              'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
-                              'transition-all duration-300 ease-in-out',
-                              'bg-green-600/50 hover:brightness-90',
-                              difficultyId ? 'bg-green-700 ring-2 ring-green-400' : ''
-                          ]"
-                      >
-                          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                          </svg>
-                          <span class="font-medium truncate">
-                              {{ difficultyId ? difficulties.find(d => d.id === difficultyId)?.name : 'All Difficulties' }}
-                          </span>
-                      </button>
+                          <!-- Category Filter Button -->
+                          <button
+                              @click="rotateCategory"
+                              :class="[
+                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
+                                  'transition-all duration-300 ease-in-out',
+                                  'bg-pink-600/50 hover:brightness-90',
+                                  categoryId ? 'bg-pink-700 ring-2 ring-pink-400' : ''
+                              ]"
+                          >
+                              <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                              </svg>
+                              <span class="font-medium truncate">
+                                  {{ categoryId ? categories.find(c => c.id === categoryId)?.name : 'All Categories' }}
+                              </span>
+                          </button>
+                      </div>
 
-                      <!-- Category Filter Button -->
-                      <button
-                          @click="rotateCategory"
-                          :class="[
-                              'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
-                              'transition-all duration-300 ease-in-out',
-                              'bg-pink-600/50 hover:brightness-90',
-                              categoryId ? 'bg-pink-700 ring-2 ring-pink-400' : ''
-                          ]"
-                      >
-                          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
-                          </svg>
-                          <span class="font-medium truncate">
-                              {{ categoryId ? categories.find(c => c.id === categoryId)?.name : 'All Categories' }}
-                          </span>
-                      </button>
-                  </div>
-
-                      <div class="mb-2">
+                      <!-- AI Scores Toggle - Full width on mobile -->
+                      <div class="mb-2 w-full lg:w-auto">
                           <button
                               @click="toggleAiScores"
                               :class="[
@@ -565,8 +569,8 @@ onUnmounted(() => {
                           </button>
                       </div>
 
-
-                      <div class="mb-2">
+                      <!-- Advanced Filters Toggle - Full width on mobile -->
+                      <div class="mb-2 w-full lg:w-auto">
                           <button
                               @click="showAdvancedFilters = !showAdvancedFilters"
                               :class="[
@@ -589,12 +593,13 @@ onUnmounted(() => {
                       </div>
                   </div>
 
+                  <!-- Advanced Filters Section -->
                   <transition name="fade-slide-y">
-                      <div v-if="showAdvancedFilters" class="mb-6 px-6">
-                          <div class="bg-gray-800 p-6 rounded-lg shadow-md space-y-6">
+                      <div v-if="showAdvancedFilters" class="mb-6 px-2 lg:px-6">
+                          <div class="bg-gray-800 p-4 lg:p-6 rounded-lg shadow-md space-y-6">
                               <!-- User Filter Section -->
                               <div>
-                                  <div class="flex items-center justify-between mb-4">
+                                  <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
                                       <h4 class="text-white font-semibold text-lg">{{ userFilterTitle }}</h4>
                                       <div class="flex space-x-2">
                                           <button
@@ -693,11 +698,12 @@ onUnmounted(() => {
                       </div>
                   </transition>
 
-                  <div class="space-y-8 p-6 rounded-lg relative">
+                  <!-- CHART SECTION - changes here for mobile -->
+                  <div class="space-y-8 p-2 lg:p-6 rounded-lg relative">
                       <section>
                           <div class="w-full">
                               <transition name="chart-fade" mode="out-in">
-                                  <div :key="currentChartIndex">
+                                  <div :key="currentChartIndex" class="w-full">
                                       <DashboardLineChartComponent
                                           v-if="currentChart.component === 'DashboardLineChartComponent'"
                                           :game-type-id="activeGameId"
@@ -708,18 +714,20 @@ onUnmounted(() => {
                                           :difficulty-id="difficultyId"
                                           :category-id="categoryId"
                                           :show-ai-scores="showAiScores" 
-                                          @pointClicked="handleChartPointClick" />
-                                          <DashboardHeatmapComponent
-                                              v-else-if="currentChart.component === 'DashboardHeatmapComponent'"
-                                              :game-type-id="activeGameId"
-                                              :start-date="dateRange[0]"
-                                              :end-date="dateRange[1]"
-                                              :user-ids="activeUserIds"
-                                              :and-users="andUsers"
-                                              :difficulty-id="difficultyId"
-                                              :category-id="categoryId"
-                                              :show-ai-scores="showAiScores"
-                                          />
+                                          @pointClicked="handleChartPointClick"
+                                          class="w-full" />
+                                      <DashboardHeatmapComponent
+                                          v-else-if="currentChart.component === 'DashboardHeatmapComponent'"
+                                          :game-type-id="activeGameId"
+                                          :start-date="dateRange[0]"
+                                          :end-date="dateRange[1]"
+                                          :user-ids="activeUserIds"
+                                          :and-users="andUsers"
+                                          :difficulty-id="difficultyId"
+                                          :category-id="categoryId"
+                                          :show-ai-scores="showAiScores"
+                                          class="w-full"
+                                      />
                                   </div>
                               </transition>
                           </div>
@@ -730,8 +738,9 @@ onUnmounted(() => {
       </div>
   </section>
 
-    <div v-if="showDateModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div class="bg-gray-800 rounded-lg shadow-xl p-4 relative max-w-md w-full min-h-[500px] flex flex-col">
+  <!-- Date Modal - Make it more mobile friendly -->
+  <div v-if="showDateModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div class="bg-gray-800 rounded-lg shadow-xl p-4 relative w-full max-w-md min-h-[500px] flex flex-col">
           <h3 class="text-xl font-semibold text-white mb-4">Select Date Range</h3>
           <button
               @click="showDateModal = false"
@@ -756,7 +765,6 @@ onUnmounted(() => {
               class="my-4"
               @update:model-value="handleDateSelection"
             />
-
           </div>
 
           <div class="flex justify-end space-x-2 mt-auto">
