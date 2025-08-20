@@ -367,6 +367,8 @@ class GamesService
                     'game_types.name as game_type_name',
                 );
 
+            
+
             // Apply same filters to AI scores
             if ($startDate && $endDate) {
                 $aiScoresQuery->whereBetween('ai_scores.created_at', [$startDate, $endDate]);
@@ -428,7 +430,7 @@ class GamesService
         $categoryIds = [];
         
         foreach ($scores->items() as $score) {
-            $answerData = is_string($score->answer_json) ? json_decode($score->answer_json, true) : $score->answer_json;
+            $answerData = $this->decodeAnswerJson($score->answer_json);
             if (isset($answerData['difficulty_id'])) {
                 $difficultyIds[] = $answerData['difficulty_id'];
             }
@@ -454,9 +456,11 @@ class GamesService
         }
 
         // Transform the results
-        $scores->getCollection()->transform(function ($score) use ($difficulties, $categories) {
+        $scores->getCollection()->transform(function ($score) use ($difficulties, $categories, $includeAI) {
             // Convert stdClass to array if needed
             $scoreArray = is_object($score) ? (array) $score : $score;
+
+            $scoreName = $includeAI ? 'AI: ' : $scoreArray['user_name'];
             
             $scoreArray['user'] = [
                 'id' => $scoreArray['user_id'] ?? 0,
@@ -464,9 +468,7 @@ class GamesService
             ];
 
             if (!empty($scoreArray['answer_json'])) {
-                $answerData = is_string($scoreArray['answer_json']) 
-                    ? json_decode($scoreArray['answer_json'], true) 
-                    : $scoreArray['answer_json'];
+                $answerData = $this->decodeAnswerJson($scoreArray['answer_json']);
 
                 if (is_array($answerData)) {
                     if (isset($answerData['difficulty_id'])) {
@@ -1724,6 +1726,26 @@ class GamesService
 
         return $series;
     }
+
+
+    private function decodeAnswerJson($rawJson): ?array
+    {
+        if (empty($rawJson)) {
+            return null;
+        }
+
+        // First decode
+        $decoded = is_string($rawJson) ? json_decode($rawJson, true) : $rawJson;
+
+        // If first decode failed or gave a string (double-encoded), try again
+        if (is_string($decoded)) {
+            $decoded = json_decode($decoded, true);
+        }
+
+        // Return only if valid array
+        return (is_array($decoded)) ? $decoded : null;
+    }
+
 
 
     /**

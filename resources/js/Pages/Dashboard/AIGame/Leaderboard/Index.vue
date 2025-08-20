@@ -120,29 +120,48 @@ const filteredScores = computed(() => {
   return filtered;
 });
 
-// Helper functions
+// Helper functions with null safety
 const formatDate = (dateString) => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  if (!dateString) return 'No date';
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Invalid date';
+    
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return 'Invalid date';
+  }
 };
 
 const formatSessionId = (sessionId) => {
-  return sessionId.length > 10 ? sessionId.substring(0, 10) + '...' : sessionId;
+  if (!sessionId) return 'No session';
+  const sessionString = String(sessionId);
+  return sessionString.length > 10 ? sessionString.substring(0, 10) + '...' : sessionString;
 };
 
 const calculatePercentage = (score) => {
+  if (!score || typeof score.score === 'undefined' || score.score === null) return 0;
+  
+  const scoreValue = parseInt(score.score) || 0;
   const maxScore = score.answer_json?.max_score ? parseInt(score.answer_json.max_score) : 100;
-  return Math.round((score.score / maxScore) * 100);
+  
+  if (maxScore <= 0) return 0;
+  
+  const percentage = Math.round((scoreValue / maxScore) * 100);
+  return Math.min(Math.max(percentage, 0), 100);
 };
 
 const getDifficultyColor = (difficulty) => {
-  switch (difficulty?.toLowerCase()) {
+  if (!difficulty || difficulty === 'N/A') return 'bg-gray-600 text-white';
+  
+  switch (difficulty.toLowerCase()) {
     case 'easy':
       return 'bg-green-600 text-white';
     case 'medium':
@@ -156,6 +175,7 @@ const getDifficultyColor = (difficulty) => {
 };
 
 const getPercentageColor = (percentage) => {
+  if (typeof percentage !== 'number' || isNaN(percentage)) return 'bg-gray-500';
   if (percentage >= 90) return 'bg-green-500';
   if (percentage >= 70) return 'bg-blue-500';
   if (percentage >= 50) return 'bg-yellow-500';
@@ -353,8 +373,8 @@ onUnmounted(() => {
               <p class="mt-2 text-gray-400">Loading leaderboard...</p>
             </div>
 
-            <!-- Table -->
-            <div v-else class="overflow-x-auto">
+            <!-- Desktop Table -->
+            <div class="hidden md:block overflow-x-auto">
               <table class="w-full text-left">
                 <thead class="bg-gray-700 border-b border-gray-600">
                   <tr>
@@ -423,8 +443,8 @@ onUnmounted(() => {
                           :class="score.score_type === 'ai' ? 'bg-blue-500' : 'bg-green-500'"
                         ></div>
                         <span class="text-white font-medium">
-                          {{ score.user.name }}
-                          <span v-if="includeAI && score.user.name === 'AI'" class="text-gray-400"> - Normal</span>
+                          {{ score.user?.name || 'Unknown' }}
+                          <span v-if="includeAI && score.user?.name === 'AI: '" class="text-purple-400">Normal Mode</span>
                         </span>
                       </div>
                     </td>
@@ -432,7 +452,7 @@ onUnmounted(() => {
                     <!-- Game Type -->
                     <td class="px-6 py-4">
                       <span class="text-gray-300 font-mono text-sm">
-                        {{ score.game_type_name }}
+                        {{ score.game_type_name || 'Unknown' }}
                       </span>
                     </td>
 
@@ -463,7 +483,7 @@ onUnmounted(() => {
                     <!-- Score -->
                     <td class="px-6 py-4">
                       <div class="flex items-center space-x-2">
-                        <span class="text-white font-bold text-lg">{{ score.score }}</span>
+                        <span class="text-white font-bold text-lg">{{ score.score || 0 }}</span>
                         <span class="text-gray-400 text-sm">pts</span>
                       </div>
                     </td>
@@ -506,8 +526,126 @@ onUnmounted(() => {
               </table>
             </div>
 
-            <!-- Pagination -->
-            <div v-if="leaderboardData && leaderboardData.last_page > 1" class="px-6 py-4 border-t border-gray-700">
+            <!-- Mobile Cards -->
+            <div class="block md:hidden">
+              <!-- Mobile Sort Controls -->
+              <div class="flex justify-between items-center p-4 bg-gray-700 border-b border-gray-600">
+                <span class="text-white font-medium text-sm">Sort by:</span>
+                <div class="flex space-x-2">
+                  <button
+                    @click="sortTable('score')"
+                    class="px-3 py-1 text-xs rounded-full transition-colors duration-200"
+                    :class="sortField === 'score' ? 'bg-blue-600 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'"
+                  >
+                    Score
+                    <span v-if="sortField === 'score'" class="ml-1">
+                      {{ sortDirection === 'desc' ? '↓' : '↑' }}
+                    </span>
+                  </button>
+                  <button
+                    @click="sortTable('created_at')"
+                    class="px-3 py-1 text-xs rounded-full transition-colors duration-200"
+                    :class="sortField === 'created_at' ? 'bg-blue-600 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'"
+                  >
+                    Date
+                    <span v-if="sortField === 'created_at'" class="ml-1">
+                      {{ sortDirection === 'desc' ? '↓' : '↑' }}
+                    </span>
+                  </button>
+                  <button
+                    @click="sortTable('user_name')"
+                    class="px-3 py-1 text-xs rounded-full transition-colors duration-200"
+                    :class="sortField === 'user_name' ? 'bg-blue-600 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'"
+                  >
+                    Player
+                    <span v-if="sortField === 'user_name'" class="ml-1">
+                      {{ sortDirection === 'desc' ? '↓' : '↑' }}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Mobile Score Cards -->
+              <div class="divide-y divide-gray-700">
+                <div 
+                  v-for="(score, index) in filteredScores" 
+                  :key="score.id || `mobile-${score.session_id}-${index}`"
+                  class="p-4 theme-hover-bg transition-colors duration-200"
+                  :class="{ 'bg-blue-900/20': score.score_type === 'ai' }"
+                >
+                  <!-- Header Row: Player and Score -->
+                  <div class="flex justify-between items-start mb-3">
+                    <div class="flex items-center space-x-3 flex-1 min-w-0">
+                      <div 
+                        class="w-3 h-3 rounded-full flex-shrink-0"
+                        :class="score.score_type === 'ai' ? 'bg-blue-500' : 'bg-green-500'"
+                      ></div>
+                      <div class="min-w-0 flex-1">
+                        <h3 class="text-white font-semibold text-sm truncate">
+                          {{ score.user?.name || 'Unknown' }}
+                          <span v-if="includeAI && score.user?.name === 'AI'" class="text-gray-400 text-xs"> - Normal</span>
+                        </h3>
+                        <p class="text-gray-400 text-xs truncate">{{ score.game_type_name || 'Unknown' }}</p>
+                      </div>
+                    </div>
+                    <div class="text-right flex-shrink-0 ml-3">
+                      <div class="text-white font-bold text-lg">{{ score.score || 0 }}</div>
+                      <div class="text-gray-400 text-xs">{{ calculatePercentage(score) }}%</div>
+                    </div>
+                  </div>
+
+                  <!-- Progress Bar -->
+                  <div class="mb-3">
+                    <div class="bg-gray-700 rounded-full h-2">
+                      <div 
+                        class="h-2 rounded-full transition-all duration-300"
+                        :class="getPercentageColor(calculatePercentage(score))"
+                        :style="{ width: Math.min(calculatePercentage(score), 100) + '%' }"
+                      ></div>
+                    </div>
+                  </div>
+
+                  <!-- Details Grid -->
+                  <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <div class="text-gray-400 mb-1">Session</div>
+                      <div class="text-white font-mono">{{ formatSessionId(score.session_id) }}</div>
+                    </div>
+                    <div>
+                      <div class="text-gray-400 mb-1">Difficulty</div>
+                      <span 
+                        class="inline-block px-2 py-1 text-xs font-medium rounded-full"
+                        :class="getDifficultyColor(score.answer_json?.difficulty_name)"
+                      >
+                        {{ score.answer_json?.difficulty_name || 'N/A' }}
+                      </span>
+                    </div>
+                    <div>
+                      <div class="text-gray-400 mb-1">Category</div>
+                      <div class="text-white truncate">{{ score.answer_json?.category_name || 'N/A' }}</div>
+                    </div>
+                    <div>
+                      <div class="text-gray-400 mb-1">Date</div>
+                      <div class="text-white">{{ formatDate(score.created_at) }}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Empty State for Mobile -->
+                <div v-if="!filteredScores.length && !isLoading" class="p-8 text-center">
+                  <div class="text-gray-400">
+                    <svg class="mx-auto h-12 w-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <p class="text-lg font-medium mb-1">No scores found</p>
+                    <p class="text-sm">Try adjusting your search or filters</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pagination (works for both desktop and mobile) -->
+            <div v-if="leaderboardData && leaderboardData.last_page > 1" class="px-4 md:px-6 py-4 border-t border-gray-700">
               <DynamicPagination 
                 :currentPage="currentPage" 
                 :totalPages="leaderboardData.last_page"
