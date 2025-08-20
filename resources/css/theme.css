@@ -25,15 +25,15 @@
   --bg-secondary: #1f2937;
   --bg-tertiary: #374151;
   --bg-leaderboard: #2525256c;
-  --bg-heatmap: #385d4859;
-  --bg-linechart: #5c3e5a59;
+  --bg-heatmap: #4a8b6659;
+  --bg-linechart: #89448559;
   --text-primary: #f9fafb;
   --text-secondary: #d1d5db;
   --text-tertiary: #9ca3af;
   --border-primary: #4b5563;
   --border-secondary: #374151;
-  --hover-bg: #374151; /* Much darker for dark mode */
-  --hover-bg-2: #bdbdbd47; /* Much darker for dark mode */
+  --hover-bg: #868e9bb5; /* Much darker for dark mode */
+  --hover-bg-2: #c5c5c57a; /* Much darker for dark mode */
   --accent-color: #a4a4a4;
   --accent-hover: #406865;
   --error-color: #ef4444;

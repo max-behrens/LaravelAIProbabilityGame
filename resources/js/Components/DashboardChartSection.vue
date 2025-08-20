@@ -441,9 +441,164 @@ onUnmounted(() => {
       <div class="container mx-auto px-4 lg:px-20">
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-2">
               <div class="lg:col-span-3">
-                  <!-- Mobile: Stack filters vertically, Desktop: Keep horizontal -->
-                  <div class="flex flex-col lg:flex-row justify-center gap-2 lg:gap-4 mb-6 px-2 lg:px-6">
 
+                <details class="block lg:hidden mb-6 px-2">
+                    <summary class="cursor-pointer select-none bg-gray-700 text-white px-4 py-2 rounded-lg">
+                      Filters
+                    </summary>
+                    <div class="mt-2 space-y-2">
+                      <!-- Chart Toggle - Full width on mobile -->
+                      <div class="flex items-center gap-2 w-full">
+                          <button
+                              @click="toggleChart"
+                              :class="[
+                                  'flex items-center p-3 rounded-lg text-white cursor-pointer text-sm md:text-base h-full w-full',
+                                  'transition-all duration-300 ease-in-out',
+                                  chartToggleColor + ' hover:brightness-90'
+                              ]"
+                          >
+                              <!-- Left - Title and Description -->
+                              <div class="flex-1 text-left p-2">
+                                  <div class="font-medium truncate">{{ currentChart.title }}</div>
+                                  <div class="text-xs opacity-75 truncate text-wrap">{{ currentChart.description }}</div>
+                              </div>
+                              <!-- Right - Icon -->
+                              <div class="flex-shrink-0 p-2">
+                                  <component :is="currentChart.icon" class="w-8 h-8 lg:w-10 lg:h-10" />
+                              </div>
+                          </button>
+                          
+                          <button
+                            @click="toggleChart"
+                            :class="[
+                                'flex justify-center items-center p-3 mt-0 lg:mt-2 rounded-lg shadow-md text-white cursor-pointer h-12 w-12',
+                                'transition-all duration-300 ease-in-out hover:brightness-90',
+                            ]"
+                          >
+                              <!-- Right Arrow Icon -->
+                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none"
+                                  viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                              </svg>
+                          </button>
+                      </div>
+
+                      <!-- Date Filter -->
+                      <div class="mb-2 w-full">
+                          <button
+                              @click="showDateModal = true"
+                              :class="[
+                                  'flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full w-full',
+                                  'transition-all duration-300 ease-in-out',
+                                  dateFilterColor + ' hover:brightness-90',
+                                  (dateRange[0] && dateRange[1]) ? 'bg-orange-900/50 ring-2 ring-orange-400' : ''
+                              ]"
+                          >
+                              <CalendarDaysIcon class="w-5 h-5 shrink-0" />
+                              <span class="font-medium truncate">{{ dateFilterTitle }}</span>
+                          </button>
+                      </div>
+
+                      <!-- Game Filters -->
+                      <div class="flex flex-col space-y-2 flex-grow w-full">
+                          <button
+                              v-for="(filter, index) in gameFilters"
+                              :key="filter.id"
+                              :class="[
+                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
+                                  'transition-all duration-300 ease-in-out',
+                                  optionColors[index] + ' hover:brightness-90',
+                                  activeGameId === filter.id ? 'bg-blue-700 ring-2 ring-gray-400' : ''
+                              ]"
+                              @click="selectGameFilter(filter.id)"
+                          >
+                              <component :is="gameIcons[index]" class="w-5 h-5 shrink-0" />
+                              <span class="font-medium truncate">{{ filter.name }}</span>
+                          </button>
+                      </div>
+
+                      <!-- Difficulty and Category -->
+                      <div class="flex flex-col space-y-2 w-full">
+                          <!-- Difficulty Filter -->
+                          <button
+                              @click="rotateDifficulty"
+                              :class="[
+                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
+                                  'transition-all duration-300 ease-in-out',
+                                  'bg-green-600/50 hover:brightness-90',
+                                  difficultyId ? 'bg-green-700 ring-2 ring-green-400' : ''
+                              ]"
+                          >
+                              <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                              </svg>
+                              <span class="font-medium truncate">
+                                  {{ difficultyId ? difficulties.find(d => d.id === difficultyId)?.name : 'All Difficulties' }}
+                              </span>
+                          </button>
+
+                          <!-- Category Filter -->
+                          <button
+                              @click="rotateCategory"
+                              :class="[
+                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
+                                  'transition-all duration-300 ease-in-out',
+                                  'bg-pink-600/50 hover:brightness-90',
+                                  categoryId ? 'bg-pink-700 ring-2 ring-pink-400' : ''
+                              ]"
+                          >
+                              <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                              </svg>
+                              <span class="font-medium truncate">
+                                  {{ categoryId ? categories.find(c => c.id === categoryId)?.name : 'All Categories' }}
+                              </span>
+                          </button>
+                      </div>
+
+                      <!-- AI Scores Toggle -->
+                      <div class="mb-2 w-full">
+                          <button
+                              @click="toggleAiScores"
+                              :class="[
+                                  'flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full w-full',
+                                  'transition-all duration-300 ease-in-out',
+                                  aiFilterColor + ' hover:brightness-90',
+                                  showAiScores ? 'bg-lime-700 ring-2 ring-lime-400' : ''
+                              ]"
+                          >
+                              <BrainCircuitIcon class="w-5 h-5 shrink-0" />
+                              <span class="font-medium truncate">{{ showAiScores ? 'AI Scores ON' : 'AI Scores OFF' }}</span>
+                          </button>
+                      </div>
+
+                      <!-- Advanced Filters Toggle -->
+                      <div class="mb-2 w-full">
+                          <button
+                              @click="showAdvancedFilters = !showAdvancedFilters"
+                              :class="[
+                                  'w-full flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full',
+                                  'transition-all duration-300 ease-in-out',
+                                  'bg-gray-600/50 hover:bg-gray-700',
+                                  showAdvancedFilters ? 'bg-gray-700' : ''
+                              ]"
+                          >
+                               <span class="text-xl shrink-0">
+                                   <template v-if="showAdvancedFilters">
+                                       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-up"><path d="m18 15-6-6-6 6"/></svg>
+                                   </template>
+                                   <template v-else>
+                                       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>
+                                   </template>
+                               </span>
+                              <span class="font-medium truncate px-1">Advanced</span>
+                          </button>
+                      </div>
+                    </div>
+                  </details>
+
+                <!-- Mobile: Stack filters vertically, Desktop: Keep horizontal -->
+                <div class="hidden lg:flex flex-row justify-center gap-2 lg:gap-4 mb-6 px-2 lg:px-6">
                       <!-- Chart Toggle - Full width on mobile -->
                       <div class="flex items-center gap-2 w-full lg:min-w-[180px] lg:max-w-xs lg:mr-20">
                           <button
@@ -481,14 +636,14 @@ onUnmounted(() => {
                       </div>
 
                       <!-- Date Filter - Full width on mobile -->
-                      <div class="mb-2 w-full lg:w-auto">
+                      <div class="mb-1 w-full lg:w-auto">
                           <button
                               @click="showDateModal = true"
                               :class="[
                                   'flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full w-full',
                                   'transition-all duration-300 ease-in-out',
                                   dateFilterColor + ' hover:brightness-90',
-                                  (dateRange[0] && dateRange[1]) ? 'bg-orange-900 ring-2 ring-orange-400' : ''
+                                  (dateRange[0] && dateRange[1]) ? 'bg-orange-900/50 ring-2 ring-orange-400' : ''
                               ]"
                           >
                               <CalendarDaysIcon class="w-5 h-5 shrink-0" />
@@ -497,15 +652,15 @@ onUnmounted(() => {
                       </div>
 
                       <!-- Game Filters - Stack on mobile, side by side on desktop -->
-                      <div class="flex flex-col lg:flex-col space-y-2 flex-grow w-full lg:min-w-[180px] lg:max-w-xs">
+                      <div class="flex flex-col lg:flex-col space-y-3 flex-grow w-full lg:min-w-[180px] lg:max-w-xs">
                           <button
                               v-for="(filter, index) in gameFilters"
                               :key="filter.id"
                               :class="[
-                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
+                                  'flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
                                   'transition-all duration-300 ease-in-out',
                                   optionColors[index] + ' hover:brightness-90',
-                                  activeGameId === filter.id ? 'bg-blue-700 ring-2 ring-gray-400' : ''
+                                  activeGameId === filter.id ? 'ring-2 ring-black/20' : ''
                               ]"
                               @click="selectGameFilter(filter.id)"
                           >
@@ -515,12 +670,12 @@ onUnmounted(() => {
                       </div>
 
                       <!-- Difficulty and Category - Stack on mobile -->
-                      <div class="flex flex-col space-y-2 w-full lg:flex-grow lg:h-full">
+                      <div class="flex flex-col space-y-3 w-full lg:flex-grow lg:h-full">
                           <!-- Difficulty Filter Button -->
                           <button
                               @click="rotateDifficulty"
                               :class="[
-                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
+                                  'flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
                                   'transition-all duration-300 ease-in-out',
                                   'bg-green-600/50 hover:brightness-90',
                                   difficultyId ? 'bg-green-700 ring-2 ring-green-400' : ''
@@ -538,7 +693,7 @@ onUnmounted(() => {
                           <button
                               @click="rotateCategory"
                               :class="[
-                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
+                                  'flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
                                   'transition-all duration-300 ease-in-out',
                                   'bg-pink-600/50 hover:brightness-90',
                                   categoryId ? 'bg-pink-700 ring-2 ring-pink-400' : ''
@@ -554,7 +709,7 @@ onUnmounted(() => {
                       </div>
 
                       <!-- AI Scores Toggle - Full width on mobile -->
-                      <div class="mb-2 w-full lg:w-auto">
+                      <div class="mb-1 w-full lg:w-auto">
                           <button
                               @click="toggleAiScores"
                               :class="[
@@ -570,7 +725,7 @@ onUnmounted(() => {
                       </div>
 
                       <!-- Advanced Filters Toggle - Full width on mobile -->
-                      <div class="mb-2 w-full lg:w-auto">
+                      <div class="mb-1 w-full lg:w-auto">
                           <button
                               @click="showAdvancedFilters = !showAdvancedFilters"
                               :class="[

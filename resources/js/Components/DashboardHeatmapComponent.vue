@@ -447,7 +447,7 @@ const heatmapOptions = ref({
   chart: {
     type: 'heatmap',
     height: 400,
-    foreColor: '#ccc',
+    foreColor: '#8f8f8f',
     toolbar: { show: false },
     animations: { enabled: false },
     events: {
@@ -478,7 +478,7 @@ const heatmapOptions = ref({
 
         { from: -100, to: -100, color: '#c96565', name: '0 pts' },
           // No activity
-          { from: 0, to: 0, color: '#1f2937', name: 'No Activity' },
+          { from: 0, to: 0, color: '#1f293700', name: 'No Activity' },
           
           // Human scores (blue) - ranges 1-1000
           { from: 1, to: 25, color: '#96b9d4', name: '1-25' },
@@ -695,7 +695,7 @@ const radialOptions = ref({
         background: 'transparent'
       },
       track: { 
-        background: '#1f2937',
+        background: '#1f293720',
         strokeWidth: '97%'
       },
       dataLabels: {
