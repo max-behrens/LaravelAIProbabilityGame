@@ -333,7 +333,7 @@ onUnmounted(() => {
                 <label class="text-sm text-gray-400">Show:</label>
                 <select
                   v-model="perPage"
-                  class="px-3 pr-6 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  class="px-3 pr-8 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="15">15</option>
                   <option value="25">25</option>
@@ -360,7 +360,7 @@ onUnmounted(() => {
                   <tr>
                     <th 
                       @click="sortTable('user_name')"
-                      class="px-6 py-4 font-semibold text-white cursor-pointer hover:bg-gray-600 transition-colors duration-200"
+                      class="px-6 py-4 font-semibold text-white cursor-pointer theme-hover-bg transition-colors duration-200"
                     >
                       <div class="flex items-center space-x-2">
                         <span>Player</span>
@@ -383,7 +383,7 @@ onUnmounted(() => {
                     </th>
                     <th 
                       @click="sortTable('score')"
-                      class="px-6 py-4 font-semibold text-white cursor-pointer hover:bg-gray-600 transition-colors duration-200"
+                      class="px-6 py-4 font-semibold text-white cursor-pointer theme-hover-bg transition-colors duration-200"
                     >
                       <div class="flex items-center space-x-2">
                         <span>Score</span>
@@ -397,7 +397,7 @@ onUnmounted(() => {
                     </th>
                     <th 
                       @click="sortTable('created_at')"
-                      class="px-6 py-4 font-semibold text-white cursor-pointer hover:bg-gray-600 transition-colors duration-200"
+                      class="px-6 py-4 font-semibold text-white cursor-pointer theme-hover-bg transition-colors duration-200"
                     >
                       <div class="flex items-center space-x-2">
                         <span>Date Created</span>
@@ -412,7 +412,7 @@ onUnmounted(() => {
                   <tr 
                     v-for="(score, index) in filteredScores" 
                     :key="score.id || `ai-${score.session_id}-${index}`"
-                    class="border-b border-gray-700 hover:bg-gray-750 transition-colors duration-200"
+                    class="border-b border-gray-700 theme-hover-bg transition-colors duration-200"
                     :class="{ 'bg-blue-900/20': score.score_type === 'ai' }"
                   >
                     <!-- Player Name -->
@@ -539,11 +539,6 @@ onUnmounted(() => {
 
 .overflow-x-auto::-webkit-scrollbar-thumb:hover {
   background: #9CA3AF;
-}
-
-/* Hover effect for table rows */
-.hover\:bg-gray-750:hover {
-  background-color: #374151;
 }
 
 /* Animation for loading spinner */
