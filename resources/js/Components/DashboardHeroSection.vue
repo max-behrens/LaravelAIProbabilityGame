@@ -1,12 +1,18 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { usePage } from '@inertiajs/inertia-vue3';
+import { Trophy } from 'lucide-vue-next';
+import axios from 'axios';
 
 // Accept props from parent component
 const props = defineProps({
   gameTypes: {
     type: Array,
     default: () => []
+  },
+  gameWins: {
+    type: Object,
+    default: () => ({ player_wins: 0, ai_wins: 0 })
   }
 });
 
@@ -14,6 +20,9 @@ const props = defineProps({
 const page = usePage();
 
 const gameTypes = page.props.gameTypes || null;
+
+// Game wins data
+const gameWinsData = ref(props.gameWins);
 
 // Generate slides dynamically based on game types
 const generateSlides = () => {
@@ -63,17 +72,67 @@ const goToSlide = (index) => {
   currentSlide.value = index;
 };
 
-const scrollToFeatured = () => {
-  const featuredSection = document.getElementById('stats');
-  if (featuredSection) {
+const scrollToSection = (sectionId) => {
+  const section = document.getElementById(sectionId);
+  if (section) {
     const yOffset = -80;
-    const y = featuredSection.getBoundingClientRect().top + window.pageYOffset + yOffset;
+    const y = section.getBoundingClientRect().top + window.pageYOffset + yOffset;
     window.scrollTo({ top: y, behavior: 'smooth' });
   }
 };
 
+const scrollToFeatured = () => {
+  scrollToSection('stats');
+};
+
+const scrollToHeatmap = () => {
+  // Dispatch custom event to switch to heatmap
+  const event = new CustomEvent('switchChart', { 
+    detail: { chartIndex: 0, chartType: 'heatmap' },
+    bubbles: true 
+  });
+  document.dispatchEvent(event);
+  
+  // Small delay to ensure chart switches before scrolling
+  setTimeout(() => {
+    scrollToSection('stats');
+  }, 100);
+};
+
+const scrollToLineChart = () => {
+  // Dispatch custom event to switch to line chart
+  const event = new CustomEvent('switchChart', { 
+    detail: { chartIndex: 1, chartType: 'linechart' },
+    bubbles: true 
+  });
+  document.dispatchEvent(event);
+  
+  // Small delay to ensure chart switches before scrolling
+  setTimeout(() => {
+    scrollToSection('stats');
+  }, 100);
+};
+
+const goToLeaderboard = () => {
+  window.location.href = route('leaderboard');
+};
+
 const handleImageLoad = (index) => {
   loadedImages.value[index] = true;
+};
+
+// Fetch game wins with filters
+const fetchGameWins = async (difficultyId = null, categoryId = null) => {
+  try {
+    const params = new URLSearchParams();
+    if (difficultyId) params.append('difficulty_id', difficultyId);
+    if (categoryId) params.append('category_id', categoryId);
+    
+    const response = await axios.get(`/api/dashboard/game-wins?${params.toString()}`);
+    gameWinsData.value = response.data;
+  } catch (error) {
+    console.error('Error fetching game wins:', error);
+  }
 };
 
 let slideInterval;
@@ -85,8 +144,10 @@ onMounted(() => {
   
   console.log('Generated slides:', slides.value);
   console.log('Props gameTypes on mount:', props.gameTypes);
+  console.log('Game wins data:', gameWinsData.value);
   
   slideInterval = setInterval(nextSlide, 15000);
+  
 });
 
 onUnmounted(() => {
@@ -96,6 +157,66 @@ onUnmounted(() => {
 
 <template>
   <section class="min-h-screen flex items-center justify-center relative">
+    <!-- Top Left Navigation Buttons -->
+    <div class="absolute top-8 left-8 z-20 flex flex-col space-y-2">
+    <!-- Heatmap -->
+    <button
+      @click="scrollToHeatmap"
+      class="theme-button-heatmap !text-white px-4 py-2 rounded-lg backdrop-blur-sm hover:scale-105"
+    >
+      Scores Per Game
+    </button>
+
+    <!-- Line Chart -->
+    <button
+      @click="scrollToLineChart"
+      class="theme-button-linechart !text-white px-4 py-2 rounded-lg backdrop-blur-sm hover:scale-105"
+    >
+      Scores Over Time
+    </button>
+    </div>
+
+    <!-- Top Right Leaderboard Button -->
+    <div class="absolute top-8 right-8 z-20">
+
+      <!-- Leaderboard -->
+      <button
+        @click="goToLeaderboard"
+        class="theme-button px-4 py-2 !text-white rounded-lg backdrop-blur-sm hover:scale-105 flex items-center space-x-2"
+        aria-label="Go to leaderboard"
+      >
+        <Trophy class="w-5 h-5" />
+        <span class="hidden sm:inline">Leaderboard</span>
+      </button>
+    </div>
+
+    <!-- Game Wins Chart - Top Center -->
+    <!-- <div class="absolute top-8 left-1/2 transform -translate-x-1/2 z-20 bg-white/10 backdrop-blur-sm rounded-lg p-4 min-w-64">
+      <h3 class="text-white text-sm font-semibold mb-2 text-center">Game Wins</h3>
+      <div class="flex space-x-4">
+        <div class="flex-1">
+          <div class="text-xs text-blue-200 mb-1">Players</div>
+          <div class="bg-blue-500 h-6 rounded flex items-center justify-center relative">
+            <div 
+              class="bg-blue-600 h-full rounded transition-all duration-500" 
+              :style="{ width: gameWinsData.player_wins > 0 ? `${(gameWinsData.player_wins / (gameWinsData.player_wins + gameWinsData.ai_wins)) * 100}%` : '0%' }"
+            ></div>
+            <span class="absolute text-xs text-white font-semibold">{{ gameWinsData.player_wins }}</span>
+          </div>
+        </div>
+        <div class="flex-1">
+          <div class="text-xs text-red-200 mb-1">AI</div>
+          <div class="bg-red-500 h-6 rounded flex items-center justify-center relative">
+            <div 
+              class="bg-red-600 h-full rounded transition-all duration-500" 
+              :style="{ width: gameWinsData.ai_wins > 0 ? `${(gameWinsData.ai_wins / (gameWinsData.player_wins + gameWinsData.ai_wins)) * 100}%` : '0%' }"
+            ></div>
+            <span class="absolute text-xs text-white font-semibold">{{ gameWinsData.ai_wins }}</span>
+          </div>
+        </div>
+      </div>
+    </div> -->
+
     <!-- Background slideshow -->
     <div class="absolute inset-0 z-0">
       <div class="absolute inset-0">

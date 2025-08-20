@@ -25,7 +25,6 @@ const props = defineProps({
   }
 });
 
-console.log('DIFF: ' + JSON.stringify(props.difficulties));
 const showAdvancedFilters = ref(false);
 
 const getDefaultDateRange = () => {
@@ -99,7 +98,19 @@ onMounted(async () => {
 
   difficultyId.value = page.props.current_difficulty_id ? parseInt(page.props.current_difficulty_id) : null;
   categoryId.value = page.props.current_category_id ? parseInt(page.props.current_category_id) : null;
+
+  // Add event listener for chart switching from hero component
+  const handleChartSwitch = (event) => {
+    console.log('Chart switch event received:', event.detail);
+    if (event.detail && typeof event.detail.chartIndex === 'number') {
+      currentChartIndex.value = event.detail.chartIndex;
+    }
+  };
   
+  document.addEventListener('switchChart', handleChartSwitch);
+  
+  // Store the handler reference for cleanup
+  window.chartSwitchHandler = handleChartSwitch;
   
   // Fetch users on mount
   await fetchUsers();
@@ -418,6 +429,10 @@ const handleClickOutside = (event) => {
 
 onUnmounted(() => {
     document.removeEventListener('click', handleClickOutside);
+    if (window.chartSwitchHandler) {
+      document.removeEventListener('switchChart', window.chartSwitchHandler);
+      delete window.chartSwitchHandler;
+    }
 });
 </script>
 

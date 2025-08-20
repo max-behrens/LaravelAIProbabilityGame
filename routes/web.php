@@ -97,6 +97,7 @@ Route::prefix('dashboard')
         Route::get('/session-details/{sessionId}', [IndexController::class, 'getGameSessionDetails']);
         Route::get('/cumulative-heatmap', [IndexController::class, 'getCumulativeHeatMap']);
         Route::get('/cumulative-bargraph', [IndexController::class, 'getCumulativeBarGraph']);
+        Route::get('/dashboard/game-wins', [IndexController::class, 'getGameWins']);
         Route::get('/users', [IndexController::class, 'getAllUsers']);
 
         // Game Auth Menu

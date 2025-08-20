@@ -1736,6 +1736,103 @@ class GamesService
     }
 
 
+    /**
+     * Get game wins statistics comparing player vs AI wins by session
+     *
+     * @param int|null $difficultyId
+     * @param int|null $categoryId
+     * @return array
+     */
+    public function getGameWins(?int $difficultyId = null, ?int $categoryId = null): array
+    {
+        Log::debug('Calculating game wins with filters', [
+            'difficultyId' => $difficultyId,
+            'categoryId' => $categoryId
+        ]);
+
+        // Get all game scores grouped by session_id
+        $gameScoresQuery = DB::table('game_scores')
+            ->select('session_id', DB::raw('SUM(score) as total_player_score'), 'answer_json')
+            ->groupBy('session_id', 'answer_json');
+
+        // Apply difficulty filter if provided
+        if ($difficultyId !== null) {
+            $this->applyJsonIdFilter($gameScoresQuery, 'game_scores', 'difficulty_id', $difficultyId);
+        }
+
+        // Apply category filter if provided
+        if ($categoryId !== null) {
+            $this->applyJsonIdFilter($gameScoresQuery, 'game_scores', 'category_id', $categoryId);
+        }
+
+        $gameScores = $gameScoresQuery->get();
+
+        // Get all AI scores grouped by session_id
+        $aiScoresQuery = DB::table('ai_scores')
+            ->select('session_id', 'score as ai_score', 'answer_json')
+            ->whereNotNull('score');
+
+        // Apply difficulty filter if provided
+        if ($difficultyId !== null) {
+            $this->applyJsonIdFilter($aiScoresQuery, 'ai_scores', 'difficulty_id', $difficultyId);
+        }
+
+        // Apply category filter if provided
+        if ($categoryId !== null) {
+            $this->applyJsonIdFilter($aiScoresQuery, 'ai_scores', 'category_id', $categoryId);
+        }
+
+        $aiScores = $aiScoresQuery->get()->keyBy('session_id');
+
+        $playerWins = 0;
+        $aiWins = 0;
+
+        // Compare scores for each session
+        foreach ($gameScores as $gameScore) {
+            $sessionId = $gameScore->session_id;
+            $playerScore = $gameScore->total_player_score;
+            
+            // Find corresponding AI score for this session
+            $aiScore = $aiScores->get($sessionId);
+            
+            if ($aiScore) {
+                $aiScoreValue = $aiScore->ai_score;
+                
+                // Determine winner
+                if ($playerScore > $aiScoreValue) {
+                    $playerWins++;
+                } elseif ($aiScoreValue > $playerScore) {
+                    $aiWins++;
+                }
+                // Ties are not counted as wins for either side
+            } else {
+                // If no AI score exists for this session, count as player win
+                $playerWins++;
+            }
+        }
+
+        // Also check for AI scores that don't have corresponding player scores
+        foreach ($aiScores as $sessionId => $aiScore) {
+            $hasPlayerScore = $gameScores->where('session_id', $sessionId)->isNotEmpty();
+            
+            if (!$hasPlayerScore) {
+                // AI score exists but no player score, count as AI win
+                $aiWins++;
+            }
+        }
+
+        $result = [
+            'player_wins' => $playerWins,
+            'ai_wins' => $aiWins,
+            'total_sessions' => $playerWins + $aiWins
+        ];
+
+        Log::debug('Game wins calculated', $result);
+
+        return $result;
+    }
+
+
     private function decodeAnswerJson($rawJson): ?array
     {
         if (empty($rawJson)) {

@@ -3,13 +3,17 @@
   --bg-primary: #c4c4c4;
   --bg-secondary: #f3f4f6;
   --bg-tertiary: #d0d1d2;
+  --bg-leaderboard: #6f6f6fa4;
+  --bg-heatmap: #8bd9acb1;
+  --bg-linechart: #cb77c6a7;
   --text-primary: #333946;
   --text-secondary: #6b7280;
   --text-tertiary: #9ca3af;
   --border-primary: #d1d5db;
   --border-secondary: #e5e7eb;
-  --hover-bg: #e5e7eb; /* Much lighter for light mode */
-  --accent-color: #578b87;
+  --hover-bg: #606774a6; /* Much lighter for light mode */
+  --hover-bg-2: #bfbfbf9c; /* Much darker for dark mode */
+  --accent-color: #bababa;
   --accent-hover: #406865;
   --error-color: #ef4444;
   --success-color: #10b981;
@@ -20,13 +24,17 @@
   --bg-primary: #111827;
   --bg-secondary: #1f2937;
   --bg-tertiary: #374151;
+  --bg-leaderboard: #2525256c;
+  --bg-heatmap: #385d4859;
+  --bg-linechart: #5c3e5a59;
   --text-primary: #f9fafb;
   --text-secondary: #d1d5db;
   --text-tertiary: #9ca3af;
   --border-primary: #4b5563;
   --border-secondary: #374151;
-  --hover-bg: #32455d; /* Much darker for dark mode */
-  --accent-color: #578b87;
+  --hover-bg: #374151; /* Much darker for dark mode */
+  --hover-bg-2: #bdbdbd47; /* Much darker for dark mode */
+  --accent-color: #a4a4a4;
   --accent-hover: #406865;
   --error-color: #ef4444;
   --success-color: #10b981;
@@ -78,4 +86,53 @@ h2 {
 .bg-yellow-600, .bg-yellow-700
 {
   color: white !important;
+}
+
+.theme-button {
+  background-color: var(--bg-leaderboard);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+  transition: all 0.3s ease;
+}
+
+.theme-button:hover {
+  background-color: var(--hover-bg);
+  color: var(--text-secondary);
+}
+
+.theme-button-heatmap {
+  background-color: var(--bg-heatmap);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+  transition: all 0.3s ease;
+}
+
+.theme-button-heatmap:hover {
+  background-color: var(--hover-bg-2);
+  color: var(--text-secondary);
+}
+
+.theme-button-linechart {
+  background-color: var(--bg-linechart);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+  transition: all 0.3s ease;
+}
+
+.theme-button-linechart:hover {
+  background-color: var(--hover-bg-2);
+  color: var(--text-secondary);
+}
+
+.theme-button-accent,
+.theme-button-heatmap-accent,
+.theme-button-linechart-accent {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.theme-button-accent:hover,
+.theme-button-heatmap-accent:hover,
+.theme-button-linechart-accent:hover {
+  background-color: var(--accent-hover);
 }

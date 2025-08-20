@@ -25,6 +25,10 @@ const props = defineProps({
     categories: {
         type: Array,
         default: () => []
+    },
+    game_wins: {
+        type: Object,
+        default: () => ({ player_wins: 0, ai_wins: 0 })
     }
 });
 
@@ -142,8 +146,8 @@ onUnmounted(() => {
     <BreezeAuthenticatedLayout>
 
         <section id="main">
-            <!-- Pass game_types as prop to DashboardHeroSection -->
-            <DashboardHeroSection :game-types="game_types" />
+            <!-- Pass game_types and game_wins as props to DashboardHeroSection -->
+            <DashboardHeroSection :game-types="game_types" :game-wins="game_wins" />
         </section>
 
         <transition name="fade">

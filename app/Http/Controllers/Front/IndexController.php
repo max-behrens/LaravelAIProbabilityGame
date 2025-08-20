@@ -19,6 +19,11 @@ class IndexController extends Controller
 {
     protected $gamesService;
 
+    public function __construct(GamesService $gamesService)
+    {
+        $this->gamesService = $gamesService;
+    }
+
     public function __invoke(Request $request)
     {
         // Fetch the first two game types for the hero slides
@@ -26,8 +31,8 @@ class IndexController extends Controller
         $difficulties = GameTypeDifficulty::all();
         $categories = GameTypeCategory::all();
 
-                Log::info('DIFF', ['difficulties' => $difficulties]);
-
+        // Get game wins data on page load
+        $gameWins = $this->gamesService->getGameWins();
 
         return Inertia::render('Dashboard/Index', [
             'current_game_id' => $request->query('game_id'),
@@ -37,12 +42,8 @@ class IndexController extends Controller
             'game_types' => $gameTypes->toArray(), // Pass game types to the view
             'difficulties' => $difficulties,
             'categories' => $categories,
+            'game_wins' => $gameWins, // Pass game wins data
         ]);
-    }
-
-    public function __construct(GamesService $gamesService)
-    {
-        $this->gamesService = $gamesService;
     }
 
     public function getAllUsers()
@@ -74,6 +75,37 @@ class IndexController extends Controller
             'players' => $players,
             'totalScore' => $totalGameScore,
         ]);
+    }
+
+    /**
+     * Get game wins data with optional filters
+     *
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getGameWins(Request $request)
+    {
+        $difficultyId = $request->get('difficulty_id') ? (int) $request->get('difficulty_id') : null;
+        $categoryId = $request->get('category_id') ? (int) $request->get('category_id') : null;
+
+        Log::info('Fetching game wins data', [
+            'difficulty_id' => $difficultyId,
+            'category_id' => $categoryId
+        ]);
+
+        try {
+            $gameWins = $this->gamesService->getGameWins($difficultyId, $categoryId);
+            
+            Log::info('Game wins data retrieved', $gameWins);
+            return response()->json($gameWins);
+        } catch (\Exception $e) {
+            Log::error('Error retrieving game wins data', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json(['error' => 'Failed to retrieve game wins data'], 500);
+        }
     }
 
     /**

@@ -86,6 +86,8 @@ Route::get('/users', [IndexController::class, 'getAllUsers']);
 
 Route::get('/game-types', [GamesController::class, 'getGameTypes']);
 
+Route::get('/dashboard/game-wins', [IndexController::class, 'getGameWins']);
+
 
 
 
