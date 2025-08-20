@@ -309,7 +309,7 @@ class GamesService
                 'users.name as user_name',
                 'game_scores.game_id',
                 'game_scores.score',
-                'game_scores.created_at',
+                DB::raw("DATE_ADD(game_scores.created_at, INTERVAL 1 HOUR) as created_at"),
                 'game_scores.answer_json',
                 'game_types.name as game_type_name',
                 DB::raw("'user' as score_type") // Add score_type for user scores
@@ -374,7 +374,7 @@ class GamesService
                     DB::raw("'AI' as user_name"),
                     'ai_scores.game_id',
                     'ai_scores.score',
-                    'ai_scores.created_at',
+                    DB::raw("DATE_ADD(ai_scores.created_at, INTERVAL 1 HOUR) as created_at"),
                     'ai_scores.answer_json',
                     'game_types.name as game_type_name',
                     DB::raw("'ai' as score_type") // Add score_type for AI scores
