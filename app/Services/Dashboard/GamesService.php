@@ -266,273 +266,273 @@ class GamesService
      * @param \Illuminate\Database\Query\Builder $query
      * 
      */
-    public function getLeaderboardGames(
-        $page = 1, 
-        ?string $startDate = null,
-        ?string $endDate = null, 
-        ?array $userIds = null, 
-        bool $andUsers = false, 
-        ?int $gameType = null,
-        $perPage = null,
-        ?int $difficultyId = null,
-        ?int $categoryId = null,
-        bool $includeAI = false,
-        ?string $searchQuery = null,
-        string $sortField = 'score',
-        string $sortDirection = 'desc'
-    )
-    {
-        Log::debug('Fetching leaderboard games', [
-            'page' => $page,
-            'startDate' => $startDate,
-            'endDate' => $endDate,
-            'userIds' => $userIds,
-            'andUsers' => $andUsers,
-            'gameType' => $gameType,
-            'includeAI' => $includeAI,
-            'difficultyId' => $difficultyId,
-            'categoryId' => $categoryId,
-            'searchQuery' => $searchQuery,
-            'sortField' => $sortField,
-            'sortDirection' => $sortDirection
-        ]);
+  public function getLeaderboardGames(
+    $page = 1, 
+    ?string $startDate = null,
+    ?string $endDate = null, 
+    ?array $userIds = null, 
+    bool $andUsers = false, 
+    ?int $gameType = null,
+    $perPage = null,
+    ?int $difficultyId = null,
+    ?int $categoryId = null,
+    bool $includeAI = false,
+    ?string $searchQuery = null,
+    string $sortField = 'score',
+    string $sortDirection = 'desc'
+)
+{
+    Log::debug('Fetching leaderboard games', [
+        'page' => $page,
+        'startDate' => $startDate,
+        'endDate' => $endDate,
+        'userIds' => $userIds,
+        'andUsers' => $andUsers,
+        'gameType' => $gameType,
+        'includeAI' => $includeAI,
+        'difficultyId' => $difficultyId,
+        'categoryId' => $categoryId,
+        'searchQuery' => $searchQuery,
+        'sortField' => $sortField,
+        'sortDirection' => $sortDirection
+    ]);
 
-        // Base query for user scores
-        $userScoresQuery = GameScore::query()
-            ->join('users', 'game_scores.player_id', '=', 'users.id')
-            ->join('games', 'game_scores.game_id', '=', 'games.id')
+    // Base query for user scores
+    $userScoresQuery = GameScore::query()
+        ->join('users', 'game_scores.player_id', '=', 'users.id')
+        ->join('games', 'game_scores.game_id', '=', 'games.id')
+        ->join('game_types', 'games.game_type_id', '=', 'game_types.id')
+        ->select(
+            'game_scores.id',
+            'game_scores.session_id',
+            'game_scores.player_id as user_id',
+            'users.name as user_name',
+            'game_scores.game_id',
+            'game_scores.score',
+            'game_scores.created_at',
+            'game_scores.answer_json',
+            'game_types.name as game_type_name',
+            DB::raw("'user' as score_type") // Add score_type for user scores
+        );
+
+    // Apply filters to user scores
+    if ($startDate && $endDate) {
+        $userScoresQuery->whereBetween('game_scores.created_at', [$startDate, $endDate]);
+    }
+
+    if (!empty($userIds) && !$andUsers) {
+        $userScoresQuery->whereIn('game_scores.player_id', $userIds);
+    }
+
+    if (!empty($userIds) && $andUsers) {
+        $sessionsWithAllUsers = GameScore::query()
+            ->whereIn('player_id', $userIds)
+            ->select('session_id')
+            ->groupBy('session_id')
+            ->havingRaw('COUNT(DISTINCT player_id) = ?', [count($userIds)])
+            ->pluck('session_id');
+
+        $userScoresQuery->whereIn('game_scores.session_id', $sessionsWithAllUsers);
+    }
+
+    if ($gameType && $gameType > 0) {
+        $userScoresQuery->where('games.game_type_id', $gameType);
+    }
+
+    if ($difficultyId !== null) {
+        $this->applyJsonIdFilter($userScoresQuery, 'game_scores', 'difficulty_id', $difficultyId);
+    }
+
+    if ($categoryId !== null) {
+        $this->applyJsonIdFilter($userScoresQuery, 'game_scores', 'category_id', $categoryId);
+    }
+
+    if ($searchQuery) {
+        $userScoresQuery->where('game_scores.session_id', 'LIKE', "%{$searchQuery}%");
+    }
+
+    // If including AI scores, create a union query
+    if ($includeAI) {
+        $aiScoresQuery = DB::table('ai_scores')
+            ->join('games', 'ai_scores.game_id', '=', 'games.id')
             ->join('game_types', 'games.game_type_id', '=', 'game_types.id')
             ->select(
-                'game_scores.id',
-                'game_scores.session_id',
-                'game_scores.player_id as user_id',
-                'users.name as user_name',
-                'game_scores.game_id',
-                'game_scores.score',
-                'game_scores.created_at',
-                'game_scores.answer_json',
-                'game_types.name as game_type_name'
+                DB::raw('NULL as id'),
+                'ai_scores.session_id',
+                DB::raw('0 as user_id'),
+                DB::raw("'AI' as user_name"),
+                'ai_scores.game_id',
+                'ai_scores.score',
+                'ai_scores.created_at',
+                'ai_scores.answer_json',
+                'game_types.name as game_type_name',
+                DB::raw("'ai' as score_type") // Add score_type for AI scores
             );
 
-        // Apply filters to user scores
+        
+
+        // Apply same filters to AI scores
         if ($startDate && $endDate) {
-            $userScoresQuery->whereBetween('game_scores.created_at', [$startDate, $endDate]);
+            $aiScoresQuery->whereBetween('ai_scores.created_at', [$startDate, $endDate]);
         }
 
-        if (!empty($userIds) && !$andUsers) {
-            $userScoresQuery->whereIn('game_scores.player_id', $userIds);
-        }
-
-        if (!empty($userIds) && $andUsers) {
-            $sessionsWithAllUsers = GameScore::query()
-                ->whereIn('player_id', $userIds)
-                ->select('session_id')
-                ->groupBy('session_id')
-                ->havingRaw('COUNT(DISTINCT player_id) = ?', [count($userIds)])
-                ->pluck('session_id');
-
-            $userScoresQuery->whereIn('game_scores.session_id', $sessionsWithAllUsers);
+        if (!empty($userIds)) {
+            if ($andUsers) {
+                $aiScoresQuery->whereIn('ai_scores.session_id', $sessionsWithAllUsers ?? []);
+            } else {
+                $sessionsWithAnyUser = GameScore::query()
+                    ->whereIn('player_id', $userIds)
+                    ->select('session_id')
+                    ->distinct()
+                    ->pluck('session_id');
+                $aiScoresQuery->whereIn('ai_scores.session_id', $sessionsWithAnyUser);
+            }
         }
 
         if ($gameType && $gameType > 0) {
-            $userScoresQuery->where('games.game_type_id', $gameType);
+            $aiScoresQuery->where('games.game_type_id', $gameType);
         }
 
         if ($difficultyId !== null) {
-            $this->applyJsonIdFilter($userScoresQuery, 'game_scores', 'difficulty_id', $difficultyId);
+            $this->applyJsonIdFilter($aiScoresQuery, 'ai_scores', 'difficulty_id', $difficultyId);
         }
 
         if ($categoryId !== null) {
-            $this->applyJsonIdFilter($userScoresQuery, 'game_scores', 'category_id', $categoryId);
+            $this->applyJsonIdFilter($aiScoresQuery, 'ai_scores', 'category_id', $categoryId);
         }
 
         if ($searchQuery) {
-            $userScoresQuery->where('game_scores.session_id', 'LIKE', "%{$searchQuery}%");
+            $aiScoresQuery->where('ai_scores.session_id', 'LIKE', "%{$searchQuery}%");
         }
 
-        // If including AI scores, create a union query
-        if ($includeAI) {
-            $aiScoresQuery = DB::table('ai_scores')
-                ->join('games', 'ai_scores.game_id', '=', 'games.id')
-                ->join('game_types', 'games.game_type_id', '=', 'game_types.id')
-                ->select(
-                    DB::raw('NULL as id'),
-                    'ai_scores.session_id',
-                    DB::raw('0 as user_id'),
-                    DB::raw("'AI' as user_name"),
-                    'ai_scores.game_id',
-                    'ai_scores.score',
-                    'ai_scores.created_at',
-                    'ai_scores.answer_json',
-                    'game_types.name as game_type_name',
-                );
+        // Union the queries
+        $combinedQuery = $userScoresQuery->union($aiScoresQuery);
+    } else {
+        $combinedQuery = $userScoresQuery;
+    }
 
-            
+    // Apply sorting
+    $validSortFields = ['score', 'created_at', 'user_name'];
+    $validSortDirections = ['asc', 'desc'];
+    
+    if (in_array($sortField, $validSortFields) && in_array($sortDirection, $validSortDirections)) {
+        $combinedQuery->orderBy($sortField, $sortDirection);
+    } else {
+        $combinedQuery->orderBy('score', 'desc'); // Default to highest scores first
+    }
 
-            // Apply same filters to AI scores
-            if ($startDate && $endDate) {
-                $aiScoresQuery->whereBetween('ai_scores.created_at', [$startDate, $endDate]);
-            }
+    // Wrap in subquery for pagination since we're using union
+    $finalQuery = DB::table(DB::raw("({$combinedQuery->toSql()}) as combined_scores"))
+        ->mergeBindings($combinedQuery->getQuery());
 
-            if (!empty($userIds)) {
-                if ($andUsers) {
-                    $aiScoresQuery->whereIn('ai_scores.session_id', $sessionsWithAllUsers ?? []);
+    $scores = $finalQuery->paginate($perPage, ['*'], 'page', $page);
+
+    // Get all unique difficulty and category IDs for batch fetching names
+    $difficultyIds = [];
+    $categoryIds = [];
+    
+    foreach ($scores->items() as $score) {
+        $answerData = $this->decodeAnswerJson($score->answer_json);
+        if (isset($answerData['difficulty_id'])) {
+            $difficultyIds[] = $answerData['difficulty_id'];
+        }
+        if (isset($answerData['category_id'])) {
+            $categoryIds[] = $answerData['category_id'];
+        }
+    }
+
+    // Fetch difficulty and category names in bulk
+    $difficulties = collect();
+    $categories = collect();
+    
+    if (!empty($difficultyIds)) {
+        $difficulties = DB::table('game_type_difficulties')
+            ->whereIn('id', array_unique($difficultyIds))
+            ->pluck('name', 'id');
+    }
+    
+    if (!empty($categoryIds)) {
+        $categories = DB::table('game_type_categories')
+            ->whereIn('id', array_unique($categoryIds))
+            ->pluck('name', 'id');
+    }
+
+    // Transform the results
+    $scores->getCollection()->transform(function ($score) use ($difficulties, $categories, $includeAI) {
+        // Convert stdClass to array if needed
+        $scoreArray = is_object($score) ? (array) $score : $score;
+
+        $scoreArray['user'] = [
+            'id' => $scoreArray['user_id'] ?? 0,
+            'name' => $scoreArray['user_name'] ?? 'Unknown',
+        ];
+
+        if (!empty($scoreArray['answer_json'])) {
+            $answerData = $this->decodeAnswerJson($scoreArray['answer_json']);
+
+            if (is_array($answerData)) {
+                if (isset($answerData['difficulty_id'])) {
+                    $answerData['difficulty_name'] = $difficulties->get($answerData['difficulty_id']) 
+                        ?? 'Difficulty #' . $answerData['difficulty_id'];
                 } else {
-                    $sessionsWithAnyUser = GameScore::query()
-                        ->whereIn('player_id', $userIds)
-                        ->select('session_id')
-                        ->distinct()
-                        ->pluck('session_id');
-                    $aiScoresQuery->whereIn('ai_scores.session_id', $sessionsWithAnyUser);
+                    $answerData['difficulty_name'] = 'N/A';
                 }
-            }
 
-            if ($gameType && $gameType > 0) {
-                $aiScoresQuery->where('games.game_type_id', $gameType);
-            }
-
-            if ($difficultyId !== null) {
-                $this->applyJsonIdFilter($aiScoresQuery, 'ai_scores', 'difficulty_id', $difficultyId);
-            }
-
-            if ($categoryId !== null) {
-                $this->applyJsonIdFilter($aiScoresQuery, 'ai_scores', 'category_id', $categoryId);
-            }
-
-            if ($searchQuery) {
-                $aiScoresQuery->where('ai_scores.session_id', 'LIKE', "%{$searchQuery}%");
-            }
-
-            // Union the queries
-            $combinedQuery = $userScoresQuery->union($aiScoresQuery);
-        } else {
-            $combinedQuery = $userScoresQuery;
-        }
-
-        // Apply sorting
-        $validSortFields = ['score', 'created_at', 'user_name'];
-        $validSortDirections = ['asc', 'desc'];
-        
-        if (in_array($sortField, $validSortFields) && in_array($sortDirection, $validSortDirections)) {
-            $combinedQuery->orderBy($sortField, $sortDirection);
-        } else {
-            $combinedQuery->orderBy('score', 'desc'); // Default to highest scores first
-        }
-
-        // Wrap in subquery for pagination since we're using union
-        $finalQuery = DB::table(DB::raw("({$combinedQuery->toSql()}) as combined_scores"))
-            ->mergeBindings($combinedQuery->getQuery());
-
-        $scores = $finalQuery->paginate($perPage, ['*'], 'page', $page);
-
-        // Get all unique difficulty and category IDs for batch fetching names
-        $difficultyIds = [];
-        $categoryIds = [];
-        
-        foreach ($scores->items() as $score) {
-            $answerData = $this->decodeAnswerJson($score->answer_json);
-            if (isset($answerData['difficulty_id'])) {
-                $difficultyIds[] = $answerData['difficulty_id'];
-            }
-            if (isset($answerData['category_id'])) {
-                $categoryIds[] = $answerData['category_id'];
-            }
-        }
-
-        // Fetch difficulty and category names in bulk
-        $difficulties = collect();
-        $categories = collect();
-        
-        if (!empty($difficultyIds)) {
-            $difficulties = DB::table('game_type_difficulties')
-                ->whereIn('id', array_unique($difficultyIds))
-                ->pluck('name', 'id');
-        }
-        
-        if (!empty($categoryIds)) {
-            $categories = DB::table('game_type_categories')
-                ->whereIn('id', array_unique($categoryIds))
-                ->pluck('name', 'id');
-        }
-
-        // Transform the results
-        $scores->getCollection()->transform(function ($score) use ($difficulties, $categories, $includeAI) {
-            // Convert stdClass to array if needed
-            $scoreArray = is_object($score) ? (array) $score : $score;
-
-            $scoreName = $includeAI ? 'AI: ' : $scoreArray['user_name'];
-            
-            $scoreArray['user'] = [
-                'id' => $scoreArray['user_id'] ?? 0,
-                'name' => $scoreArray['user_name'] ?? 'Unknown',
-            ];
-
-            if (!empty($scoreArray['answer_json'])) {
-                $answerData = $this->decodeAnswerJson($scoreArray['answer_json']);
-
-                if (is_array($answerData)) {
-                    if (isset($answerData['difficulty_id'])) {
-                        $answerData['difficulty_name'] = $difficulties->get($answerData['difficulty_id']) 
-                            ?? 'Difficulty #' . $answerData['difficulty_id'];
-                    } else {
-                        $answerData['difficulty_name'] = 'N/A';
-                    }
-
-                    if (isset($answerData['category_id'])) {
-                        $answerData['category_name'] = $categories->get($answerData['category_id']) 
-                            ?? 'Category #' . $answerData['category_id'];
-                    } else {
-                        $answerData['category_name'] = 'N/A';
-                    }
-
-                    // Add max score based on difficulty for percentage calculation
-                    if (isset($answerData['difficulty_id'])) {
-                        $difficultyId = (int)$answerData['difficulty_id'];
-                        $totalScores = $this->totalScore($scoreArray['game_id'], null, 1);
-
-                        switch ($difficultyId) {
-                            case 1:
-                                $answerData['max_score'] = $totalScores['totalEasy'];
-                                break;
-                            case 2:
-                                $answerData['max_score'] = $totalScores['totalMedium'];
-                                break;
-                            case 3:
-                                $answerData['max_score'] = $totalScores['totalDifficult'];
-                                break;
-                            default:
-                                $answerData['max_score'] = $totalScores['totalEasy'];
-                        }
-                    } else {
-                        $answerData['max_score'] = 75; // fallback
-                    }
-
-                    $scoreArray['answer_json'] = $answerData;
+                if (isset($answerData['category_id'])) {
+                    $answerData['category_name'] = $categories->get($answerData['category_id']) 
+                        ?? 'Category #' . $answerData['category_id'];
                 } else {
-                    // If answer_json couldn't be decoded, set defaults
-                    $scoreArray['answer_json'] = [
-                        'difficulty_name' => 'N/A',
-                        'category_name' => 'N/A',
-                        'max_score' => 75
-                    ];
+                    $answerData['category_name'] = 'N/A';
                 }
+
+                // Add max score based on difficulty for percentage calculation
+                if (isset($answerData['difficulty_id'])) {
+                    $difficultyId = (int)$answerData['difficulty_id'];
+                    $totalScores = $this->totalScore($scoreArray['game_id'], null, 1);
+
+                    switch ($difficultyId) {
+                        case 1:
+                            $answerData['max_score'] = $totalScores['totalEasy'];
+                            break;
+                        case 2:
+                            $answerData['max_score'] = $totalScores['totalMedium'];
+                            break;
+                        case 3:
+                            $answerData['max_score'] = $totalScores['totalDifficult'];
+                            break;
+                        default:
+                            $answerData['max_score'] = $totalScores['totalEasy'];
+                    }
+                } else {
+                    $answerData['max_score'] = 75; // fallback
+                }
+
+                $scoreArray['answer_json'] = $answerData;
             } else {
-                // No answer_json, set defaults
+                // If answer_json couldn't be decoded, set defaults
                 $scoreArray['answer_json'] = [
                     'difficulty_name' => 'N/A',
                     'category_name' => 'N/A',
                     'max_score' => 75
                 ];
             }
+        } else {
+            // No answer_json, set defaults
+            $scoreArray['answer_json'] = [
+                'difficulty_name' => 'N/A',
+                'category_name' => 'N/A',
+                'max_score' => 75
+            ];
+        }
 
-            // Clean up the user_name field
-            unset($scoreArray['user_name']);
+        // Clean up the user_name field
+        unset($scoreArray['user_name']);
 
-            return (object) $scoreArray;
-        });
+        return (object) $scoreArray;
+    });
 
-        return $scores;
-    }
+    return $scores;
+}
 
     // Question retrieval methods:
 
