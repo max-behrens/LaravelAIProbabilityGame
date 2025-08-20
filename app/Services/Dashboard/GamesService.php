@@ -351,7 +351,18 @@ class GamesService
         $userScoresQuery->where('game_scores.session_id', 'LIKE', "%{$searchQuery}%");
     }
 
-    // If including AI scores, create a union query
+    // Validate sort parameters
+    $validSortFields = ['score', 'created_at', 'user_name'];
+    $validSortDirections = ['asc', 'desc'];
+    
+    if (!in_array($sortField, $validSortFields)) {
+        $sortField = 'score';
+    }
+    if (!in_array($sortDirection, $validSortDirections)) {
+        $sortDirection = 'desc';
+    }
+
+    // Always wrap in subquery for consistent structure
     if ($includeAI) {
         $aiScoresQuery = DB::table('ai_scores')
             ->join('games', 'ai_scores.game_id', '=', 'games.id')
@@ -368,8 +379,6 @@ class GamesService
                 'game_types.name as game_type_name',
                 DB::raw("'ai' as score_type") // Add score_type for AI scores
             );
-
-        
 
         // Apply same filters to AI scores
         if ($startDate && $endDate) {
@@ -405,26 +414,21 @@ class GamesService
             $aiScoresQuery->where('ai_scores.session_id', 'LIKE', "%{$searchQuery}%");
         }
 
-        // Union the queries
-        $combinedQuery = $userScoresQuery->union($aiScoresQuery);
+        // Create union query
+        $unionQuery = $userScoresQuery->union($aiScoresQuery);
+        
+        // Wrap union in subquery for proper sorting
+        $finalQuery = DB::table(DB::raw("({$unionQuery->toSql()}) as combined_scores"))
+            ->mergeBindings($unionQuery->getQuery())
+            ->orderBy($sortField, $sortDirection);
     } else {
-        $combinedQuery = $userScoresQuery;
+        // For consistency, wrap user scores in subquery too
+        $finalQuery = DB::table(DB::raw("({$userScoresQuery->toSql()}) as combined_scores"))
+            ->mergeBindings($userScoresQuery->getQuery())
+            ->orderBy($sortField, $sortDirection);
     }
 
-    // Apply sorting
-    $validSortFields = ['score', 'created_at', 'user_name'];
-    $validSortDirections = ['asc', 'desc'];
-    
-    if (in_array($sortField, $validSortFields) && in_array($sortDirection, $validSortDirections)) {
-        $combinedQuery->orderBy($sortField, $sortDirection);
-    } else {
-        $combinedQuery->orderBy('score', 'desc'); // Default to highest scores first
-    }
-
-    // Wrap in subquery for pagination since we're using union
-    $finalQuery = DB::table(DB::raw("({$combinedQuery->toSql()}) as combined_scores"))
-        ->mergeBindings($combinedQuery->getQuery());
-
+    // Apply pagination
     $scores = $finalQuery->paginate($perPage, ['*'], 'page', $page);
 
     // Get all unique difficulty and category IDs for batch fetching names
