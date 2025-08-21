@@ -85,17 +85,19 @@ class IndexController extends Controller
      */
     public function getGameWins(Request $request)
     {
+        $gameTypeId = $request->get('game_type_id') ? (int) $request->get('game_type_id') : null;
         $difficultyId = $request->get('difficulty_id') ? (int) $request->get('difficulty_id') : null;
         $categoryId = $request->get('category_id') ? (int) $request->get('category_id') : null;
-
+        
         Log::info('Fetching game wins data', [
+            'game_type_id' => $gameTypeId,
             'difficulty_id' => $difficultyId,
             'category_id' => $categoryId
         ]);
-
+        
         try {
-            $gameWins = $this->gamesService->getGameWins($difficultyId, $categoryId);
-            
+            $gameWins = $this->gamesService->getGameWins($gameTypeId, $difficultyId, $categoryId);
+        
             Log::info('Game wins data retrieved', $gameWins);
             return response()->json($gameWins);
         } catch (\Exception $e) {
@@ -103,10 +105,10 @@ class IndexController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-
             return response()->json(['error' => 'Failed to retrieve game wins data'], 500);
         }
     }
+
 
     /**
      * Get cumulative scores for all players across all games to the dashboard.

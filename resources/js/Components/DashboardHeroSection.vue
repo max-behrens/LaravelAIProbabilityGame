@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue';
 import { usePage } from '@inertiajs/inertia-vue3';
 import { Trophy, ChartColumnStacked, LineChartIcon } from 'lucide-vue-next';
 import axios from 'axios';
@@ -13,6 +13,14 @@ const props = defineProps({
   gameWins: {
     type: Object,
     default: () => ({ player_wins: 0, ai_wins: 0 })
+  },
+  difficulties: {
+    type: Array,
+    default: () => []
+  },
+  categories: {
+    type: Array,
+    default: () => []
   }
 });
 
@@ -21,8 +29,34 @@ const page = usePage();
 
 const gameTypes = page.props.gameTypes || null;
 
-// Game wins data
-const gameWinsData = ref(props.gameWins);
+// Game wins data - store for each game type
+const gameWinsData = ref({});
+const currentSlide = ref(0);
+
+// Filter states
+const selectedDifficulty = ref(null); // null means "All"
+const selectedCategory = ref(null); // null means "All"
+
+// Initialize game wins data for each game type
+const initializeGameWinsData = async () => {
+  const gameTypesToUse = props.gameTypes?.length > 0 ? props.gameTypes : page.props.game_types;
+  
+  if (gameTypesToUse) {
+    for (const gameType of gameTypesToUse) {
+      gameWinsData.value[gameType.id] = await fetchGameWinsForType(gameType.id);
+    }
+  }
+};
+
+// Get current game wins based on selected slide
+const currentGameWins = computed(() => {
+  const gameTypesToUse = props.gameTypes?.length > 0 ? props.gameTypes : page.props.game_types;
+  if (gameTypesToUse && gameTypesToUse[currentSlide.value]) {
+    const gameTypeId = gameTypesToUse[currentSlide.value].id;
+    return gameWinsData.value[gameTypeId] || { player_wins: 0, ai_wins: 0 };
+  }
+  return { player_wins: 0, ai_wins: 0 };
+});
 
 // Generate slides dynamically based on game types
 const generateSlides = () => {
@@ -62,7 +96,6 @@ const slides = ref([]);
 
 // Initialize loadedImages reactively based on slides length
 const loadedImages = ref([]);
-const currentSlide = ref(0);
 
 const nextSlide = () => {
   currentSlide.value = (currentSlide.value + 1) % slides.value.length;
@@ -121,33 +154,106 @@ const handleImageLoad = (index) => {
   loadedImages.value[index] = true;
 };
 
-// Fetch game wins with filters
-const fetchGameWins = async (difficultyId = null, categoryId = null) => {
+// Fetch game wins for specific game type
+const fetchGameWinsForType = async (gameTypeId, difficultyId = null, categoryId = null) => {
   try {
     const params = new URLSearchParams();
+    params.append('game_type_id', gameTypeId);
     if (difficultyId) params.append('difficulty_id', difficultyId);
     if (categoryId) params.append('category_id', categoryId);
     
     const response = await axios.get(`/api/dashboard/game-wins?${params.toString()}`);
-    gameWinsData.value = response.data;
+    return response.data;
   } catch (error) {
     console.error('Error fetching game wins:', error);
+    return { player_wins: 0, ai_wins: 0 };
   }
 };
 
+// Update game wins data when filters change
+const updateGameWinsWithFilters = async () => {
+  const gameTypesToUse = props.gameTypes?.length > 0 ? props.gameTypes : page.props.game_types;
+  
+  if (gameTypesToUse) {
+    for (const gameType of gameTypesToUse) {
+      gameWinsData.value[gameType.id] = await fetchGameWinsForType(
+        gameType.id,
+        selectedDifficulty.value,
+        selectedCategory.value
+      );
+    }
+  }
+};
+
+// Cycle through difficulty options
+const cycleDifficulty = () => {
+  if (!props.difficulties || props.difficulties.length === 0) return;
+  
+  if (selectedDifficulty.value === null) {
+    // Start with first difficulty
+    selectedDifficulty.value = props.difficulties[0].id;
+  } else {
+    // Find current index and move to next, or back to "All"
+    const currentIndex = props.difficulties.findIndex(d => d.id === selectedDifficulty.value);
+    if (currentIndex >= props.difficulties.length - 1) {
+      selectedDifficulty.value = null; // Back to "All"
+    } else {
+      selectedDifficulty.value = props.difficulties[currentIndex + 1].id;
+    }
+  }
+};
+
+// Cycle through category options
+const cycleCategory = () => {
+  if (!props.categories || props.categories.length === 0) return;
+  
+  if (selectedCategory.value === null) {
+    // Start with first category
+    selectedCategory.value = props.categories[0].id;
+  } else {
+    // Find current index and move to next, or back to "All"
+    const currentIndex = props.categories.findIndex(c => c.id === selectedCategory.value);
+    if (currentIndex >= props.categories.length - 1) {
+      selectedCategory.value = null; // Back to "All"
+    } else {
+      selectedCategory.value = props.categories[currentIndex + 1].id;
+    }
+  }
+};
+
+// Get display text for current difficulty
+const currentDifficultyText = computed(() => {
+  if (selectedDifficulty.value === null) return 'All';
+  const difficulty = props.difficulties?.find(d => d.id === selectedDifficulty.value);
+  return difficulty ? difficulty.name : 'All';
+});
+
+// Get display text for current category
+const currentCategoryText = computed(() => {
+  if (selectedCategory.value === null) return 'All';
+  const category = props.categories?.find(c => c.id === selectedCategory.value);
+  return category ? category.name : 'All';
+});
+
+// Watch for filter changes and update data
+watch([selectedDifficulty, selectedCategory], () => {
+  updateGameWinsWithFilters();
+});
+
 let slideInterval;
 
-onMounted(() => {
+onMounted(async () => {
   // Generate slides when component mounts
   slides.value = generateSlides();
   loadedImages.value = slides.value.map(() => false);
   
   console.log('Generated slides:', slides.value);
   console.log('Props gameTypes on mount:', props.gameTypes);
-  console.log('Game wins data:', gameWinsData.value);
+  
+  // Initialize game wins data for all game types
+  await initializeGameWinsData();
   
   slideInterval = setInterval(nextSlide, 15000);
-  
 });
 
 onUnmounted(() => {
@@ -180,7 +286,6 @@ onUnmounted(() => {
 
     <!-- Top Right Leaderboard Button -->
     <div class="absolute top-8 right-8 z-20">
-
       <!-- Leaderboard -->
       <button
         @click="goToLeaderboard"
@@ -193,85 +298,123 @@ onUnmounted(() => {
     </div>
 
     <!-- Game Wins Chart - Top Center -->
-    <!-- <div class="absolute top-8 left-1/2 transform -translate-x-1/2 z-20 bg-white/10 backdrop-blur-sm rounded-lg p-4 min-w-64">
-      <h3 class="text-white text-sm font-semibold mb-2 text-center">Game Wins</h3>
-      <div class="flex space-x-4">
-        <div class="flex-1">
-          <div class="text-xs text-blue-200 mb-1">Players</div>
-          <div class="bg-blue-500 h-6 rounded flex items-center justify-center relative">
-            <div 
-              class="bg-blue-600 h-full rounded transition-all duration-500" 
-              :style="{ width: gameWinsData.player_wins > 0 ? `${(gameWinsData.player_wins / (gameWinsData.player_wins + gameWinsData.ai_wins)) * 100}%` : '0%' }"
-            ></div>
-            <span class="absolute text-xs text-white font-semibold">{{ gameWinsData.player_wins }}</span>
-          </div>
-        </div>
-        <div class="flex-1">
-          <div class="text-xs text-red-200 mb-1">AI</div>
-          <div class="bg-red-500 h-6 rounded flex items-center justify-center relative">
-            <div 
-              class="bg-red-600 h-full rounded transition-all duration-500" 
-              :style="{ width: gameWinsData.ai_wins > 0 ? `${(gameWinsData.ai_wins / (gameWinsData.player_wins + gameWinsData.ai_wins)) * 100}%` : '0%' }"
-            ></div>
-            <span class="absolute text-xs text-white font-semibold">{{ gameWinsData.ai_wins }}</span>
-          </div>
-        </div>
-      </div>
-    </div> -->
-
-    <!-- Background slideshow -->
-    <div class="absolute inset-0 z-0">
-      <div class="absolute inset-0">
-        <div
-          v-for="(slide, index) in slides"
-          :key="`slide-${index}`"
-          class="absolute inset-0"
-          :class="[
-            'transition-opacity duration-1000 ease-in-out',
-            index === currentSlide ? 'opacity-100' : 'opacity-0'
-          ]"
+    <div class="flex flex-col">
+      <!-- Filter Buttons -->
+      <div class="z-20 mb-2 flex space-x-2 justify-center">
+        <button
+          @click="cycleDifficulty"
+          class="px-3 py-1 bg-white/20 hover:bg-white/30 text-white text-xs rounded backdrop-blur-sm transition-all"
+          v-if="difficulties && difficulties.length > 0"
         >
-          <img
-            :src="slide.src"
-            :alt="slide.alt"
-            @load="handleImageLoad(index)"
-            :class="[
-              'absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out',
-              loadedImages[index] ? 'opacity-100' : 'opacity-0'
-            ]"
-          />
+          Difficulty: {{ currentDifficultyText }}
+        </button>
+        <button
+          @click="cycleCategory"
+          class="px-3 py-1 bg-white/20 hover:bg-white/30 text-white text-xs rounded backdrop-blur-sm transition-all"
+          v-if="categories && categories.length > 0"
+        >
+          Category: {{ currentCategoryText }}
+        </button>
+      </div>
+
+      <div class="z-20 rounded-lg p-4 min-w-64">
+        <h3 class="text-white text-sm font-semibold mb-2 text-center">Game Wins</h3>
+        
+        <!-- Labels -->
+        <div class="flex justify-between text-xs mb-1">
+          <div class="text-blue-200">Players: {{ currentGameWins.player_wins }}</div>
+          <div class="text-red-200">AI: {{ currentGameWins.ai_wins }}</div>
+        </div>
+        
+        <!-- Single combined bar -->
+        <div class="bg-gray-600/30 h-6 rounded-full overflow-hidden flex relative">
+          <!-- Player section -->
+          <div 
+            class="bg-blue-500/60 transition-all duration-500 flex items-center justify-start pl-2" 
+            :style="{ width: (currentGameWins.player_wins + currentGameWins.ai_wins) > 0 ? `${(currentGameWins.player_wins / (currentGameWins.player_wins + currentGameWins.ai_wins)) * 100}%` : '50%' }"
+          >
+            <span 
+              v-if="currentGameWins.player_wins > 0" 
+              class="text-xs text-white font-semibold"
+            >
+              {{ currentGameWins.player_wins }}
+            </span>
+          </div>
+          <!-- AI section -->
+          <div 
+            class="bg-red-500/60 transition-all duration-500 flex items-center justify-end pr-2" 
+            :style="{ width: (currentGameWins.player_wins + currentGameWins.ai_wins) > 0 ? `${(currentGameWins.ai_wins / (currentGameWins.player_wins + currentGameWins.ai_wins)) * 100}%` : '50%' }"
+          >
+            <span 
+              v-if="currentGameWins.ai_wins > 0" 
+              class="text-xs text-white font-semibold"
+            >
+              {{ currentGameWins.ai_wins }}
+            </span>
+          </div>
+        </div>
+        
+        <!-- Optional: Total count below -->
+        <div class="text-center text-xs text-gray-300 mt-1">
+          Total Games: {{ currentGameWins.player_wins + currentGameWins.ai_wins }}
         </div>
       </div>
-      <!-- Overlay for better text readability -->
-      <div class="absolute inset-0 bg-black opacity-40"></div>
-    </div>
 
-    <!-- Content -->
-    <div class="text-center z-10 px-6">
-      <transition name="fade" appear mode="out-in">
-        <div :key="currentSlide" class="max-w-4xl mx-auto fade-sides-bg rounded-lg p-4">
-          <h1 class="text-5xl md:text-7xl font-bold mb-6 !text-white" style="font-size: 20pt !important;">
-            {{ slides[currentSlide]?.title }}
-          </h1>
-          <div class="text-xl md:text-2xl text-blue-200 mb-8">
-            <span class="typewriter" style="font-size: 15pt !important;">{{ slides[currentSlide]?.description }}</span>
-          </div>
-          <div class="flex flex-col sm:flex-row gap-4 justify-center">
-            <a
-              :href="slides[currentSlide]?.button1.href"
-              class="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-large rounded-lg transition-colors"
-            >
-              {{ slides[currentSlide]?.button1.text }}
-            </a>
-            <a
-              :href="slides[currentSlide]?.button2.href"
-              class="inline-flex items-center px-6 py-3 bg-transparent !text-black border border-white bg-white/70 hover:bg-white hover:text-slate-900 font-large rounded-lg transition-colors"
-            >
-              {{ slides[currentSlide]?.button2.text }}
-            </a>
+      <!-- Background slideshow -->
+      <div class="absolute inset-0 z-0">
+        <div class="absolute inset-0">
+          <div
+            v-for="(slide, index) in slides"
+            :key="`slide-${index}`"
+            class="absolute inset-0"
+            :class="[
+              'transition-opacity duration-1000 ease-in-out',
+              index === currentSlide ? 'opacity-100' : 'opacity-0'
+            ]"
+          >
+            <img
+              :src="slide.src"
+              :alt="slide.alt"
+              @load="handleImageLoad(index)"
+              :class="[
+                'absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out',
+                loadedImages[index] ? 'opacity-100' : 'opacity-0'
+              ]"
+            />
           </div>
         </div>
-      </transition>
+        <!-- Overlay for better text readability -->
+        <div class="absolute inset-0 bg-black opacity-40"></div>
+      </div>
+
+      <!-- Content -->
+      <div class="text-center z-10 px-6">
+        <transition name="fade" appear mode="out-in">
+          <div :key="currentSlide" class="max-w-4xl mx-auto fade-sides-bg rounded-lg p-4">
+            <h1 class="text-5xl md:text-7xl font-bold mb-6 !text-white" style="font-size: 20pt !important;">
+              {{ slides[currentSlide]?.title }}
+            </h1>
+            <div class="text-xl md:text-2xl text-blue-200 mb-8">
+              <span class="typewriter" style="font-size: 15pt !important;">{{ slides[currentSlide]?.description }}</span>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+              <a
+                :href="slides[currentSlide]?.button1.href"
+                class="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-large rounded-lg transition-colors"
+              >
+                {{ slides[currentSlide]?.button1.text }}
+              </a>
+              <a
+                :href="slides[currentSlide]?.button2.href"
+                class="inline-flex items-center px-6 py-3 bg-transparent !text-black border border-white bg-white/70 hover:bg-white hover:text-slate-900 font-large rounded-lg transition-colors"
+              >
+                {{ slides[currentSlide]?.button2.text }}
+              </a>
+            </div>
+          </div>
+        </transition>
+      </div>
+
     </div>
 
     <!-- Navigation dots -->
