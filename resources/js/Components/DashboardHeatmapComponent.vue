@@ -1030,6 +1030,9 @@ onMounted(() => {
           <!-- Right side: Difficulty & Category -->
           <div class="w-48 shrink-0 space-y-2 text-sm">
             <div class="font-medium">
+              Game Type: {{ selectedSessionDetails.game_name }}
+            </div>
+            <div class="font-medium">
               Difficulty: {{ selectedSessionDetails.difficulty_name }}
             </div>
             <div class="font-medium">

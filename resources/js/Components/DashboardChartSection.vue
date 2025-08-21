@@ -134,7 +134,7 @@ const performanceIcons = [ClockIcon, TrendingUpIcon, EyeIcon];
 const UserIcons = [UserIcon, UserIcon, UserIcon];
 
 // Adjusted colors for better active state visibility
-const optionColors = ['bg-yellow-600/50', 'bg-blue-600/50'];
+const optionColors = ['bg-teal-600/50', 'bg-blue-600/50'];
 const dateFilterColor = 'bg-orange-600/50';
 const performanceFilterColor = 'bg-purple-600/50';
 const aiFilterColor = 'bg-lime-600/50';
@@ -637,20 +637,23 @@ onUnmounted(() => {
 
                       <!-- Game Filters - Stack on mobile, side by side on desktop -->
                       <div class="flex flex-col lg:flex-col space-y-3 flex-grow w-full lg:min-w-[180px] lg:max-w-xs">
-                          <button
-                              v-for="(filter, index) in gameFilters"
-                              :key="filter.id"
-                              :class="[
-                                  'flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
-                                  'transition-all duration-300 ease-in-out',
-                                  optionColors[index] + ' hover:brightness-90',
-                                  activeGameId === filter.id ? 'ring-2 ring-black/20' : ''
-                              ]"
-                              @click="selectGameFilter(filter.id)"
-                          >
-                              <component :is="gameIcons[index]" class="w-5 h-5 shrink-0" />
-                              <span class="font-medium truncate">{{ filter.name }}</span>
-                          </button>
+                        <button
+                          v-for="(filter, index) in gameFilters"
+                          :key="filter.id"
+                          :class="[
+                            'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
+                            'transition-all duration-300 ease-in-out',
+                            activeGameId === filter.id
+                              ? optionColors[index].replace('/50', '') // stronger bg when active
+                              : optionColors[index],                   // semi-transparent bg normally
+                            'hover:brightness-90',
+                            activeGameId === filter.id ? 'ring-2 ring-gray-400' : ''
+                          ]"
+                          @click="selectGameFilter(filter.id)"
+                        >
+                          <component :is="gameIcons[index]" class="w-5 h-5 shrink-0" />
+                          <span class="font-medium truncate">{{ filter.name }}</span>
+                        </button>
                       </div>
 
                       <!-- Difficulty and Category - Stack on mobile -->
@@ -659,7 +662,7 @@ onUnmounted(() => {
                           <button
                               @click="rotateDifficulty"
                               :class="[
-                                  'flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
+                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
                                   'transition-all duration-300 ease-in-out',
                                   'bg-green-600/50 hover:brightness-90',
                                   difficultyId ? 'bg-green-700 ring-2 ring-green-400' : ''
@@ -677,7 +680,7 @@ onUnmounted(() => {
                           <button
                               @click="rotateCategory"
                               :class="[
-                                  'flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
+                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
                                   'transition-all duration-300 ease-in-out',
                                   'bg-pink-600/50 hover:brightness-90',
                                   categoryId ? 'bg-pink-700 ring-2 ring-pink-400' : ''
@@ -729,7 +732,7 @@ onUnmounted(() => {
                           <button
                               @click="showAdvancedFilters = !showAdvancedFilters"
                               :class="[
-                                  'w-full flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full',
+                                  'w-full flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full',
                                   'transition-all duration-300 ease-in-out',
                                   'bg-gray-600/50 hover:bg-gray-700',
                                   showAdvancedFilters ? 'bg-gray-700' : ''
