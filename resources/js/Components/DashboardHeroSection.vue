@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { usePage } from '@inertiajs/inertia-vue3';
-import { Trophy } from 'lucide-vue-next';
+import { Trophy, ChartColumnStacked, LineChartIcon } from 'lucide-vue-next';
 import axios from 'axios';
 
 // Accept props from parent component
@@ -162,16 +162,18 @@ onUnmounted(() => {
     <!-- Heatmap -->
     <button
       @click="scrollToHeatmap"
-      class="theme-button-heatmap !text-white px-4 py-2 rounded-lg backdrop-blur-sm hover:scale-105"
+      class="theme-button-heatmap px-4 py-2 !text-white rounded-lg backdrop-blur-sm hover:scale-105 flex items-center space-x-2"
     >
+      <ChartColumnStacked class="w-5 h-5 mr-2" />
       Scores Per Game
     </button>
 
     <!-- Line Chart -->
     <button
       @click="scrollToLineChart"
-      class="theme-button-linechart !text-white px-4 py-2 rounded-lg backdrop-blur-sm hover:scale-105"
+      class="theme-button-linechart px-4 py-2 !text-white rounded-lg backdrop-blur-sm hover:scale-105 flex items-center space-x-2"
     >
+      <LineChartIcon class="w-5 h-5 mr-2" />
       Scores Over Time
     </button>
     </div>

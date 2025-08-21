@@ -482,6 +482,16 @@ const chartOptions = ref({
   yaxis: {
     labels: { offsetX: 10, style: { colors: '#758096' } },
   },
+  responsive: [
+    {
+      breakpoint: 768, // screens smaller than 768px (tailwind md breakpoint)
+      options: {
+        dataLabels: {
+          enabled: false // disable numbers inside heatmap squares
+        }
+      }
+    }
+  ]
 });
 
 // Listen for filter changes from GameAuthenticated layout

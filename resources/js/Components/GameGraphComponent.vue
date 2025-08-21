@@ -416,7 +416,7 @@ defineExpose({
 </script>
 
 <template>
-  <div class="p-4 bg-gray-800 rounded shadow flex flex-col">
+  <div class="p-4 min-h-[300px] bg-gray-800 rounded shadow flex flex-col">
     <h3 class="font-semibold text-lg mb-2">Score Trends</h3>
     <div class="flex-1 flex items-center justify-center">
       <div v-if="isLoading" class="text-center text-gray-400">

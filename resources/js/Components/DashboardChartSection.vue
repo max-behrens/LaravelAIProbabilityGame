@@ -38,14 +38,14 @@ const getDefaultDateRange = () => {
 const currentChartIndex = ref(0);
 const chartConfigs = [
   {
-    title: 'Activity Heatmap',
-    description: 'View your gaming activity patterns and frequency',
+    title: 'Scores Per Game',
+    description: 'Compare single & multi player statistics',
     component: 'DashboardHeatmapComponent',
     icon: ChartColumnStacked
   },  
   {
-    title: 'Performance Over Time',
-    description: 'Track your game performance and progress',
+    title: 'Scores Over Time',
+    description: 'Observe trends in player progress over time',
     component: 'DashboardLineChartComponent',
     icon: LineChartIcon
   },
@@ -635,22 +635,6 @@ onUnmounted(() => {
                           </button>
                       </div>
 
-                      <!-- Date Filter - Full width on mobile -->
-                      <div class="mb-1 w-full lg:w-auto">
-                          <button
-                              @click="showDateModal = true"
-                              :class="[
-                                  'flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full w-full',
-                                  'transition-all duration-300 ease-in-out',
-                                  dateFilterColor + ' hover:brightness-90',
-                                  (dateRange[0] && dateRange[1]) ? 'bg-orange-900/50 ring-2 ring-orange-400' : ''
-                              ]"
-                          >
-                              <CalendarDaysIcon class="w-5 h-5 shrink-0" />
-                              <span class="font-medium truncate">{{ dateFilterTitle }}</span>
-                          </button>
-                      </div>
-
                       <!-- Game Filters - Stack on mobile, side by side on desktop -->
                       <div class="flex flex-col lg:flex-col space-y-3 flex-grow w-full lg:min-w-[180px] lg:max-w-xs">
                           <button
@@ -708,8 +692,24 @@ onUnmounted(() => {
                           </button>
                       </div>
 
+                      <!-- Date Filter - Full width on mobile -->
+                      <div class="mb-1 w-full h-full lg:w-auto">
+                          <button
+                              @click="showDateModal = true"
+                              :class="[
+                                  'flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full w-full',
+                                  'transition-all duration-300 ease-in-out',
+                                  dateFilterColor + ' hover:brightness-90',
+                                  (dateRange[0] && dateRange[1]) ? 'bg-orange-900/50 ring-2 ring-orange-400' : ''
+                              ]"
+                          >
+                              <CalendarDaysIcon class="w-5 h-5 shrink-0" />
+                              <span class="font-medium truncate">{{ dateFilterTitle }}</span>
+                          </button>
+                      </div>
+
                       <!-- AI Scores Toggle - Full width on mobile -->
-                      <div class="mb-1 w-full lg:w-auto">
+                      <div class="mb-1 w-full h-full lg:w-auto">
                           <button
                               @click="toggleAiScores"
                               :class="[
@@ -725,7 +725,7 @@ onUnmounted(() => {
                       </div>
 
                       <!-- Advanced Filters Toggle - Full width on mobile -->
-                      <div class="mb-1 w-full lg:w-auto">
+                      <div class="mb-1 w-full h-full lg:w-auto">
                           <button
                               @click="showAdvancedFilters = !showAdvancedFilters"
                               :class="[

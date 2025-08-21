@@ -1064,11 +1064,10 @@ onUnmounted(() => {
                         
 
             <div class="py-4 mb-6">
-                <div class="main-width mx-auto sm:px-6 lg:px-8">
-
+                <div class="w-1/2 sm:w-auto pl-6 main-width mx-auto sm:px-6 lg:px-8">
                     <div v-if="errorMessage" class="mb-4 p-4 bg-red-900 text-red-200 rounded border border-red-700">
-                        {{ errorMessage }}</div>
-
+                        {{ errorMessage }}
+                    </div>
 
                     <div class="flex flex-wrap gap-6 justify-center items-start">
                         <div v-if="showQuestionInput" class="basis-full mb-6">
