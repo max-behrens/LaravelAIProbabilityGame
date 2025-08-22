@@ -1743,97 +1743,130 @@ class GamesService
      * @param int|null $categoryId
      * @return array
      */
-public function getGameWins(?int $gameTypeId = null, ?int $difficultyId = null, ?int $categoryId = null): array
-{
-    Log::debug('Calculating game wins with filters', [
-        'gameTypeId' => $gameTypeId,
-        'difficultyId' => $difficultyId,
-        'categoryId' => $categoryId
-    ]);
+    public function getAllGameWins(?int $gameTypeId = null, ?int $difficultyId = null, ?int $categoryId = null): array
+    {
+        Log::debug('Calculating game wins with filters', [
+            'gameTypeId' => $gameTypeId,
+            'difficultyId' => $difficultyId,
+            'categoryId' => $categoryId
+        ]);
 
-    // Get all sessions with their highest player scores
-    $playerSessionsQuery = DB::table('game_scores')
-        ->join('games', 'game_scores.game_id', '=', 'games.id')
-        ->select('game_scores.session_id', DB::raw('MAX(game_scores.score) as highest_player_score'))
-        ->groupBy('game_scores.session_id');
+        // Get all sessions with their highest player scores
+        $playerSessionsQuery = DB::table('game_scores')
+            ->join('games', 'game_scores.game_id', '=', 'games.id')
+            ->select('game_scores.session_id', DB::raw('MAX(game_scores.score) as highest_player_score'))
+            ->groupBy('game_scores.session_id');
 
-    // Apply game type filter if provided
-    if ($gameTypeId !== null) {
-        $playerSessionsQuery->where('games.game_type_id', $gameTypeId);
-    }
-
-    // Apply difficulty filter if provided
-    if ($difficultyId !== null) {
-        $this->applyJsonIdFilter($playerSessionsQuery, 'game_scores', 'difficulty_id', $difficultyId);
-    }
-
-    // Apply category filter if provided
-    if ($categoryId !== null) {
-        $this->applyJsonIdFilter($playerSessionsQuery, 'game_scores', 'category_id', $categoryId);
-    }
-
-    $playerSessions = $playerSessionsQuery->get()->keyBy('session_id');
-
-    // Get all sessions with their highest AI scores
-    $aiSessionsQuery = DB::table('ai_scores')
-        ->join('games', 'ai_scores.game_id', '=', 'games.id')
-        ->select('ai_scores.session_id', DB::raw('MAX(ai_scores.score) as highest_ai_score'))
-        ->whereNotNull('ai_scores.score')
-        ->groupBy('ai_scores.session_id');
-
-    // Apply game type filter if provided
-    if ($gameTypeId !== null) {
-        $aiSessionsQuery->where('games.game_type_id', $gameTypeId);
-    }
-
-    // Apply difficulty filter if provided
-    if ($difficultyId !== null) {
-        $this->applyJsonIdFilter($aiSessionsQuery, 'ai_scores', 'difficulty_id', $difficultyId);
-    }
-
-    // Apply category filter if provided
-    if ($categoryId !== null) {
-        $this->applyJsonIdFilter($aiSessionsQuery, 'ai_scores', 'category_id', $categoryId);
-    }
-
-    $aiSessions = $aiSessionsQuery->get()->keyBy('session_id');
-
-    $playerWins = 0;
-    $aiWins = 0;
-
-    // Get all unique session IDs from both tables
-    $allSessionIds = collect($playerSessions->keys())
-        ->merge($aiSessions->keys())
-        ->unique();
-
-    // Compare highest scores for each session
-    foreach ($allSessionIds as $sessionId) {
-        $playerSession = $playerSessions->get($sessionId);
-        $aiSession = $aiSessions->get($sessionId);
-
-        $playerHighest = $playerSession ? $playerSession->highest_player_score : 0;
-        $aiHighest = $aiSession ? $aiSession->highest_ai_score : 0;
-
-        // Only count sessions where at least one side has a score > 0
-        if ($playerHighest > 0 || $aiHighest > 0) {
-            if ($playerHighest > $aiHighest) {
-                $playerWins++;
-            } elseif ($aiHighest > $playerHighest) {
-                $aiWins++;
-            }
-            // Ties are not counted as wins for either side
+        // Apply game type filter if provided
+        if ($gameTypeId !== null) {
+            $playerSessionsQuery->where('games.game_type_id', $gameTypeId);
         }
+
+        // Apply difficulty filter if provided
+        if ($difficultyId !== null) {
+            $this->applyJsonIdFilter($playerSessionsQuery, 'game_scores', 'difficulty_id', $difficultyId);
+        }
+
+        // Apply category filter if provided
+        if ($categoryId !== null) {
+            $this->applyJsonIdFilter($playerSessionsQuery, 'game_scores', 'category_id', $categoryId);
+        }
+
+        Log::debug('PLAYER QUERY', [
+            'sql' => $playerSessionsQuery->toSql(),
+            'bindings' => $playerSessionsQuery->getBindings(),
+        ]);
+
+        $playerSessions = $playerSessionsQuery->get()->keyBy('session_id');
+
+        Log::debug('PLAYER SESSIONS', [
+            'playerSessions' => $playerSessions,
+        ]);
+
+        // Get all sessions with their highest AI scores
+        $aiSessionsQuery = DB::table('ai_scores')
+            ->join('games', 'ai_scores.game_id', '=', 'games.id')
+            ->select('ai_scores.session_id', DB::raw('MAX(ai_scores.score) as highest_ai_score'))
+            ->whereNotNull('ai_scores.score')
+            ->groupBy('ai_scores.session_id');
+
+        // Apply game type filter if provided
+        if ($gameTypeId !== null) {
+            $aiSessionsQuery->where('games.game_type_id', $gameTypeId);
+        }
+
+        // Apply difficulty filter if provided
+        if ($difficultyId !== null) {
+            $this->applyJsonIdFilter($aiSessionsQuery, 'ai_scores', 'difficulty_id', $difficultyId);
+        }
+
+        // Apply category filter if provided
+        if ($categoryId !== null) {
+            $this->applyJsonIdFilter($aiSessionsQuery, 'ai_scores', 'category_id', $categoryId);
+        }
+
+        Log::debug('AI QUERY', [
+            'sql' => $aiSessionsQuery->toSql(),
+            'bindings' => $aiSessionsQuery->getBindings(),
+        ]);
+
+
+        $aiSessions = $aiSessionsQuery->get()->keyBy('session_id');
+
+        Log::debug('AI SESSIONS', [
+            'aiSessions' => $aiSessions,
+        ]);
+
+        $playerWins = 0;
+        $aiWins = 0;
+
+        // Get all unique session IDs from both tables
+        $allSessionIds = collect($playerSessions->keys())
+            ->merge($aiSessions->keys())
+            ->unique();
+
+        // Compare highest scores for each session
+        foreach ($allSessionIds as $sessionId) {
+
+            $playerSession = $playerSessions->get($sessionId);
+            $aiSession = $aiSessions->get($sessionId);
+
+            if (!$playerSession || !$aiSession) {
+                continue;
+            }
+
+            Log::debug('SESSIONS', [
+                'playerSession' => $playerSession,
+                'aiSession' => $aiSession,
+                'sessionId' => $sessionId,
+            ]);
+
+            $playerHighest = $playerSession ? $playerSession->highest_player_score : 0;
+            $aiHighest = $aiSession ? $aiSession->highest_ai_score : 0;
+
+            // Only count sessions where at least one side has a score > 0
+            if ($playerHighest > 0 || $aiHighest > 0) {
+                if ($playerHighest > $aiHighest) {
+                    $playerWins++;
+                } elseif ($aiHighest > $playerHighest) {
+                    $aiWins++;
+                } else {
+                    // Give 1 point to both if draw.
+                    $playerWins++;
+                    $aiWins++;
+                }
+            }
+        }
+
+        $result = [
+            'player_wins' => $playerWins,
+            'ai_wins' => $aiWins,
+            'total_sessions' => $playerWins + $aiWins
+        ];
+
+        Log::debug('Game wins calculated', $result);
+        return $result;
     }
-
-    $result = [
-        'player_wins' => $playerWins,
-        'ai_wins' => $aiWins,
-        'total_sessions' => $playerWins + $aiWins
-    ];
-
-    Log::debug('Game wins calculated', $result);
-    return $result;
-}
 
 
     private function decodeAnswerJson($rawJson): ?array

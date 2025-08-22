@@ -31,11 +31,17 @@ const gameTypes = page.props.gameTypes || null;
 
 // Game wins data - store for each game type
 const gameWinsData = ref({});
-const currentSlide = ref(0);
+const currentSlide = ref(1);
+const gameWinsLoading = ref({});
 
 // Filter states
 const selectedDifficulty = ref(null); // null means "All"
 const selectedCategory = ref(null); // null means "All"
+
+// Image loading states
+const loadedImages = ref([]);
+const preloadedImages = ref([]);
+const imagesReady = ref(false);
 
 // Initialize game wins data for each game type
 const initializeGameWinsData = async () => {
@@ -43,7 +49,9 @@ const initializeGameWinsData = async () => {
   
   if (gameTypesToUse) {
     for (const gameType of gameTypesToUse) {
+      gameWinsLoading.value[gameType.id] = true;
       gameWinsData.value[gameType.id] = await fetchGameWinsForType(gameType.id);
+      gameWinsLoading.value[gameType.id] = false;
     }
   }
 };
@@ -56,6 +64,16 @@ const currentGameWins = computed(() => {
     return gameWinsData.value[gameTypeId] || { player_wins: 0, ai_wins: 0 };
   }
   return { player_wins: 0, ai_wins: 0 };
+});
+
+// Check if current game wins data is loading
+const currentGameWinsLoading = computed(() => {
+  const gameTypesToUse = props.gameTypes?.length > 0 ? props.gameTypes : page.props.game_types;
+  if (gameTypesToUse && gameTypesToUse[currentSlide.value]) {
+    const gameTypeId = gameTypesToUse[currentSlide.value].id;
+    return gameWinsLoading.value[gameTypeId] === true;
+  }
+  return false;
 });
 
 // Generate slides dynamically based on game types
@@ -94,8 +112,29 @@ const generateSlides = () => {
 
 const slides = ref([]);
 
-// Initialize loadedImages reactively based on slides length
-const loadedImages = ref([]);
+// Preload all images
+const preloadImages = () => {
+  return Promise.all(
+    slides.value.map((slide, index) => {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          loadedImages.value[index] = true;
+          preloadedImages.value[index] = img;
+          resolve(img);
+        };
+        img.onerror = reject;
+        // Set loading priority for first image
+        if (index === 0) {
+          img.fetchPriority = 'high';
+        }
+        img.src = slide.src;
+      });
+    })
+  ).then(() => {
+    imagesReady.value = true;
+  });
+};
 
 const nextSlide = () => {
   currentSlide.value = (currentSlide.value + 1) % slides.value.length;
@@ -176,11 +215,13 @@ const updateGameWinsWithFilters = async () => {
   
   if (gameTypesToUse) {
     for (const gameType of gameTypesToUse) {
+      gameWinsLoading.value[gameType.id] = true;
       gameWinsData.value[gameType.id] = await fetchGameWinsForType(
         gameType.id,
         selectedDifficulty.value,
         selectedCategory.value
       );
+      gameWinsLoading.value[gameType.id] = false;
     }
   }
 };
@@ -250,10 +291,16 @@ onMounted(async () => {
   console.log('Generated slides:', slides.value);
   console.log('Props gameTypes on mount:', props.gameTypes);
   
+  // Start preloading images immediately
+  preloadImages().catch(console.error);
+  
   // Initialize game wins data for all game types
   await initializeGameWinsData();
   
-  slideInterval = setInterval(nextSlide, 15000);
+  // Only start slideshow after images are ready
+  setTimeout(() => {
+    slideInterval = setInterval(nextSlide, 15000);
+  }, 1000);
 });
 
 onUnmounted(() => {
@@ -263,8 +310,9 @@ onUnmounted(() => {
 
 <template>
   <section class="min-h-screen flex items-center justify-center relative">
+
     <!-- Top Left Navigation Buttons -->
-    <div class="absolute top-8 left-8 z-20 flex flex-col space-y-2">
+    <div class="main-width absolute top-8 left-8 z-20 flex flex-col space-y-2">
     <!-- Heatmap -->
     <button
       @click="scrollToHeatmap"
@@ -285,7 +333,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Top Right Leaderboard Button -->
-    <div class="absolute top-8 right-8 z-20">
+    <div class="main-width absolute top-8 right-8 z-20">
       <!-- Leaderboard -->
       <button
         @click="goToLeaderboard"
@@ -318,7 +366,14 @@ onUnmounted(() => {
       </div>
 
       <div class="z-20 rounded-lg p-4 min-w-64">
-        <h3 class="text-white text-sm font-semibold mb-2 text-center">Game Wins</h3>
+        <div class="flex items-center justify-center mb-2">
+          <h3 class="text-white text-sm font-semibold">Game Wins</h3>
+          <!-- Loading spinner -->
+          <div 
+            v-if="currentGameWinsLoading"
+            class="ml-2 animate-spin rounded-full h-4 w-4 border-b-2 border-white"
+          ></div>
+        </div>
         
         <!-- Labels -->
         <div class="flex justify-between text-xs mb-1">
@@ -355,7 +410,7 @@ onUnmounted(() => {
         </div>
         
         <!-- Optional: Total count below -->
-        <div class="text-center text-xs text-gray-300 mt-1">
+        <div class="text-center text-xs text-gray-300 mt-3">
           Total Games: {{ currentGameWins.player_wins + currentGameWins.ai_wins }}
         </div>
       </div>
@@ -369,7 +424,7 @@ onUnmounted(() => {
             class="absolute inset-0"
             :class="[
               'transition-opacity duration-1000 ease-in-out',
-              index === currentSlide ? 'opacity-100' : 'opacity-0'
+              index === currentSlide && imagesReady ? 'opacity-100' : 'opacity-0'
             ]"
           >
             <img
@@ -432,7 +487,9 @@ onUnmounted(() => {
     <!-- Next button -->
     <button
       @click="nextSlide"
-      class="absolute top-1/2 right-8 z-20 -translate-y-1/2 bg-white/20 hover:bg-white/30 !text-white p-3 rounded-full transition-all duration-300 backdrop-blur-sm hover:scale-110"
+      class="absolute top-1/2 sm:right-8 right-4 z-20 -translate-y-1/2 
+            bg-white/20 hover:bg-white/30 !text-white p-3 rounded-full 
+            transition-all duration-300 backdrop-blur-sm hover:scale-110"
       aria-label="Next slide"
     >
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -532,5 +589,4 @@ onUnmounted(() => {
     rgba(0, 0, 0, 0.5) 90%,
     transparent 100%
   );
-}
-</style>
+}</style>

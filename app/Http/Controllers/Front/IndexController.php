@@ -32,7 +32,7 @@ class IndexController extends Controller
         $categories = GameTypeCategory::all();
 
         // Get game wins data on page load
-        $gameWins = $this->gamesService->getGameWins();
+        $gameWins = $this->gamesService->getAllGameWins();
 
         return Inertia::render('Dashboard/Index', [
             'current_game_id' => $request->query('game_id'),
@@ -96,7 +96,7 @@ class IndexController extends Controller
         ]);
         
         try {
-            $gameWins = $this->gamesService->getGameWins($gameTypeId, $difficultyId, $categoryId);
+            $gameWins = $this->gamesService->getAllGameWins($gameTypeId, $difficultyId, $categoryId);
         
             Log::info('Game wins data retrieved', $gameWins);
             return response()->json($gameWins);

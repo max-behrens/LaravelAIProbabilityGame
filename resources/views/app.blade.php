@@ -3,6 +3,10 @@
 
 <head>
 
+    <!-- Preload critical images -->
+    <link rel="preload" as="image" href="/images/vecteezy_domesticated-black-donkeys-in-the-paddock-on-the-farm-pets_49542847.jpg">
+    <link rel="preload" as="image" href="/images/person-with-futuristic-metaverse-avatar-mask.jpg">
+
     <!-- This fixes the CSRF mismatch on 1st try after login. -->
     <script>
         $.ajaxSetup({

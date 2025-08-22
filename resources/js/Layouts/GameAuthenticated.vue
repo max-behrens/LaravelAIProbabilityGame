@@ -954,7 +954,7 @@ onUnmounted(() => {
 
               <button
                 type="button"
-                class="w-full px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 text-left transition duration-150 ease-in-out"
+                class="w-full px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 text-left transition duration-150 ease-in-out text-white"
                 @click="showLogoutModal = false"
               >
                 Settings
