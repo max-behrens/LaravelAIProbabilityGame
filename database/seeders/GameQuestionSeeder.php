@@ -12,7 +12,7 @@ class GameQuestionSeeder extends Seeder
 {
     public function run(): void
     {
-        $gameType = GameType::where('name', 'Game of Lies')->firstOrFail();
+        $gameType = GameType::where('name', 'Fake or Steal')->firstOrFail();
 
         $difficulties = GameTypeDifficulty::get()->keyBy('name');
         $categories = GameTypeCategory::get()->keyBy('name');

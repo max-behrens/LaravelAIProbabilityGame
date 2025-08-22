@@ -378,6 +378,7 @@ onUnmounted(() => {
               <table class="w-full text-left">
                 <thead class="bg-gray-700 border-b border-gray-600">
                   <tr>
+                    <th class="px-6 py-4 font-semibold text-white">#</th>
                     <th 
                       @click="sortTable('user_name')"
                       class="px-6 py-4 font-semibold text-white cursor-pointer theme-hover-bg transition-colors duration-200"
@@ -435,6 +436,10 @@ onUnmounted(() => {
                     class="border-b border-gray-700 theme-hover-bg transition-colors duration-200"
                     :class="{ 'bg-blue-900/20': score.score_type === 'ai' }"
                   >
+                    <!-- Row number -->
+                    <td class="px-6 py-4 text-gray-300 font-mono">
+                      {{ (currentPage - 1) * perPage + index + 1 }}
+                    </td>
                     <!-- Player Name -->
                     <td class="px-6 py-4">
                       <div class="flex items-center space-x-3">
@@ -573,6 +578,12 @@ onUnmounted(() => {
                   class="p-4 theme-hover-bg transition-colors duration-200"
                   :class="{ 'bg-blue-900/20': score.score_type === 'ai' }"
                 >
+
+                  <!-- Row number -->
+                  <div class="text-gray-400 text-xs mb-2">
+                    #{{ (currentPage - 1) * perPage + index + 1 }}
+                  </div>
+                  
                   <!-- Header Row: Player and Score -->
                   <div class="flex justify-between items-start mb-3">
                     <div class="flex items-center space-x-3 flex-1 min-w-0">

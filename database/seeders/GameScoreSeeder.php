@@ -78,7 +78,7 @@ class GameScoreSeeder extends Seeder
                                 $score = 0;
 
                                 foreach ($questions as $index => $question) {
-                                    $isCorrect = rand(0, 1) === 1;
+                                    $isCorrect = rand(1, 100) <= 75;
                                     $submitted = $isCorrect ? $question->answer : fake()->word;
 
                                     $answerJson[$question->id] = [

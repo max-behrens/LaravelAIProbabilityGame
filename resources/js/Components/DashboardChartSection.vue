@@ -126,7 +126,7 @@ const userFilterColor = 'bg-teal-600/50';
 // Map selectedGame index to actual game IDs and names
 const gameFilters = [
   { id: 1, name: 'Object Detection Game' },
-  { id: 2, name: 'Game of Lies' }
+  { id: 2, name: 'Fake or Steal' }
 ];
 
 const gameIcons = [PuzzleIcon, Gamepad2Icon, ChartBarIcon];

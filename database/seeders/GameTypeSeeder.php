@@ -11,7 +11,7 @@ class GameTypeSeeder extends Seeder
     {
         $gameTypes = [
             ['id' => 1, 'name' => 'Object Detection Game'],
-            ['id' => 2, 'name' => 'Game of Lies'],
+            ['id' => 2, 'name' => 'Fake or Steal'],
         ];
 
         foreach ($gameTypes as $gameType) {
