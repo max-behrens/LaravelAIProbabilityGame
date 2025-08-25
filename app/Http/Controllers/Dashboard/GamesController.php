@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Cache;
 use App\Events\GameStatusUpdated;
 use App\Services\Dashboard\GamesService;
 use App\Services\Dashboard\AIGameService;
+use App\Services\Dashboard\BespokeAIGameService;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -24,11 +25,13 @@ use Illuminate\Support\Str;
 class GamesController extends Controller
 {
     protected $gamesService;
+    protected $bespokeAIGameService;
 
-    public function __construct(GamesService $gamesService, AIGameService $aiGameService)
+    public function __construct(GamesService $gamesService, AIGameService $aiGameService, BespokeAIGameService $bespokeAIGameService)
     {
         $this->gamesService = $gamesService;
         $this->aiGameService = $aiGameService;
+        $this->bespokeAIGameService = $bespokeAIGameService;
     }
 
     public function index(Request $request)
@@ -246,7 +249,10 @@ class GamesController extends Controller
             'gameId' => $gameId,
             'userId' => $request->user()?->id,
             'hasAIAnswers' => $request->has('aiAnswers'),
+            'hasBespokeAIAnswers' => $request->has('bespokeAIAnswers'),
             'playWithAI' => $request->boolean('playWithAI', false),
+            'playWithBespokeAI' => $request->boolean('playWithBespokeAI', false),
+            'bespokeAIModelId' => $request->get('bespokeAIModelId'),
             'difficultyId' => $request->get('difficulty_id'),
             'categoryId' => $request->get('category_id')
         ]);
@@ -256,7 +262,11 @@ class GamesController extends Controller
             'answers.*' => 'nullable|string',
             'aiAnswers' => 'sometimes|array',
             'aiAnswers.*' => 'nullable|string',
+            'bespokeAIAnswers' => 'sometimes|array',
+            'bespokeAIAnswers.*' => 'nullable|string',
             'playWithAI' => 'sometimes|boolean',
+            'playWithBespokeAI' => 'sometimes|boolean',
+            'bespokeAIModelId' => 'sometimes|nullable|integer|exists:bespoke_ai_models,id',
             'difficulty_id' => 'sometimes|nullable|integer',
             'category_id' => 'sometimes|nullable|integer'
         ]);
@@ -266,11 +276,10 @@ class GamesController extends Controller
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 
-        // Get difficulty and category IDs from request
+        // Get difficulty and category IDs
         $difficultyId = $request->get('difficulty_id');
         $categoryId = $request->get('category_id');
 
-        // If not provided in request, try to get from game settings cache
         if (is_null($difficultyId) || is_null($categoryId)) {
             $settingsKey = "game:{$gameId}:gameSettings";
             $gameSettings = Cache::get($settingsKey);
@@ -284,7 +293,7 @@ class GamesController extends Controller
             }
         }
 
-        // Use game start time to create unique session per game round
+        // Create session ID
         $gameStartKey = "game:{$gameId}:start_time";
         $gameStartTime = Cache::remember($gameStartKey, now()->addHours(1), function() {
             return now()->timestamp;
@@ -293,61 +302,63 @@ class GamesController extends Controller
         $sessionKey = "game:{$gameId}:session_id:{$gameStartTime}";
         $sessionId = Cache::rememberForever($sessionKey, fn () => Str::uuid()->toString());
 
-        // Submit player answers with shared session_id, difficulty_id, and category_id
+        // Submit player answers
         $this->gamesService->submitAnswers($gameId, $user->id, $request->answers, $sessionId, $difficultyId, $categoryId);
 
-        // Submit AI answers ONLY if playing with AI AND aiAnswers are provided
+        // Submit regular AI answers if enabled
         if ($request->boolean('playWithAI', false) && $request->has('aiAnswers') && is_array($request->aiAnswers)) {
-            Log::info('Submitting AI answers', [
-                'gameId' => $gameId,
-                'sessionId' => $sessionId,
-                'aiAnswersCount' => count($request->aiAnswers),
-                'difficultyId' => $difficultyId,
-                'categoryId' => $categoryId
-            ]);
+            Log::info('Submitting regular AI answers');
 
             try {
-                // Submit AI answers with the same session ID, difficulty_id, and category_id
                 $this->aiGameService->submitAIAnswers(
                     $gameId,
-                    $user->id, // Use the current user's ID for consistency
+                    $user->id,
                     $request->aiAnswers,
                     $sessionId,
                     $difficultyId,
                     $categoryId
                 );
-
-                Log::info('AI answers submitted successfully', [
-                    'gameId' => $gameId,
-                    'sessionId' => $sessionId,
-                    'difficultyId' => $difficultyId,
-                    'categoryId' => $categoryId
-                ]);
+                Log::info('Regular AI answers submitted successfully');
             } catch (\Exception $e) {
-                Log::error('Failed to submit AI answers', [
-                    'gameId' => $gameId,
-                    'sessionId' => $sessionId,
-                    'difficultyId' => $difficultyId,
-                    'categoryId' => $categoryId,
-                    'error' => $e->getMessage()
-                ]);
-                // Don't fail the entire request if AI submission fails
-                // But log the error for debugging
+                Log::error('Failed to submit regular AI answers', ['error' => $e->getMessage()]);
             }
-        } else {
-            Log::info('Skipping AI answers submission', [
-                'gameId' => $gameId,
-                'playWithAI' => $request->boolean('playWithAI', false),
-                'hasAIAnswers' => $request->has('aiAnswers'),
-                'aiAnswersIsArray' => $request->has('aiAnswers') ? is_array($request->aiAnswers) : false
-            ]);
         }
 
+        // Submit bespoke AI answers if enabled
+        if ($request->boolean('playWithBespokeAI', false) && 
+            $request->has('bespokeAIAnswers') && 
+            is_array($request->bespokeAIAnswers) &&
+            $request->get('bespokeAIModelId')) {
+            
+            Log::info('Submitting bespoke AI answers', [
+                'modelId' => $request->get('bespokeAIModelId'),
+                'answersCount' => count($request->bespokeAIAnswers)
+            ]);
+
+            try {
+                $this->bespokeAIGameService->submitBespokeAIAnswers(
+                    $gameId,
+                    $request->get('bespokeAIModelId'),
+                    $user->id,
+                    $request->bespokeAIAnswers,
+                    $sessionId,
+                    $difficultyId,
+                    $categoryId
+                );
+                Log::info('Bespoke AI answers submitted successfully');
+            } catch (\Exception $e) {
+                Log::error('Failed to submit bespoke AI answers', ['error' => $e->getMessage()]);
+            }
+        }
+
+        // Broadcast completion event
         $this->triggerGameUpdate($gameId, 'game.answers_submitted', [
             'userId' => $user->id,
             'userName' => $user->name,
             'timestamp' => now()->toISOString(),
-            'withAI' => $request->boolean('playWithAI', false) && $request->has('aiAnswers'),
+            'withRegularAI' => $request->boolean('playWithAI', false) && $request->has('aiAnswers'),
+            'withBespokeAI' => $request->boolean('playWithBespokeAI', false) && $request->has('bespokeAIAnswers'),
+            'bespokeAIModelId' => $request->get('bespokeAIModelId'),
             'difficultyId' => $difficultyId,
             'categoryId' => $categoryId
         ]);
@@ -356,10 +367,51 @@ class GamesController extends Controller
             'success' => true,
             'message' => 'Game completed successfully!',
             'session_id' => $sessionId,
-            'ai_submitted' => $request->boolean('playWithAI', false) && $request->has('aiAnswers') && is_array($request->aiAnswers),
+            'ai_submitted' => $request->boolean('playWithAI', false) && $request->has('aiAnswers'),
+            'bespoke_ai_submitted' => $request->boolean('playWithBespokeAI', false) && $request->has('bespokeAIAnswers'),
             'difficulty_id' => $difficultyId,
             'category_id' => $categoryId
         ]);
+    }
+
+    public function getBespokeAIAnswerForQuestion(Request $request, $gameId)
+    {
+        $request->validate([
+            'modelId' => 'required|integer|exists:bespoke_ai_models,id',
+            'questionIndex' => 'required|integer|min:0',
+            'questionText' => 'required|string',
+            'playerAnswer' => 'sometimes|string',
+            'difficultyId' => 'sometimes|integer',
+            'categoryId' => 'sometimes|integer'
+        ]);
+
+        try {
+            $result = $this->bespokeAIGameService->getBespokeAIAnswerForQuestion(
+                $gameId,
+                $request->input('modelId'),
+                $request->input('questionIndex'),
+                $request->input('questionText'),
+                $request->input('playerAnswer', ''),
+                $request->input('difficultyId'),
+                $request->input('categoryId')
+            );
+
+            return response()->json($result);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to get bespoke AI answer for question', [
+                'gameId' => $gameId,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get bespoke AI answer',
+                'answer' => 'I need more training data',
+                'score' => 0,
+                'isCorrect' => false
+            ], 500);
+        }
     }
 
     public function start(Games $game)
@@ -664,132 +716,132 @@ class GamesController extends Controller
         }
     }
 
-public function playerReady(Request $request, Games $game)
-{
-    $user = $request->user();
-    if (!$user) {
-        Log::warning('Unauthorized ready status');
-        return response()->json(['error' => 'Unauthorized'], 401);
-    }
+    public function playerReady(Request $request, Games $game)
+    {
+        $user = $request->user();
+        if (!$user) {
+            Log::warning('Unauthorized ready status');
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
 
-    $userId = $user->id;
-    $userName = $user->name;
-    $requiredCount = (int) $request->requiredCount;
-    
-    // Get game settings from the request
-    $difficultyId = $request->get('difficulty_id', 1);
-    $categoryId = $request->get('category_id', 1);
-    $playWithAI = $request->boolean('play_with_ai', false);
+        $userId = $user->id;
+        $userName = $user->name;
+        $requiredCount = (int) $request->requiredCount;
+        
+        // Get game settings from the request
+        $difficultyId = $request->get('difficulty_id', 1);
+        $categoryId = $request->get('category_id', 1);
+        $playWithAI = $request->boolean('play_with_ai', false);
 
-    // CHECK IF THIS IS A SINGLE-PLAYER GAME
-    if ($requiredCount === 1) {
-        Log::info('Single-player game detected - bypassing ready system', [
+        // CHECK IF THIS IS A SINGLE-PLAYER GAME
+        if ($requiredCount === 1) {
+            Log::info('Single-player game detected - bypassing ready system', [
+                'gameId' => $game->id,
+                'userId' => $userId,
+                'userName' => $userName
+            ]);
+            
+            // For single-player, don't use the ready players cache system at all
+            // Don't broadcast player.ready event - let frontend handle the single-player broadcast
+            return response()->json([
+                'status' => 'waiting', // This will trigger single-player logic in frontend
+                'gameSettings' => [
+                    'difficulty_id' => $difficultyId,
+                    'category_id' => $categoryId,
+                    'play_with_ai' => $playWithAI,
+                    'starter_name' => $userName
+                ]
+            ]);
+        }
+
+        // MULTIPLAYER LOGIC ONLY FROM HERE
+        Log::info('Multiplayer game detected - using ready system', [
             'gameId' => $game->id,
             'userId' => $userId,
-            'userName' => $userName
+            'requiredCount' => $requiredCount
         ]);
+
+        $cacheKey = "game:{$game->id}:readyPlayers";
+        $readyPlayers = Cache::get($cacheKey, []);
+
+        // Store the first player's settings as the "official" game settings
+        $settingsKey = "game:{$game->id}:gameSettings";
+        $currentSettings = Cache::get($settingsKey);
         
-        // For single-player, don't use the ready players cache system at all
-        // Don't broadcast player.ready event - let frontend handle the single-player broadcast
-        return response()->json([
-            'status' => 'waiting', // This will trigger single-player logic in frontend
-            'gameSettings' => [
+        if (!$currentSettings) {
+            // This is the first player to click ready - store their settings
+            $gameQuestions = $this->gamesService->getGameQuestionsByDifficultyAndCategory(
+                $game, 
+                $difficultyId, 
+                $categoryId
+            );
+            
+            $gameSettings = [
                 'difficulty_id' => $difficultyId,
                 'category_id' => $categoryId,
                 'play_with_ai' => $playWithAI,
+                'questions' => $gameQuestions,
                 'starter_name' => $userName
-            ]
-        ]);
-    }
+            ];
+            
+            Cache::put($settingsKey, $gameSettings, now()->addMinutes(30));
+            $currentSettings = $gameSettings;
+            
+            Log::info('Game settings stored by first ready player', [
+                'gameId' => $game->id,
+                'userId' => $userId,
+                'settings' => $gameSettings
+            ]);
+        }
 
-    // MULTIPLAYER LOGIC ONLY FROM HERE
-    Log::info('Multiplayer game detected - using ready system', [
-        'gameId' => $game->id,
-        'userId' => $userId,
-        'requiredCount' => $requiredCount
-    ]);
+        if (!in_array($userId, $readyPlayers)) {
+            $readyPlayers[] = $userId;
+            Cache::put($cacheKey, $readyPlayers, now()->addMinutes(30));
+        }
 
-    $cacheKey = "game:{$game->id}:readyPlayers";
-    $readyPlayers = Cache::get($cacheKey, []);
-
-    // Store the first player's settings as the "official" game settings
-    $settingsKey = "game:{$game->id}:gameSettings";
-    $currentSettings = Cache::get($settingsKey);
-    
-    if (!$currentSettings) {
-        // This is the first player to click ready - store their settings
-        $gameQuestions = $this->gamesService->getGameQuestionsByDifficultyAndCategory(
-            $game, 
-            $difficultyId, 
-            $categoryId
-        );
+        $readyCount = count($readyPlayers);
         
-        $gameSettings = [
-            'difficulty_id' => $difficultyId,
-            'category_id' => $categoryId,
-            'play_with_ai' => $playWithAI,
-            'questions' => $gameQuestions,
-            'starter_name' => $userName
-        ];
-        
-        Cache::put($settingsKey, $gameSettings, now()->addMinutes(30));
-        $currentSettings = $gameSettings;
-        
-        Log::info('Game settings stored by first ready player', [
+        Log::info('Player marked ready for multiplayer', [
             'gameId' => $game->id,
             'userId' => $userId,
-            'settings' => $gameSettings
-        ]);
-    }
-
-    if (!in_array($userId, $readyPlayers)) {
-        $readyPlayers[] = $userId;
-        Cache::put($cacheKey, $readyPlayers, now()->addMinutes(30));
-    }
-
-    $readyCount = count($readyPlayers);
-    
-    Log::info('Player marked ready for multiplayer', [
-        'gameId' => $game->id,
-        'userId' => $userId,
-        'readyCount' => $readyCount,
-        'requiredCount' => $requiredCount,
-        'allReadyPlayers' => $readyPlayers
-    ]);
-
-    // ONLY broadcast player.ready for multiplayer games
-    broadcast(new PlayerReady($game->id, $userId, $userName, $readyCount, $requiredCount, $currentSettings))->toOthers();
-
-    if ($readyCount >= $requiredCount) {
-        // All players are ready - update game status and broadcast special event
-        $game->status = 'in_progress';
-        $game->save();
-        
-        // Clear the ready players cache since game is starting
-        Cache::forget($cacheKey);
-        Cache::forget($settingsKey);
-        
-        // Broadcast a special event for when all players are ready
-        $this->triggerGameUpdate($game->id, 'game.started.all.ready', [
-            'gameId' => $game->id,
-            'playerCount' => $requiredCount,
             'readyCount' => $readyCount,
-            'gameSettings' => $currentSettings,
-            'timestamp' => now()->toISOString()
+            'requiredCount' => $requiredCount,
+            'allReadyPlayers' => $readyPlayers
         ]);
-        
-        Log::info('All players ready - multiplayer game starting', [
-            'gameId' => $game->id,
-            'playerCount' => $requiredCount,
-            'finalReadyPlayers' => $readyPlayers,
-            'finalSettings' => $currentSettings
-        ]);
-        
-        return response()->json(['status' => 'started', 'gameSettings' => $currentSettings]);
-    }
 
-    return response()->json(['status' => 'waiting', 'gameSettings' => $currentSettings]);
-}
+        // ONLY broadcast player.ready for multiplayer games
+        broadcast(new PlayerReady($game->id, $userId, $userName, $readyCount, $requiredCount, $currentSettings))->toOthers();
+
+        if ($readyCount >= $requiredCount) {
+            // All players are ready - update game status and broadcast special event
+            $game->status = 'in_progress';
+            $game->save();
+            
+            // Clear the ready players cache since game is starting
+            Cache::forget($cacheKey);
+            Cache::forget($settingsKey);
+            
+            // Broadcast a special event for when all players are ready
+            $this->triggerGameUpdate($game->id, 'game.started.all.ready', [
+                'gameId' => $game->id,
+                'playerCount' => $requiredCount,
+                'readyCount' => $readyCount,
+                'gameSettings' => $currentSettings,
+                'timestamp' => now()->toISOString()
+            ]);
+            
+            Log::info('All players ready - multiplayer game starting', [
+                'gameId' => $game->id,
+                'playerCount' => $requiredCount,
+                'finalReadyPlayers' => $readyPlayers,
+                'finalSettings' => $currentSettings
+            ]);
+            
+            return response()->json(['status' => 'started', 'gameSettings' => $currentSettings]);
+        }
+
+        return response()->json(['status' => 'waiting', 'gameSettings' => $currentSettings]);
+    }
 
 
     public function broadcast(Request $request, $gameId)

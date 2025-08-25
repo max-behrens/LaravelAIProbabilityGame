@@ -8,6 +8,7 @@ use App\Http\Controllers\Dashboard\WeatherController;
 use App\Http\Controllers\Dashboard\DashboardAIController;
 use App\Http\Controllers\Dashboard\GamesController;
 use App\Http\Controllers\Dashboard\AIGameController;
+use App\Http\Controllers\Dashboard\BespokeAIGamesController;
 use App\Http\Controllers\Dashboard\ParseXmlController;
 use App\Http\Controllers\Auth\ErrorController;
 use App\Http\Controllers\Front\PostController as FrontPostController;
@@ -32,7 +33,7 @@ Route::get('/', function () {
 Route::get('/403', [ErrorController::class, 'unauthorized'])->name('errors.403');
 
 
-// GENERAL DASHBOARD ROUTES (without prefix)
+// GENERAL ROUTES (without prefix)
 
 
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -56,6 +57,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             Route::get('/games/{gameId}/{difficultyId}/{categoryId}/questions', [GamesController::class, 'getQuestions']);
 
+
+            // Get available bespoke AI models
+            Route::get('/api/bespoke-ai/models', [BespokeAIGameController::class, 'getAvailableModels']);
+            
+            // Get bespoke AI answer for a question
+            Route::post('/api/bespoke-ai/answer', [BespokeAIGameController::class, 'getBespokeAIAnswer']);
+            
+            // Get bespoke AI scores for a game
+            Route::get('/api/games/{gameId}/bespoke-ai-scores', [BespokeAIGameController::class, 'getBespokeAIScores']);
+            
+            // Handle steal functionality
+            Route::post('/api/games/{gameId}/bespoke-ai/steal', [BespokeAIGameController::class, 'handleSteal']);
+            
+            // Get performance statistics for a model
+            Route::get('/api/games/{gameId}/bespoke-ai/stats/{modelId}', [BespokeAIGameController::class, 'getPerformanceStats']);
+            
+            // Get bespoke AI answer for specific question during gameplay
+            Route::post('/games/{gameId}/bespoke-ai-answer', [GamesController::class, 'getBespokeAIAnswerForQuestion']);
             
 
             Route::post('/games/{game}/join', [GamesController::class, 'join']);
