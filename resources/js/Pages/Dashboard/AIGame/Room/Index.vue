@@ -69,6 +69,8 @@ const aiSortDirection = ref('desc');
 
 const playWithAISection = ref(false);
 
+const isStealAnimating = ref(false);
+
 // Initialize player interactions first
 const {
     players,
@@ -596,12 +598,14 @@ const nextOrSubmit = async () => {
                                 aiAnswer: aiAnswers.value[currentQuestionIndex.value]?.answer,
                                 aiScore: aiAnswers.value[currentQuestionIndex.value]?.score,
                                 isCorrect: aiAnswers.value[currentQuestionIndex.value]?.isCorrect,
+                                steal: aiAnswers.value[currentQuestionIndex.value]?.steal,
                                 aiData: aiAnswers.value[currentQuestionIndex.value], // Send complete AI object
                                 // Bespoke AI data
-                                bespokeAIAnswer: bespokeAIAnswers.value[currentQuestionIndex.value]?.bespokeAIAnswer,
+                                bespokeAIAnswer: bespokeAIAnswers.value[currentQuestionIndex.value]?.answer,
                                 bespokeAIScore: bespokeAIAnswers.value[currentQuestionIndex.value]?.score,
                                 bespokeAIPredictedScore: bespokeAIAnswers.value[currentQuestionIndex.value]?.predicted_score,
                                 bespokeAIIsCorrect: bespokeAIAnswers.value[currentQuestionIndex.value]?.isCorrect,
+                                bespokeAISteal: bespokeAIAnswers.value[currentQuestionIndex.value]?.steal,
                                 bespokeAIModelId: bespokeAIAnswers.value[currentQuestionIndex.value]?.model_id,
                                 bespokeAIData: bespokeAIAnswers.value[currentQuestionIndex.value], // Send complete Bespoke AI object
                                 gameId: props.gameId,
@@ -990,6 +994,22 @@ const parseFiltersFromUrl = () => {
     appliedFilters.value.categoryId = urlParams.get('category');
 };
 
+const stealAnimation = async () => {
+    // Set the current answer to 'STEAL'
+    answers.value[currentQuestionIndex.value] = 'STEAL';
+    
+    // Trigger the animation
+    isStealAnimating.value = true;
+    
+    // Wait 2 seconds for animation, then proceed
+    setTimeout(async () => {
+        isStealAnimating.value = false;
+        
+        // Automatically proceed to next question or submit
+        await nextOrSubmit();
+    }, 2000);
+};
+
 const handleFilterChange = (event) => {
     appliedFilters.value = {
         dateRange: event.detail.dateRange || [null, null],
@@ -1190,16 +1210,35 @@ onUnmounted(() => {
                             <div class="text-center mb-4 text-white text-xl font-semibold">
                                 {{ currentGameQuestions[currentQuestionIndex]?.question }}
                             </div>
-                            <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                                <input v-model="answers[currentQuestionIndex]"
-                                    class="px-4 py-2 rounded w-full sm:w-2/3 text-gray-200 placeholder-gray-400 !text-gray-200"
-                                    placeholder="Your answer" />
+                                <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                                    <button 
+                                        :disabled="submitting || isStealAnimating" 
+                                        @click="stealAnimation"
+                                        class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50 transition-colors">
+                                        Steal
+                                    </button>
+                                    
+                                    <div class="relative w-full sm:w-2/3">
+                                        <input 
+                                            v-model="answers[currentQuestionIndex]"
+                                            :class="{
+                                                'animate-pulse bg-white !text-white': isStealAnimating,
+                                                'bg-gray-100 !text-white': !isStealAnimating
+                                            }"
+                                            :disabled="isStealAnimating"
+                                            class="px-4 py-2 rounded w-full !placeholder-white transition-all duration-500"
+                                            :placeholder="isStealAnimating ? '' : 'Your answer'" 
+                                        />
 
-                                <button :disabled="submitting" @click="nextOrSubmit"
-                                    class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50">
-                                    {{ isLastQuestion ? (submitting ? 'Submitting...' : 'Submit') : 'Next' }}
-                                </button>
-                            </div>
+                                    </div>
+
+                                    <button 
+                                        :disabled="submitting || isStealAnimating" 
+                                        @click="nextOrSubmit"
+                                        class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50 transition-colors">
+                                        {{ isLastQuestion ? (submitting ? 'Submitting...' : 'Submit') : 'Next' }}
+                                    </button>
+                                </div>
                         </div>
 
 

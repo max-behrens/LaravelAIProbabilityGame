@@ -369,6 +369,8 @@ class BespokeAIGameService
                 $correctAnswerCleaned = preg_replace('/[^\p{L}\p{N}\s]/u', '', $correctAnswerCleaned);
                 
                 $isCorrect = strpos($submittedAnswerCleaned, $correctAnswerCleaned) !== false;
+                $steal = ($submittedAnswerCleaned === 'STEAL') ? true : false; 
+                
             }
 
             $scoreAwarded = $isCorrect ? ($question->score_awarded ?? 0) : 0;
@@ -383,6 +385,7 @@ class BespokeAIGameService
                 'submitted' => $submittedAnswer,
                 'correct_answer' => $question->answer,
                 'is_correct' => $isCorrect,
+                'steal' => $steal,
                 'score_awarded' => $scoreAwarded,
             ];
 

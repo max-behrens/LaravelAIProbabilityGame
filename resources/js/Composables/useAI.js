@@ -84,6 +84,7 @@ export function createAI(gameId, getDependencies) {
           answer: response.data.answer,
           score: response.data.score,
           isCorrect: response.data.isCorrect,
+          steal: response.data.steal,
           cached: response.data.cached
         };
         console.log('AI answer received:', response.data.answer);
@@ -123,6 +124,7 @@ export function createAI(gameId, getDependencies) {
           answer: response.data.answer,
           score: response.data.score,
           isCorrect: response.data.isCorrect,
+          steal: response.data.steal,
           cached: response.data.cached
         };
         return response.data.answer;

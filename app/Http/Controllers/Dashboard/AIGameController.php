@@ -206,12 +206,15 @@ class AIGameController extends Controller
             $isCorrect = strpos($aiAnswerCleaned, $correctAnswerCleaned) !== false;
             $scoreAwarded = $isCorrect ? ($question->score_awarded ?? 0) : 0;
 
+            $steal = ($aiAnswerCleaned === 'STEAL') ? true : false; 
+
             return response()->json([
                 'success' => true,
                 'answer' => $aiAnswer,
                 'bespokeAIAnswer' =>$aiAnswer,
                 'score' => $scoreAwarded,
                 'isCorrect' => $isCorrect,
+                'steal' => $steal,
                 'cached' => false
             ]);
 

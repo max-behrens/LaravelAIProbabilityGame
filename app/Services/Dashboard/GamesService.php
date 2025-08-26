@@ -630,6 +630,7 @@ class GamesService
         foreach ($gameQuestions as $index => $question) {
             $submittedAnswer = $answers[$index] ?? null;
             $isCorrect = $submittedAnswer !== null && strtolower(trim($submittedAnswer)) === strtolower(trim($question->answer));
+            $steal = ($submittedAnswer === 'STEAL') ? true : false; 
             $scoreAwarded = $isCorrect ? ($question->score_awarded ?? 0) : 0;
 
             $answerJson[$question->id] = [
@@ -638,6 +639,7 @@ class GamesService
                 'submitted' => $submittedAnswer,
                 'correct_answer' => $question->answer,
                 'is_correct' => $isCorrect,
+                'steal' => $steal,
                 'score_awarded' => $scoreAwarded
             ];
 

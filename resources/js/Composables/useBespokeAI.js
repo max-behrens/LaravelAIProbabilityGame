@@ -117,6 +117,7 @@ export function createBespokeAI(gameId, getDependencies) {
           score: response.data.score,
           predicted_score: response.data.predicted_score,
           isCorrect: response.data.isCorrect,
+          steal: response.data.steal,
           cached: response.data.cached,
           model_id: response.data.model_id
         };
@@ -159,6 +160,7 @@ export function createBespokeAI(gameId, getDependencies) {
           score: response.data.score,
           predicted_score: response.data.predicted_score,
           isCorrect: response.data.isCorrect,
+          steal: response.data.steal,
           cached: response.data.cached,
           model_id: response.data.model_id
         };

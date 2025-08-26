@@ -777,6 +777,7 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
                 answer: data.aiAnswer,
                 score: data.aiScore, 
                 isCorrect: data.isCorrect,
+                steal: data.steal,
                 cached: false, // Mark as received via broadcast
                 questionIndex: data.questionIndex, // Add question index for reference
                 timestamp: data.timestamp || new Date().toISOString()
@@ -787,6 +788,7 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
                 answer: data.aiAnswer,
                 score: data.aiScore,
                 isCorrect: data.isCorrect,
+                steal: data.steal,
                 storedData: aiModule.aiAnswers.value[data.questionIndex]
             });
             
@@ -813,6 +815,7 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
                 score: data.bespokeAIScore,
                 predicted_score: data.bespokeAIPredictedScore,
                 isCorrect: data.bespokeAIIsCorrect,
+                steal: data.bespokeAISteal,
                 cached: false, // Mark as received via broadcast
                 model_id: data.bespokeAIModelId,
                 questionIndex: data.questionIndex, // Add question index for reference
@@ -824,6 +827,7 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
                 answer: data.bespokeAIAnswer,
                 score: data.bespokeAIScore,
                 isCorrect: data.bespokeAIIsCorrect,
+                bespokeAISteal: data.bespokeAISteal,
                 storedData: bespokeAIModule.bespokeAIAnswers.value[data.questionIndex]
             });
             

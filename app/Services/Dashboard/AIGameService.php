@@ -321,6 +321,7 @@ class AIGameService
                 
                 // Check if the correct answer appears anywhere within the AI's answer
                 $isCorrect = strpos($submittedAnswerCleaned, $correctAnswerCleaned) !== false;
+                $steal = ($submittedAnswerCleaned === 'STEAL') ? true : false; 
             }
             $scoreAwarded = $isCorrect ? ($question->score_awarded ?? 0) : 0;
 
@@ -330,6 +331,7 @@ class AIGameService
                 'submitted' => $submittedAnswer,
                 'correct_answer' => $question->answer,
                 'is_correct' => $isCorrect,
+                'steal' => $steal,
                 'score_awarded' => $scoreAwarded,
             ];
             $totalScore += $scoreAwarded;
