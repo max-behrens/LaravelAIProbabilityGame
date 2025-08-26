@@ -32,7 +32,7 @@ const props = defineProps({
 // State
 const showingNavigation = ref(false);
 const showLogoutModal = ref(false);
-const showFiltersSection = ref(false);
+const showFiltersSection = ref(true);
 const showDateModal = ref(false);
 const isDark = ref(false);
 const isLoading = ref(false);
@@ -516,7 +516,6 @@ const excludeAIFilter = computed(() => {
 });
 
 const handleToggleGameFilters = () => {
-  toggleFiltersSection();
   // Also open the navigation menu if it's not already open
   if (!showingNavigation.value) {
     showingNavigation.value = true;

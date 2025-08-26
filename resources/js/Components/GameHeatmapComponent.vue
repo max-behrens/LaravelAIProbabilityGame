@@ -424,7 +424,7 @@ const chartOptions = ref({
       }
 
       // Only add difficulty/category info if filters are applied
-      if (filterInfo) {
+      if (filterInfo && (difficultyId.value !== null && categoryId.value !== null)) {
         tooltipContent += `Difficulty: <strong>${filterInfo.difficultyInfo}</strong><br/>
         Category: <strong>${filterInfo.categoryInfo}</strong><br/>`;
       }

@@ -367,7 +367,7 @@ onUnmounted(() => {
 
       <div class="z-20 rounded-lg p-4 min-w-64">
         <div class="flex items-center justify-center">
-          <h3 class="text-white text-sm font-semibold">Game Wins</h3>
+          <h3 class="!text-white text-sm font-semibold">Game Wins</h3>
           <!-- Loading spinner -->
           <div 
             v-if="currentGameWinsLoading"
@@ -390,7 +390,7 @@ onUnmounted(() => {
           >
             <span 
               v-if="currentGameWins.player_wins > 0" 
-              class="text-xs text-white font-semibold"
+              class="text-xs !text-white font-semibold"
             >
               {{ currentGameWins.player_wins }}
             </span>
@@ -402,7 +402,7 @@ onUnmounted(() => {
           >
             <span 
               v-if="currentGameWins.ai_wins > 0" 
-              class="text-xs text-white font-semibold"
+              class="text-xs !text-white font-semibold"
             >
               {{ currentGameWins.ai_wins }}
             </span>
@@ -410,7 +410,7 @@ onUnmounted(() => {
         </div>
         
         <!-- Total games count -->
-        <div class="text-center text-xs text-gray-300 mt-3">
+        <div class="text-center text-xs text-gray-100 mt-3">
           Total Games: {{ currentGameWins.player_wins + currentGameWins.ai_wins }}
         </div>
       </div>
