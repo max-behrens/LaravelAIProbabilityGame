@@ -4,6 +4,7 @@ import BreezeAuthenticatedLayout from '@/Layouts/Authenticated.vue';
 import GameAuthenticatedLayout from '@/Layouts/GameAuthenticated.vue';
 import { Head, Link } from '@inertiajs/inertia-vue3';
 import { useAI, createAI } from '@/Composables/useAI';
+import { createBespokeAI } from '@/Composables/useBespokeAI';
 import { usePlayerInteractions } from '@/Composables/usePlayerInteractions';
 import DynamicPagination from '@/Components/DynamicPagination.vue';
 import GameGraphComponent from '@/Components/GameGraphComponent.vue';
@@ -66,6 +67,8 @@ const playerSortDirection = ref('desc');
 const aiSortField = ref('created_at');
 const aiSortDirection = ref('desc');
 
+const playWithAISection = ref(false);
+
 // Initialize player interactions first
 const {
     players,
@@ -112,6 +115,33 @@ const {
 // Set AI module reference in player interactions
 setAIModule(aiModule);
 
+// Initialize bespoke AI alongside existing AI
+const bespokeAIModule = createBespokeAI(props.gameId, () => ({
+    gameState: gameState.value,
+    players: players.value,
+    currentQuestionIndex: currentQuestionIndex.value,
+    currentGameQuestions: currentGameQuestions.value,
+    selectedDifficulty: selectedDifficulty.value,
+    selectedCategory: selectedCategory.value
+}));
+
+const {
+    bespokeAIAnswers,
+    bespokeAILoading,
+    bespokeAIError,
+    playWithBespokeAI,
+    selectedAIModel,
+    availableModels,
+    modelStats,
+    loadAvailableModels,
+    getBespokeAIAnswerForQuestion,
+    handleSteal,
+    hasBespokeAIAnswered,
+    resetBespokeAI,
+    changeAIModel
+} = bespokeAIModule;
+
+
 
 // Debug logging
 console.log('Game ID:', props.gameId);
@@ -138,7 +168,6 @@ const isGameInProgress = computed(() => gameState.value.gameInProgress);
 const showQuestionInput = computed(() => {
     return isGameStarted.value && !isWaitingForOthers.value && !gameIsOver.value && currentGameQuestions.value.length > 0;
 });
-
 
 console.log('NO. PLAYERS: ' + playerCount.value);
 // Format date helper
@@ -297,8 +326,9 @@ const changeAIScoresPage = (page) => {
 };
 
 const showSinglePlayerAIWarning = computed(() => {
-    return playerCount.value === 1 && !playWithAI.value;
+    return playerCount.value === 1 && !playWithAI.value && !playWithBespokeAI.value;
 });
+
 
 
 // Updated game control functions
@@ -352,7 +382,7 @@ const startGame = async () => {
             if (playerCount.value === 1) {
                 // Single player - start immediately
                 if (showSinglePlayerAIWarning.value) {
-                    addFlashMessage('Cannot start game. Please enable "Play with AI" or add more players.', 'warning');
+                    addFlashMessage('Cannot start game. Please enable "Play With ChatGPT" or add more players.', 'warning');
                     return;
                 } else {
                     isGameStarted.value = true;
@@ -392,7 +422,7 @@ const startGame = async () => {
             }
             
             if (showSinglePlayerAIWarning.value) {
-                addFlashMessage('Cannot start game. Please enable "Play with AI" or add more players.', 'warning');
+                addFlashMessage('Cannot start game. Please enable "Play With ChatGPT" or add more players.', 'warning');
                 return;
             } else {
                 isGameStarted.value = true;
@@ -407,6 +437,74 @@ const startGame = async () => {
         console.error(error);
     }
 };
+
+const attemptSteal = async () => {
+    if (!stealTarget.value || !playWithBespokeAI.value) return;
+    
+    try {
+        addFlashMessage('Attempting to steal...', 'info');
+        
+        const result = await handleSteal(stealTarget.value.id, currentQuestionIndex.value);
+        
+        if (result.success) {
+            addFlashMessage(`Successfully stole from ${stealTarget.value.name}!`, 'success');
+            
+            // Broadcast steal to other players
+            await axios.post(`/api/games/${props.gameId}/broadcast`, {
+                event: 'player.stole.answer',
+                data: {
+                    stealerId: props.auth.user.id,
+                    stealerName: props.auth.user.name,
+                    targetId: stealTarget.value.id,
+                    targetName: stealTarget.value.name,
+                    questionIndex: currentQuestionIndex.value,
+                    timestamp: new Date().toISOString()
+                }
+            });
+            
+            if (result.stolenAnswer) {
+                // Use the stolen answer
+                answers.value[currentQuestionIndex.value] = result.stolenAnswer;
+            }
+        } else {
+            addFlashMessage(result.message || 'Steal failed', 'error');
+        }
+        
+        showStealButton.value = false;
+        stealTarget.value = null;
+        
+    } catch (error) {
+        console.error('Steal error:', error);
+        addFlashMessage('Failed to execute steal', 'error');
+    }
+};
+
+const prepareAIAnswersForSubmission = () => {
+    const aiAnswersObj = aiModule.aiAnswers.value;
+    const aiAnswersArray = [];
+
+    // Convert object to array for ChatGPT AI
+    for (let i = 0; i < Object.keys(aiAnswersObj).length; i++) {
+        aiAnswersArray[i] = aiAnswersObj[i]?.answer ?? null;
+    }
+
+    console.log('Prepared ChatGPT AI answers for submission:', aiAnswersArray);
+    return aiAnswersArray;
+};
+
+const prepareBespokeAIAnswersForSubmission = () => {
+    const bespokeAIAnswersObj = bespokeAIAnswers.value;
+    const bespokeAIAnswersArray = [];
+
+    // Convert object to array for Bespoke AI
+    for (let i = 0; i < Object.keys(bespokeAIAnswersObj).length; i++) {
+        bespokeAIAnswersArray[i] = bespokeAIAnswersObj[i]?.answer ?? null;
+    }
+
+    console.log('Prepared Bespoke AI answers for submission:', bespokeAIAnswersArray);
+    return bespokeAIAnswersArray;
+};
+
 
 const applyGameSettings = async (settings) => {
     console.log('Applying game settings from ready player:', settings);
@@ -975,7 +1073,7 @@ onMounted(() => {
             console.log('🚀 Auto-starting game via callback...');
             
             if (playerCount.value === 1 && !playWithAI.value) {
-                addFlashMessage('Cannot start game. Please enable "Play with AI" or add more players.', 'warning');
+                addFlashMessage('Cannot start game. Please enable "Play With ChatGPT" or add more players.', 'warning');
                 return;
             }
             
@@ -1174,7 +1272,7 @@ onUnmounted(() => {
                                                     {{ getCategoryName(gameState.gameSettings?.category_id) }}
                                                 </div>
                                                 <div>
-                                                    <span class="font-semibold">Play with AI:</span> 
+                                                    <span class="font-semibold">Play With ChatGPT:</span> 
                                                     {{ gameState.gameSettings?.play_with_ai ? 'Yes' : 'No' }}
                                                 </div>
                                             </div>
@@ -1242,11 +1340,11 @@ onUnmounted(() => {
                                     </select>
                                 </div>
 
-                                <!-- Play with AI -->
+                                <!-- Play With AI Section Toggle -->
                                 <div class="flex items-center gap-2">
-                                    <input type="checkbox" v-model="playWithAI"
+                                    <input type="checkbox" v-model="playWithAISection"
                                         :disabled="isGameInProgress || isWaitingForOthers || gameIsOver" />
-                                    <label>Play with AI</label>
+                                    <label>Play With AI</label>
                                 </div>
                             </div>
                         </div>
@@ -1260,58 +1358,131 @@ onUnmounted(() => {
                             </div>
                         </div>
 
-                        <div v-if="playWithAI" class="flex flex-wrap gap-6 w-full">
-                          <div class="bg-gray-800 min-w-[300px] basis-1/4 p-4 rounded border border-gray-700">
-                              <h4 class="text-white font-semibold mb-2">AI Player Status</h4>
+                        <div v-if="playWithAISection" class="flex flex-wrap gap-6 w-full">
 
-                              <div v-if="aiLoading" class="text-yellow-400 flex items-center">
-                                  <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
-                                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
-                                          stroke-width="4"></circle>
-                                      <path class="opacity-75" fill="currentColor"
-                                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
-                                      </path>
-                                  </svg>
-                                  AI is thinking...
-                              </div>
-
-                              <div v-if="aiError" class="text-red-400">
-                                  AI Error: {{ aiError }}
-                              </div>
-
-                                <div v-if="!aiLoading && !aiError" class="space-y-2">
-                                    <div v-for="(question, index) in currentGameQuestions" :key="question.id" class="text-gray-300">
-                                        <span class="font-medium">Q{{ index + 1 }}:</span>
-                                        <span v-if="hasAIAnswered(index)" class="text-green-400 ml-2">
-                                            {{ aiAnswers[index]?.answer || 'Answer not available' }}
-                                            <span v-if="aiAnswers[index]?.score !== undefined && aiAnswers[index]?.score !== null" 
-                                                class="text-blue-400 ml-1">
-                                                (Score: {{ aiAnswers[index].score }})
-                                            </span>
-                                        </span>
-                                        <span v-else-if="index < currentQuestionIndex || gameIsOver" class="text-gray-500 ml-2">
-                                            <!-- Show different text for completed games -->
-                                            {{ gameIsOver ? 'Game completed' : 'Waiting for AI...' }}
-                                        </span>
-                                        <span v-else class="text-gray-500 ml-2">
-                                            Not answered yet
-                                        </span>
+                            <div class="flex flex-col gap-4">
+                                <div class="bg-gray-800 min-w-[300px] basis-1/4 p-4 rounded border border-gray-700">
+                                    <h4 class="text-white font-semibold mb-4">AI Players</h4>
+                                    <div class="flex flex-col gap-4 items-center">
+                                        <div class="flex flex-row gap-4">
+                                            <input type="checkbox" v-model="playWithBespokeAI"
+                                                :disabled="isGameInProgress || isWaitingForOthers || gameIsOver" />
+                                            <label>Play With Learning Model</label>
+                                            <input type="checkbox" v-model="playWithAI"
+                                                :disabled="isGameInProgress || isWaitingForOthers || gameIsOver" />
+                                            <label>Play With ChatGPT</label>
+                                        </div>
+                                        <div v-if="playWithBespokeAI" class="flex flex-row items-center gap-4">
+                                            <label for="difficulty">Choose Learning Model:</label>
+                                            <select id="difficulty" v-model="selectedDifficulty"
+                                                :disabled="isGameInProgress || isWaitingForOthers || gameIsOver"
+                                                @change="onDifficultyOrCategoryChange"
+                                                class="border rounded px-2 py-1 bg-gray-700 text-white disabled:opacity-50">
+                                                <option v-for="difficulty in difficulties" :key="difficulty.id" :value="difficulty.id">
+                                                {{ difficulty.name }}
+                                                </option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
+                                <div class="bg-gray-800 min-w-[300px] max-h-[800px] basis-1/4 p-4 rounded border border-gray-700">
 
-                                <div v-if="playWithAI" class="mt-4 text-xs text-gray-500 bg-gray-900 p-2 rounded">
-                                    <p><strong>Debug AI Answers:</strong></p>
-                                    <div v-for="(answer, index) in aiAnswers" :key="index" class="mb-1">
-                                        Q{{ parseInt(index) + 1 }}: 
-                                        {{ answer?.answer || 'No answer' }} 
-                                        (Score: {{ answer?.score ?? 'No score' }})
-                                        (Cached: {{ answer?.cached ? 'Yes' : 'No' }})
+                                    <div class="flex flex-row gap-6">
+
+                                        <div v-if="playWithBespokeAI">
+                                            <h4 class="text-white font-semibold mb-2">Bespoke AI Status</h4>
+
+                                            <div v-if="aiLoading" class="text-yellow-400 flex items-center">
+                                                <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                                        stroke-width="4"></circle>
+                                                    <path class="opacity-75" fill="currentColor"
+                                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                                    </path>
+                                                </svg>
+                                                AI is thinking...
+                                            </div>
+
+                                            <div v-if="aiError" class="text-red-400">
+                                                AI Error: {{ aiError }}
+                                            </div>
+
+                                            <div v-if="!aiLoading && !aiError" class="space-y-2">
+                                                <div v-for="(question, index) in currentGameQuestions" :key="question.id" class="text-gray-300">
+                                                    <span class="font-medium">Q{{ index + 1 }}:</span>
+                                                    <span v-if="hasBespokeAIAnswered(index)" class="text-green-400 ml-2">
+                                                        {{ aiAnswers[index]?.answer || 'Answer not available' }}
+                                                        <span v-if="aiAnswers[index]?.score !== undefined && aiAnswers[index]?.score !== null" 
+                                                            class="text-blue-400 ml-1">
+                                                            (Score: {{ aiAnswers[index].score }})
+                                                        </span>
+                                                    </span>
+                                                    <span v-else-if="index < currentQuestionIndex || gameIsOver" class="text-gray-500 ml-2">
+                                                        <!-- Show different text for completed games -->
+                                                        {{ gameIsOver ? 'Game completed' : 'Waiting for AI...' }}
+                                                    </span>
+                                                    <span v-else class="text-gray-500 ml-2">
+                                                        Not answered yet
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div v-if="playWithAI">
+                                            <h4 class="text-white font-semibold mb-2">ChatGPT Status</h4>
+
+                                            <div v-if="aiLoading" class="text-yellow-400 flex items-center">
+                                                <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                                        stroke-width="4"></circle>
+                                                    <path class="opacity-75" fill="currentColor"
+                                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                                    </path>
+                                                </svg>
+                                                AI is thinking...
+                                            </div>
+
+                                            <div v-if="aiError" class="text-red-400">
+                                                AI Error: {{ aiError }}
+                                            </div>
+
+                                            <div v-if="!aiLoading && !aiError" class="space-y-2">
+                                                <div v-for="(question, index) in currentGameQuestions" :key="question.id" class="text-gray-300">
+                                                    <span class="font-medium">Q{{ index + 1 }}:</span>
+                                                    <span v-if="hasAIAnswered(index)" class="text-green-400 ml-2">
+                                                        {{ aiAnswers[index]?.answer || 'Answer not available' }}
+                                                        <span v-if="aiAnswers[index]?.score !== undefined && aiAnswers[index]?.score !== null" 
+                                                            class="text-blue-400 ml-1">
+                                                            (Score: {{ aiAnswers[index].score }})
+                                                        </span>
+                                                    </span>
+                                                    <span v-else-if="index < currentQuestionIndex || gameIsOver" class="text-gray-500 ml-2">
+                                                        <!-- Show different text for completed games -->
+                                                        {{ gameIsOver ? 'Game completed' : 'Waiting for AI...' }}
+                                                    </span>
+                                                    <span v-else class="text-gray-500 ml-2">
+                                                        Not answered yet
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <p class="mt-2"><strong>Current Question Index:</strong> {{ currentQuestionIndex }}</p>
-                                    <p><strong>Game Is Over:</strong> {{ gameIsOver }}</p>
-                                    <p><strong>Total Questions:</strong> {{ currentGameQuestions.length }}</p>
+
+
+                                    <!-- <div v-if="playWithAI" class="mt-4 text-xs text-gray-500 bg-gray-900 p-2 rounded">
+                                        <p><strong>Debug AI Answers:</strong></p>
+                                        <div v-for="(answer, index) in aiAnswers" :key="index" class="mb-1">
+                                            Q{{ parseInt(index) + 1 }}: 
+                                            {{ answer?.answer || 'No answer' }} 
+                                            (Score: {{ answer?.score ?? 'No score' }})
+                                            (Cached: {{ answer?.cached ? 'Yes' : 'No' }})
+                                        </div>
+                                        <p class="mt-2"><strong>Current Question Index:</strong> {{ currentQuestionIndex }}</p>
+                                        <p><strong>Game Is Over:</strong> {{ gameIsOver }}</p>
+                                        <p><strong>Total Questions:</strong> {{ currentGameQuestions.length }}</p>
+                                    </div> -->
                                 </div>
-                          </div>
+                            </div>
 
                             <div class="flex-1 min-w-[300px] p-4 bg-gray-800 rounded shadow">
                                 <h3 class="font-semibold text-lg mb-4">AI Scores</h3>

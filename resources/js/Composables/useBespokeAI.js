@@ -9,7 +9,7 @@ export function createBespokeAI(gameId, getDependencies) {
   const bespokeAIAnswers = ref({});
   const bespokeAILoading = ref(false);
   const bespokeAIError = ref(null);
-  const playWithBespokeAI = ref(false);
+  const playWithBespokeAI = ref(true);
   const selectedAIModel = ref(null);
   const availableModels = ref([]);
   const modelStats = ref({});
