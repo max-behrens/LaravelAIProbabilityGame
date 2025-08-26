@@ -87,7 +87,8 @@ const {
     removeFlashMessage,
     clearFlashMessages,
     registerCallbacks,
-    setAIModule // Get the setAIModule function
+    setAIModule, // Get the setAIModule function
+    setBespokeAIModule
 } = usePlayerInteractions(props.gameId, props.auth);
 
 // Create AI with dependency getter function
@@ -134,14 +135,14 @@ const {
     availableModels,
     modelStats,
     loadAvailableModels,
+    getBespokeAIAnswer,
     getBespokeAIAnswerForQuestion,
-    handleSteal,
     hasBespokeAIAnswered,
     resetBespokeAI,
     changeAIModel
 } = bespokeAIModule;
 
-
+setBespokeAIModule(bespokeAIModule);
 
 // Debug logging
 console.log('Game ID:', props.gameId);
@@ -270,7 +271,9 @@ const fetchAIScores = async (page = 1, sortField = null, sortDirection = null) =
         const url = `/api/games/${props.gameId}/ai-scores?${params.toString()}`;
         
         const response = await axios.get(url);
-        aiScores.value = response.data.data || []; // Ensure it's always an array
+
+        aiScores.value = response.data || []; // Ensure it's always an array
+
         aiScoresTotalPages.value = response.data.last_page || 1;
         aiScoresCurrentPage.value = response.data.current_page || 1;
     } catch (error) {
@@ -282,7 +285,6 @@ const fetchAIScores = async (page = 1, sortField = null, sortDirection = null) =
         aiScoresCurrentPage.value = 1;
     }
 };
-
 
 const fetchGameQuestions = async (difficultyId = null, categoryId = null) => {
     try {
@@ -330,13 +332,10 @@ const showSinglePlayerAIWarning = computed(() => {
 });
 
 
-
 // Updated game control functions
 const startGame = async () => {
-
     currentQuestionIndex.value = 0;
     answers.value = [];
-
 
     try {
         console.log('Starting game with player count:', playerCount.value);
@@ -363,6 +362,7 @@ const startGame = async () => {
 
         // Reset AI state
         resetAI();
+        resetBespokeAI(); // Reset Bespoke AI state
 
         // Reset session before starting new game
         await axios.post(`/games/${props.gameId}/reset-session`);
@@ -374,6 +374,8 @@ const startGame = async () => {
             difficulty_id: selectedDifficulty.value,
             category_id: selectedCategory.value,
             play_with_ai: playWithAI.value,
+            play_with_bespoke_ai: playWithBespokeAI.value,
+            selected_ai_model: selectedAIModel.value, // Include selected Bespoke AI model
         });
 
         console.log('playerCount.value: ' + playerCount.value);
@@ -382,7 +384,7 @@ const startGame = async () => {
             if (playerCount.value === 1) {
                 // Single player - start immediately
                 if (showSinglePlayerAIWarning.value) {
-                    addFlashMessage('Cannot start game. Please enable "Play With ChatGPT" or add more players.', 'warning');
+                    addFlashMessage('Cannot start game. Please enable "Play With ChatGPT" or "Play With Learning Model" or add more players.', 'warning');
                     return;
                 } else {
                     isGameStarted.value = true;
@@ -400,6 +402,8 @@ const startGame = async () => {
                                 difficulty_id: selectedDifficulty.value,
                                 category_id: selectedCategory.value,
                                 play_with_ai: playWithAI.value,
+                                play_with_bespoke_ai: playWithBespokeAI.value,
+                                selected_ai_model: selectedAIModel.value,
                                 timestamp: new Date().toISOString()
                             }
                         });
@@ -422,7 +426,7 @@ const startGame = async () => {
             }
             
             if (showSinglePlayerAIWarning.value) {
-                addFlashMessage('Cannot start game. Please enable "Play With ChatGPT" or add more players.', 'warning');
+                addFlashMessage('Cannot start game. Please enable "Play With ChatGPT" or "Play With Learning Model" or add more players.', 'warning');
                 return;
             } else {
                 isGameStarted.value = true;
@@ -438,73 +442,6 @@ const startGame = async () => {
     }
 };
 
-const attemptSteal = async () => {
-    if (!stealTarget.value || !playWithBespokeAI.value) return;
-    
-    try {
-        addFlashMessage('Attempting to steal...', 'info');
-        
-        const result = await handleSteal(stealTarget.value.id, currentQuestionIndex.value);
-        
-        if (result.success) {
-            addFlashMessage(`Successfully stole from ${stealTarget.value.name}!`, 'success');
-            
-            // Broadcast steal to other players
-            await axios.post(`/api/games/${props.gameId}/broadcast`, {
-                event: 'player.stole.answer',
-                data: {
-                    stealerId: props.auth.user.id,
-                    stealerName: props.auth.user.name,
-                    targetId: stealTarget.value.id,
-                    targetName: stealTarget.value.name,
-                    questionIndex: currentQuestionIndex.value,
-                    timestamp: new Date().toISOString()
-                }
-            });
-            
-            if (result.stolenAnswer) {
-                // Use the stolen answer
-                answers.value[currentQuestionIndex.value] = result.stolenAnswer;
-            }
-        } else {
-            addFlashMessage(result.message || 'Steal failed', 'error');
-        }
-        
-        showStealButton.value = false;
-        stealTarget.value = null;
-        
-    } catch (error) {
-        console.error('Steal error:', error);
-        addFlashMessage('Failed to execute steal', 'error');
-    }
-};
-
-const prepareAIAnswersForSubmission = () => {
-    const aiAnswersObj = aiModule.aiAnswers.value;
-    const aiAnswersArray = [];
-
-    // Convert object to array for ChatGPT AI
-    for (let i = 0; i < Object.keys(aiAnswersObj).length; i++) {
-        aiAnswersArray[i] = aiAnswersObj[i]?.answer ?? null;
-    }
-
-    console.log('Prepared ChatGPT AI answers for submission:', aiAnswersArray);
-    return aiAnswersArray;
-};
-
-const prepareBespokeAIAnswersForSubmission = () => {
-    const bespokeAIAnswersObj = bespokeAIAnswers.value;
-    const bespokeAIAnswersArray = [];
-
-    // Convert object to array for Bespoke AI
-    for (let i = 0; i < Object.keys(bespokeAIAnswersObj).length; i++) {
-        bespokeAIAnswersArray[i] = bespokeAIAnswersObj[i]?.answer ?? null;
-    }
-
-    console.log('Prepared Bespoke AI answers for submission:', bespokeAIAnswersArray);
-    return bespokeAIAnswersArray;
-};
-
 
 const applyGameSettings = async (settings) => {
     console.log('Applying game settings from ready player:', settings);
@@ -513,7 +450,12 @@ const applyGameSettings = async (settings) => {
     selectedDifficulty.value = settings.difficulty_id;
     selectedCategory.value = settings.category_id;
     playWithAI.value = settings.play_with_ai;
+    playWithBespokeAI.value = settings.play_with_bespoke_ai;
     
+    // Update Bespoke AI model if provided
+    if (settings.selected_ai_model) {
+        selectedAIModel.value = settings.selected_ai_model;
+    }
     
     // Update questions if provided
     if (settings.questions && settings.questions.length > 0) {
@@ -524,11 +466,8 @@ const applyGameSettings = async (settings) => {
         await fetchGameQuestions(settings.difficulty_id, settings.category_id);
     }
 
-
-
     addFlashMessage(`Game settings updated to match ${settings.starter_name}'s preferences!`, 'info');
 };
-
 // Join the game with real-time updates
 const joinGame = async () => {
     try {
@@ -580,26 +519,13 @@ const nextOrSubmit = async () => {
         if (result.submitted) {
             // Answer was submitted successfully (single player or all players answered)
             // Check if we're playing with AI and need to wait for AI answer
-            if (playWithAI.value && currentGameQuestions.value[currentQuestionIndex.value]) {
+            if ((playWithAI.value || playWithBespokeAI.value) && currentGameQuestions.value[currentQuestionIndex.value]) {
                 // For single player: Get AI answer immediately
                 if (playerCount.value === 1) {
-                    console.log('Single player: Requesting AI answer for question:', currentQuestionIndex.value);
-                    await getAIAnswerForQuestion(
-                        currentGameQuestions.value[currentQuestionIndex.value].question,
-                        props.gameId,
-                        currentQuestionIndex.value,
-                        selectedDifficulty.value,
-                        selectedCategory.value
-                    );
-                    // Progress to next question immediately after AI responds
-                    currentQuestionIndex.value++;
-                } else {
-                    // For multiplayer: Only the first player to trigger "all answered" should request AI
-                    console.log('Multiplayer: All players answered, checking if need to request AI');
+                    console.log('Single player: Requesting AI answers for question:', currentQuestionIndex.value);
                     
-                    // If AI hasn't answered this question yet, request it
-                    if (!hasAIAnswered(currentQuestionIndex.value)) {
-                        console.log('Requesting AI answer for question:', currentQuestionIndex.value);
+                    // Get ChatGPT AI answer if enabled
+                    if (playWithAI.value) {
                         await getAIAnswerForQuestion(
                             currentGameQuestions.value[currentQuestionIndex.value].question,
                             props.gameId,
@@ -607,16 +533,77 @@ const nextOrSubmit = async () => {
                             selectedDifficulty.value,
                             selectedCategory.value
                         );
+                    }
+                    
+                    // Get Bespoke AI answer if enabled
+                    if (playWithBespokeAI.value) {
+                        await getBespokeAIAnswerForQuestion(
+                            currentGameQuestions.value[currentQuestionIndex.value].question,
+                            props.gameId,
+                            currentQuestionIndex.value,
+                            selectedDifficulty.value,
+                            selectedCategory.value
+                        );
+                    }
+                    
+                    // Progress to next question immediately after AI responds
+                    currentQuestionIndex.value++;
+                } else {
+                    // For multiplayer: Only the first player to trigger "all answered" should request AI
+                    console.log('Multiplayer: All players answered, checking if need to request AI');
+                    
+                    let shouldRequestAI = false;
+                    
+                    // Check if either AI hasn't answered this question yet
+                    if (playWithAI.value && !hasAIAnswered(currentQuestionIndex.value)) {
+                        shouldRequestAI = true;
+                    }
+                    if (playWithBespokeAI.value && !hasBespokeAIAnswered(currentQuestionIndex.value)) {
+                        shouldRequestAI = true;
+                    }
+                    
+                    if (shouldRequestAI) {
+                        console.log('Requesting AI answers for question:', currentQuestionIndex.value);
+                        
+                        // Get ChatGPT AI answer if enabled and not answered
+                        if (playWithAI.value && !hasAIAnswered(currentQuestionIndex.value)) {
+                            await getAIAnswerForQuestion(
+                                currentGameQuestions.value[currentQuestionIndex.value].question,
+                                props.gameId,
+                                currentQuestionIndex.value,
+                                selectedDifficulty.value,
+                                selectedCategory.value
+                            );
+                        }
+                        
+                        // Get Bespoke AI answer if enabled and not answered
+                        if (playWithBespokeAI.value && !hasBespokeAIAnswered(currentQuestionIndex.value)) {
+                            await getBespokeAIAnswerForQuestion(
+                                currentGameQuestions.value[currentQuestionIndex.value].question,
+                                props.gameId,
+                                currentQuestionIndex.value,
+                                selectedDifficulty.value,
+                                selectedCategory.value
+                            );
+                        }
                         
                         // Broadcast that AI has answered and all players can progress
                         await axios.post(`/api/games/${props.gameId}/broadcast`, {
                             event: 'ai.answered',
                             data: {
                                 questionIndex: currentQuestionIndex.value,
+                                // ChatGPT AI data
                                 aiAnswer: aiAnswers.value[currentQuestionIndex.value]?.answer,
                                 aiScore: aiAnswers.value[currentQuestionIndex.value]?.score,
                                 isCorrect: aiAnswers.value[currentQuestionIndex.value]?.isCorrect,
                                 aiData: aiAnswers.value[currentQuestionIndex.value], // Send complete AI object
+                                // Bespoke AI data
+                                bespokeAIAnswer: bespokeAIAnswers.value[currentQuestionIndex.value]?.bespokeAIAnswer,
+                                bespokeAIScore: bespokeAIAnswers.value[currentQuestionIndex.value]?.score,
+                                bespokeAIPredictedScore: bespokeAIAnswers.value[currentQuestionIndex.value]?.predicted_score,
+                                bespokeAIIsCorrect: bespokeAIAnswers.value[currentQuestionIndex.value]?.isCorrect,
+                                bespokeAIModelId: bespokeAIAnswers.value[currentQuestionIndex.value]?.model_id,
+                                bespokeAIData: bespokeAIAnswers.value[currentQuestionIndex.value], // Send complete Bespoke AI object
                                 gameId: props.gameId,
                                 timestamp: new Date().toISOString()
                             }
@@ -641,16 +628,28 @@ const nextOrSubmit = async () => {
             // Don't increment currentQuestionIndex - this will happen automatically via Pusher
         }
     } else {
-        // This is the LAST question - use existing final submission logic
+        // This is the LAST question - use existing final submission logic with Bespoke AI support
         submitting.value = true;
 
         try {
             // For single-player: Get AI answer for final question if needed
-            if (playerCount.value === 1 && playWithAI.value) {
-                if (!hasAIAnswered(currentQuestionIndex.value)) {
-                    addFlashMessage('Getting AI answer for final question...', 'info');
-                    console.log('Single-player: Getting AI answer for final question:', currentQuestionIndex.value);
+            if (playerCount.value === 1) {
+                if (playWithAI.value && !hasAIAnswered(currentQuestionIndex.value)) {
+                    addFlashMessage('Getting ChatGPT AI answer for final question...', 'info');
+                    console.log('Single-player: Getting ChatGPT AI answer for final question:', currentQuestionIndex.value);
                     await getAIAnswerForQuestion(
+                        currentGameQuestions.value[currentQuestionIndex.value].question,
+                        props.gameId,
+                        currentQuestionIndex.value,
+                        selectedDifficulty.value,
+                        selectedCategory.value
+                    );
+                }
+                
+                if (playWithBespokeAI.value && !hasBespokeAIAnswered(currentQuestionIndex.value)) {
+                    addFlashMessage('Getting Bespoke AI answer for final question...', 'info');
+                    console.log('Single-player: Getting Bespoke AI answer for final question:', currentQuestionIndex.value);
+                    await getBespokeAIAnswerForQuestion(
                         currentGameQuestions.value[currentQuestionIndex.value].question,
                         props.gameId,
                         currentQuestionIndex.value,
@@ -661,11 +660,23 @@ const nextOrSubmit = async () => {
             }
             
             // For multiplayer: Check if AI needs to answer
-            if (playerCount.value > 1 && playWithAI.value) {
-                if (!hasAIAnswered(currentQuestionIndex.value)) {
-                    addFlashMessage('Waiting for AI to answer the final question...', 'info');
-                    console.log('Multiplayer: Triggering AI answer for final question:', currentQuestionIndex.value);
+            if (playerCount.value > 1) {
+                if (playWithAI.value && !hasAIAnswered(currentQuestionIndex.value)) {
+                    addFlashMessage('Waiting for ChatGPT AI to answer the final question...', 'info');
+                    console.log('Multiplayer: Triggering ChatGPT AI answer for final question:', currentQuestionIndex.value);
                     await getAIAnswerForQuestion(
+                        currentGameQuestions.value[currentQuestionIndex.value].question,
+                        props.gameId,
+                        currentQuestionIndex.value,
+                        selectedDifficulty.value,
+                        selectedCategory.value
+                    );
+                }
+                
+                if (playWithBespokeAI.value && !hasBespokeAIAnswered(currentQuestionIndex.value)) {
+                    addFlashMessage('Waiting for Bespoke AI to answer the final question...', 'info');
+                    console.log('Multiplayer: Triggering Bespoke AI answer for final question:', currentQuestionIndex.value);
+                    await getBespokeAIAnswerForQuestion(
                         currentGameQuestions.value[currentQuestionIndex.value].question,
                         props.gameId,
                         currentQuestionIndex.value,
@@ -700,7 +711,8 @@ const nextOrSubmit = async () => {
                                 timestamp: new Date().toISOString(),
                                 difficultyId: selectedDifficulty.value,
                                 categoryId: selectedCategory.value,
-                                playedWithAI: playWithAI.value
+                                playedWithAI: playWithAI.value,
+                                playedWithBespokeAI: playWithBespokeAI.value
                             }
                         });
                         console.log('Single-player game completion broadcasted');
@@ -743,6 +755,18 @@ const debugAIAnswers = computed(() => {
     return debug;
 });
 
+const debugBespokeAIAnswers = computed(() => {
+    const debug = {};
+    Object.keys(bespokeAIAnswers.value).forEach(key => {
+        debug[key] = {
+            hasAnswer: !!bespokeAIAnswers.value[key]?.answer,
+            hasScore: bespokeAIAnswers.value[key]?.score !== undefined,
+            score: bespokeAIAnswers.value[key]?.score
+        };
+    });
+    return debug;
+});
+
 // Function to handle starting a new game (called by a "Play Again" button)
 const startNewGame = () => {
     console.log('Starting a new game - resetting state...');
@@ -780,9 +804,8 @@ const resetGameState = () => {
         gameIsOver: gameIsOver.value
     });
 };
+
 // Vertical Nav Section:
-
-
 const navSections = [
     { id: 'main', name: 'Main' },
     { id: 'scores', name: 'Scores' },
@@ -866,8 +889,6 @@ const updateNavigation = () => {
     }
 };
 
-
-
 const getDifficultyName = (difficultyId) => {
     const difficulty = props.difficulties.find(d => d.id === difficultyId);
     return difficulty ? difficulty.name : 'Unknown';
@@ -879,7 +900,6 @@ const getCategoryName = (categoryId) => {
 };
 
 // Player & AI Scores Tables Filtering:
-
 const filteredAndSortedGameScores = computed(() => {
     let filtered = gameScores.value;
     
@@ -933,8 +953,6 @@ const calculatePercentage = (score) => {
     return ((score.score / maxScore) * 100).toFixed(1);
 };
 
-
-
 const appliedFilters = ref({
     dateRange: [null, null],
     userIds: [],
@@ -970,8 +988,6 @@ const parseFiltersFromUrl = () => {
     appliedFilters.value.difficultyId = urlParams.get('difficulty');
 
     appliedFilters.value.categoryId = urlParams.get('category');
-
-    
 };
 
 const handleFilterChange = (event) => {
@@ -992,9 +1008,9 @@ const handleFilterChange = (event) => {
 watch(() => gameState.value.gameInProgress, (newVal, oldVal) => {
     if (newVal && !oldVal) {
         console.log('Game started - AI answers preserved:', Object.keys(aiAnswers.value));
+        console.log('Game started - Bespoke AI answers preserved:', Object.keys(bespokeAIAnswers.value));
     }
 });
-
 
 // Lifecycle: fetch data
 onMounted(() => {
@@ -1059,7 +1075,7 @@ onMounted(() => {
                 }
             } else {
                 if (questionIndex === currentQuestionIndex.value) {
-                    if (playWithAI.value && !hasAIAnswered(questionIndex)) {
+                    if ((playWithAI.value && !hasAIAnswered(questionIndex)) || (playWithBespokeAI.value && !hasBespokeAIAnswered(questionIndex))) {
                         console.log('All players answered, waiting for AI...');
                         addFlashMessage('All players answered! Waiting for AI...', 'info');
                     } else {
@@ -1072,8 +1088,8 @@ onMounted(() => {
         onAutoStart: () => {
             console.log('🚀 Auto-starting game via callback...');
             
-            if (playerCount.value === 1 && !playWithAI.value) {
-                addFlashMessage('Cannot start game. Please enable "Play With ChatGPT" or add more players.', 'warning');
+            if (playerCount.value === 1 && !playWithAI.value && !playWithBespokeAI.value) {
+                addFlashMessage('Cannot start game. Please enable "Play With ChatGPT" or "Play With Learning Model" or add more players.', 'warning');
                 return;
             }
             
@@ -1090,8 +1106,6 @@ onMounted(() => {
             await applyGameSettings(settings);
         }
     });
-
-        
 });
 
 onUnmounted(() => {
@@ -1392,7 +1406,7 @@ onUnmounted(() => {
                                         <div v-if="playWithBespokeAI">
                                             <h4 class="text-white font-semibold mb-2">Bespoke AI Status</h4>
 
-                                            <div v-if="aiLoading" class="text-yellow-400 flex items-center">
+                                            <div v-if="bespokeAILoading" class="text-yellow-400 flex items-center">
                                                 <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
                                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
                                                         stroke-width="4"></circle>
@@ -1403,18 +1417,18 @@ onUnmounted(() => {
                                                 AI is thinking...
                                             </div>
 
-                                            <div v-if="aiError" class="text-red-400">
+                                            <div v-if="bespokeAIError" class="text-red-400">
                                                 AI Error: {{ aiError }}
                                             </div>
 
-                                            <div v-if="!aiLoading && !aiError" class="space-y-2">
+                                            <div v-if="!bespokeAILoading && !bespokeAIError" class="space-y-2">
                                                 <div v-for="(question, index) in currentGameQuestions" :key="question.id" class="text-gray-300">
                                                     <span class="font-medium">Q{{ index + 1 }}:</span>
                                                     <span v-if="hasBespokeAIAnswered(index)" class="text-green-400 ml-2">
-                                                        {{ aiAnswers[index]?.answer || 'Answer not available' }}
-                                                        <span v-if="aiAnswers[index]?.score !== undefined && aiAnswers[index]?.score !== null" 
+                                                        {{ bespokeAIAnswers[index]?.answer || 'Answer not available' }}
+                                                        <span v-if="bespokeAIAnswers[index]?.score !== undefined && bespokeAIAnswers[index]?.score !== null" 
                                                             class="text-blue-400 ml-1">
-                                                            (Score: {{ aiAnswers[index].score }})
+                                                            (Score: {{ bespokeAIAnswers[index].score }})
                                                         </span>
                                                     </span>
                                                     <span v-else-if="index < currentQuestionIndex || gameIsOver" class="text-gray-500 ml-2">
@@ -1544,7 +1558,7 @@ onUnmounted(() => {
                                         </thead>
                                         <tbody>
                                             <tr v-for="score in filteredAndSortedAIScores" :key="score.id">
-                                                <td class="p-2 border-b text-white">Normal</td>
+                                                <td class="p-2 border-b text-white">{{ score.model_id || 'Normal' }}</td>
                                                 <td class="p-2 border-b text-white">{{ score.session_id }}</td>
                                                 <td class="p-2 border-b text-white">
                                                     {{ score.answer_json?.difficulty_name || 'N/A' }}

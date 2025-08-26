@@ -327,8 +327,8 @@ class GamesController extends Controller
         // Submit bespoke AI answers if enabled
         if ($request->boolean('playWithBespokeAI', false) && 
             $request->has('bespokeAIAnswers') && 
-            is_array($request->bespokeAIAnswers) &&
-            $request->get('bespokeAIModelId')) {
+            is_array($request->bespokeAIAnswers))
+            {
             
             Log::info('Submitting bespoke AI answers', [
                 'modelId' => $request->get('bespokeAIModelId'),
@@ -338,7 +338,7 @@ class GamesController extends Controller
             try {
                 $this->bespokeAIGameService->submitBespokeAIAnswers(
                     $gameId,
-                    $request->get('bespokeAIModelId'),
+                    1,
                     $user->id,
                     $request->bespokeAIAnswers,
                     $sessionId,
@@ -732,6 +732,7 @@ class GamesController extends Controller
         $difficultyId = $request->get('difficulty_id', 1);
         $categoryId = $request->get('category_id', 1);
         $playWithAI = $request->boolean('play_with_ai', false);
+        $playWithBespokeAI = $request->boolean('play_with_bespoke_ai', false);
 
         // CHECK IF THIS IS A SINGLE-PLAYER GAME
         if ($requiredCount === 1) {
@@ -741,20 +742,19 @@ class GamesController extends Controller
                 'userName' => $userName
             ]);
             
-            // For single-player, don't use the ready players cache system at all
-            // Don't broadcast player.ready event - let frontend handle the single-player broadcast
             return response()->json([
-                'status' => 'waiting', // This will trigger single-player logic in frontend
+                'status' => 'waiting',
                 'gameSettings' => [
                     'difficulty_id' => $difficultyId,
                     'category_id' => $categoryId,
                     'play_with_ai' => $playWithAI,
+                    'play_with_bespoke_ai' => $playWithBespokeAI,
                     'starter_name' => $userName
                 ]
             ]);
         }
 
-        // MULTIPLAYER LOGIC ONLY FROM HERE
+        // MULTIPLAYER LOGIC
         Log::info('Multiplayer game detected - using ready system', [
             'gameId' => $game->id,
             'userId' => $userId,
@@ -764,12 +764,10 @@ class GamesController extends Controller
         $cacheKey = "game:{$game->id}:readyPlayers";
         $readyPlayers = Cache::get($cacheKey, []);
 
-        // Store the first player's settings as the "official" game settings
         $settingsKey = "game:{$game->id}:gameSettings";
         $currentSettings = Cache::get($settingsKey);
         
         if (!$currentSettings) {
-            // This is the first player to click ready - store their settings
             $gameQuestions = $this->gamesService->getGameQuestionsByDifficultyAndCategory(
                 $game, 
                 $difficultyId, 
@@ -780,6 +778,7 @@ class GamesController extends Controller
                 'difficulty_id' => $difficultyId,
                 'category_id' => $categoryId,
                 'play_with_ai' => $playWithAI,
+                'play_with_bespoke_ai' => $playWithBespokeAI,
                 'questions' => $gameQuestions,
                 'starter_name' => $userName
             ];
@@ -809,19 +808,22 @@ class GamesController extends Controller
             'allReadyPlayers' => $readyPlayers
         ]);
 
-        // ONLY broadcast player.ready for multiplayer games
-        broadcast(new PlayerReady($game->id, $userId, $userName, $readyCount, $requiredCount, $currentSettings))->toOthers();
+        broadcast(new PlayerReady(
+            $game->id, 
+            $userId, 
+            $userName, 
+            $readyCount, 
+            $requiredCount, 
+            $currentSettings
+        ))->toOthers();
 
         if ($readyCount >= $requiredCount) {
-            // All players are ready - update game status and broadcast special event
             $game->status = 'in_progress';
             $game->save();
             
-            // Clear the ready players cache since game is starting
             Cache::forget($cacheKey);
             Cache::forget($settingsKey);
             
-            // Broadcast a special event for when all players are ready
             $this->triggerGameUpdate($game->id, 'game.started.all.ready', [
                 'gameId' => $game->id,
                 'playerCount' => $requiredCount,

@@ -116,7 +116,6 @@ export function createAI(gameId, getDependencies) {
         categoryId: selectedCategory || null
       });
 
-      console.log('ETURNED AI ANSWER: ' + JSON.stringify(response));
       
       if (response.data.success) {
         // Store AI answer with proper structure

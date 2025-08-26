@@ -19,6 +19,7 @@ class BespokeAIGameController extends Controller
         $this->bespokeAIGameService = $bespokeAIGameService;
     }
 
+
     /**
      * Get available bespoke AI models
      */
@@ -41,48 +42,6 @@ class BespokeAIGameController extends Controller
         }
     }
 
-    /**
-     * Get bespoke AI scores for a game room
-     */
-    public function getBespokeAIScores($gameId, Request $request)
-    {
-        $page = $request->query('page', 1);
-        $startDate = $request->get('start_date');
-        $endDate = $request->get('end_date');
-        $excludeBespokeAI = $request->get('exclude_bespoke_ai', 'false') === 'true';
-        $difficultyId = $request->get('difficulty');
-        $categoryId = $request->get('category');
-        $sortField = $request->get('sort_field', 'created_at');
-        $sortDirection = $request->get('sort_direction', 'desc');
-
-        try {
-            $bespokeAIScores = $this->bespokeAIGameService->getBespokeAIGameScores(
-                $gameId,
-                $page,
-                $startDate,
-                $endDate,
-                $excludeBespokeAI,
-                $difficultyId,
-                $categoryId,
-                5, // perPage
-                $sortField,
-                $sortDirection
-            );
-
-            Log::info('Bespoke AI scores retrieved', ['scores' => $bespokeAIScores]);
-            return response()->json($bespokeAIScores);
-        } catch (\Exception $e) {
-            Log::error('Failed to get bespoke AI scores', [
-                'error' => $e->getMessage(),
-                'gameId' => $gameId
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to load bespoke AI scores'
-            ], 500);
-        }
-    }
 
     /**
      * Get bespoke AI answer for a specific question

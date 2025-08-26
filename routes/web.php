@@ -66,10 +66,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             
             // Get bespoke AI scores for a game
             Route::get('/api/games/{gameId}/bespoke-ai-scores', [BespokeAIGameController::class, 'getBespokeAIScores']);
-            
-            // Handle steal functionality
-            Route::post('/api/games/{gameId}/bespoke-ai/steal', [BespokeAIGameController::class, 'handleSteal']);
-            
+                        
             // Get performance statistics for a model
             Route::get('/api/games/{gameId}/bespoke-ai/stats/{modelId}', [BespokeAIGameController::class, 'getPerformanceStats']);
             

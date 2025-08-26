@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Games;
 use App\Models\AIScore;
 use App\Services\Dashboard\AIGameService;
+use App\Services\Dashboard\BespokeAIGameService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -14,45 +15,80 @@ class AIGameController extends Controller
 {
     protected $aiGameService;
 
-    public function __construct(AIGameService $aiGameService)
+    public function __construct(AIGameService $aiGameService, BespokeAIGameService $bespokeAIGameService)
     {
         $this->aiGameService = $aiGameService;
+        $this->bespokeAIGameService = $bespokeAIGameService;
     }
 
     /**
      * Get AI scores for room.
      */
+
     public function getAIScores($gameId, Request $request)
     {
         $page = $request->query('page', 1);
-        // Get filter parameters from the request
         $startDate = $request->get('start_date');
         $endDate = $request->get('end_date');
         $excludeAI = $request->get('exclude_ai', 'true') === 'true';
         $difficultyId = $request->get('difficulty');
         $categoryId = $request->get('category');
-        
-        // Get sorting parameters
         $sortField = $request->get('sort_field', 'created_at');
         $sortDirection = $request->get('sort_direction', 'desc');
-    
-        // Pass difficulty and category IDs to the service method
+
+        Log::info('Fetching AI scores request', [
+            'game_id'       => $gameId,
+            'page'          => $page,
+            'start_date'    => $startDate,
+            'end_date'      => $endDate,
+            'exclude_ai'    => $excludeAI,
+            'difficulty_id' => $difficultyId,
+            'category_id'   => $categoryId,
+            'sort_field'    => $sortField,
+            'sort_direction'=> $sortDirection,
+        ]);
+
         $aiScores = $this->aiGameService->getAIGameScores(
-            $gameId,
-            $page,
-            $startDate,
-            $endDate,
-            $excludeAI,
-            $difficultyId,  
-            $categoryId,
-            5, // perPage
-            $sortField,
-            $sortDirection
+            $gameId, $page, $startDate, $endDate,
+            $excludeAI, $difficultyId, $categoryId,
+            5, $sortField, $sortDirection
         );
 
-        Log::info('AI Game scores retrieved', ['scores' => $aiScores]);
-        return response()->json($aiScores);
+        Log::debug('AI Scores retrieved', [
+            'count' => $aiScores ? $aiScores->count() : 0,
+        ]);
+
+        $bespokeScores = $this->bespokeAIGameService->getBespokeAIGameScores(
+            $gameId, $page, $startDate, $endDate,
+            $excludeAI, $difficultyId, $categoryId,
+            5, $sortField, $sortDirection
+        );
+
+        Log::debug('Bespoke AI Scores retrieved', [
+            'count' => $bespokeScores ? $bespokeScores->count() : 0,
+        ]);
+
+        // Merge collections
+        $allScores = collect();
+        if ($aiScores) $allScores = $allScores->merge($aiScores->items());
+        if ($bespokeScores) $allScores = $allScores->merge($bespokeScores->items());
+
+        Log::debug('Merged AI scores', [
+            'total_count' => $allScores->count(),
+        ]);
+
+        // Sort merged results
+        $allScores = $allScores->sortByDesc($sortField)->values();
+
+        Log::info('Final sorted AI scores response', [
+            'total_count' => $allScores->count(),
+            'first_item'  => $allScores->first(),
+        ]);
+
+        return response()->json($allScores);
     }
+
+
 
     /**
      * Get AI answer for a specific question in a game
@@ -118,6 +154,7 @@ class AIGameController extends Controller
             return response()->json([
                 'success' => true,
                 'answer' => $aiAnswer,
+                'bespokeAIAnswer' =>$aiAnswer,
                 'score' => $scoreAwarded,
                 'isCorrect' => $isCorrect,
                 'cached' => false

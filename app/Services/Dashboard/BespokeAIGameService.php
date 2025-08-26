@@ -31,28 +31,25 @@ class BespokeAIGameService
         return BespokeAIModel::getActiveModels();
     }
 
-    /**
-     * Get bespoke AI scores with filtering and sorting
-     */
     public function getBespokeAIGameScores(
-        $gameId,
-        $page = 1,
-        ?string $startDate = null,
-        ?string $endDate = null,
-        bool $excludeBespokeAI = false,
-        ?int $difficultyId = null,
-        ?int $categoryId = null,
+        $gameId, 
+        $page = 1, 
+        ?string $startDate = null, 
+        ?string $endDate = null, 
+        bool $excludeAI = true, 
+        ?int $difficultyId = null, 
+        ?int $categoryId = null, 
         $perPage = 5,
         string $sortField = 'created_at',
-        string $sortDirection = 'desc'
-    ) {
-        if ($excludeBespokeAI) {
-            return collect()->paginate($perPage);
+        string $sortDirection = 'desc')
+    {
+        if ($excludeAI) {
+            return null;
         }
 
         Log::debug('Fetching Bespoke AI scores', [
-            'gameId' => $gameId,
-            'page' => $page,
+            'gameId' => $gameId, 
+            'page' => $page, 
             'difficultyId' => $difficultyId,
             'categoryId' => $categoryId,
             'sortField' => $sortField,
@@ -60,83 +57,114 @@ class BespokeAIGameService
         ]);
 
         $query = BespokeAIScore::query()
-            ->with('model')
-            ->where('game_id', $gameId);
+            ->where('bespoke_ai_scores.game_id', $gameId)
+            ->select(
+                'bespoke_ai_scores.id',
+                'bespoke_ai_scores.session_id',
+                'bespoke_ai_scores.game_id',
+                'bespoke_ai_scores.score',
+                'bespoke_ai_scores.created_at',
+                'bespoke_ai_scores.answer_json'
+            );
 
-        // Apply filters
         if ($startDate && $endDate) {
-            $query->whereBetween('created_at', [$startDate, $endDate]);
+            $query->whereBetween('bespoke_ai_scores.created_at', [$startDate, $endDate]);
         }
 
         if ($difficultyId !== null) {
+            Log::debug('Applying difficulty filter', ['difficultyId' => $difficultyId]);
             $query->where(function($query) use ($difficultyId) {
-                $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(answer_json, "$.category_id")) = ?', [$categoryId])
-                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(answer_json, "$.category_id")) AS UNSIGNED) = ?', [$categoryId]);
+                $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(bespoke_ai_scores.answer_json, "$.difficulty_id")) = ?', [(string)$difficultyId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(bespoke_ai_scores.answer_json, "$.difficulty_id")) = ?', [(int)$difficultyId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(bespoke_ai_scores.answer_json, "$.difficulty_id")) AS UNSIGNED) = ?', [(int)$difficultyId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(bespoke_ai_scores.answer_json), "$.difficulty_id")) = ?', [(string)$difficultyId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(bespoke_ai_scores.answer_json), "$.difficulty_id")) = ?', [(int)$difficultyId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(bespoke_ai_scores.answer_json), "$.difficulty_id")) AS UNSIGNED) = ?', [(int)$difficultyId]);
             });
         }
 
-        // Apply sorting
-        $validSortFields = ['score', 'created_at'];
-        $validSortDirections = ['asc', 'desc'];
-        
-        if (in_array($sortField, $validSortFields) && in_array($sortDirection, $validSortDirections)) {
-            $query->orderBy($sortField, $sortDirection);
-        } else {
-            $query->orderBy('created_at', 'desc');
+        if ($categoryId !== null) {
+            Log::debug('Applying category filter', ['categoryId' => $categoryId]);
+            $query->where(function($query) use ($categoryId) {
+                $query->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(bespoke_ai_scores.answer_json, "$.category_id")) = ?', [(string)$categoryId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(bespoke_ai_scores.answer_json, "$.category_id")) = ?', [(int)$categoryId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(bespoke_ai_scores.answer_json, "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(bespoke_ai_scores.answer_json), "$.category_id")) = ?', [(string)$categoryId])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(bespoke_ai_scores.answer_json), "$.category_id")) = ?', [(int)$categoryId])
+                    ->orWhereRaw('CAST(JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(bespoke_ai_scores.answer_json), "$.category_id")) AS UNSIGNED) = ?', [(int)$categoryId]);
+            });
         }
 
-        $scores = $query->paginate($perPage, ['*'], 'page', $page);
+        $scores = $query
+            ->orderBy($sortField, $sortDirection)
+            ->paginate($perPage, ['*'], 'page', $page);
 
-        // Enhance scores with difficulty and category names
-        $scores->getCollection()->transform(function ($score) use ($gameId) {
-            if ($score->answer_json) {
-                $answerData = $score->answer_json;
+        return $this->transformAIScores($scores, $gameId);
+    }
 
-                // Get difficulty and category names
-                if (isset($answerData['difficulty_id'])) {
-                    $difficulty = \DB::table('game_type_difficulties')
-                        ->where('id', $answerData['difficulty_id'])
-                        ->first();
-                    $answerData['difficulty_name'] = $difficulty ? $difficulty->name : 'N/A';
-                }
+    private function transformAIScores($scores, $gameId)
+    {
+        $difficultyIds = [];
+        $categoryIds = [];
 
-                if (isset($answerData['category_id'])) {
-                    $category = \DB::table('game_type_categories')
-                        ->where('id', $answerData['category_id'])
-                        ->first();
-                    $answerData['category_name'] = $category ? $category->name : 'N/A';
-                }
+        foreach ($scores->items() as $score) {
+            $answerData = is_string($score->answer_json) ? json_decode($score->answer_json, true) : $score->answer_json;
+            if (isset($answerData['difficulty_id'])) {
+                $difficultyIds[] = $answerData['difficulty_id'];
+            }
+            if (isset($answerData['category_id'])) {
+                $categoryIds[] = $answerData['category_id'];
+            }
+        }
 
-                // Add max score based on difficulty
-                if (isset($answerData['difficulty_id'])) {
-                    $difficultyId = (int)$answerData['difficulty_id'];
-                    $totalScores = $this->gamesService->totalScore($gameId, null, 1);
-                    switch ($difficultyId) {
-                        case 1:
-                            $answerData['max_score'] = $totalScores['totalEasy'];
-                            break;
-                        case 2:
-                            $answerData['max_score'] = $totalScores['totalMedium'];
-                            break;
-                        case 3:
-                            $answerData['max_score'] = $totalScores['totalDifficult'];
-                            break;
-                        default:
-                            $answerData['max_score'] = $totalScores['totalEasy'];
-                    }
-                } else {
-                    $totalScores = $this->gamesService->totalScore($gameId, null, 1);
-                    $answerData['max_score'] = $totalScores['totalEasy'];
-                }
+        $difficulties = !empty($difficultyIds)
+            ? \DB::table('game_type_difficulties')->whereIn('id', array_unique($difficultyIds))->pluck('name', 'id')
+            : collect();
 
-                $score->answer_json = $answerData;
+        $categories = !empty($categoryIds)
+            ? \DB::table('game_type_categories')->whereIn('id', array_unique($categoryIds))->pluck('name', 'id')
+            : collect();
+
+        $scores->getCollection()->transform(function ($score) use ($difficulties, $categories, $gameId) {
+            $answerData = $score->answer_json;
+
+            if (is_string($answerData)) {
+                $decoded = json_decode($answerData, true);
+                $answerData = json_last_error() === JSON_ERROR_NONE && is_array($decoded) ? $decoded : [];
+            } elseif (is_object($answerData)) {
+                $answerData = (array) $answerData;
+            } elseif (!is_array($answerData)) {
+                $answerData = [];
             }
 
+            $answerData['difficulty_name'] = isset($answerData['difficulty_id'])
+                ? $difficulties->get($answerData['difficulty_id'], 'Difficulty #'.$answerData['difficulty_id'])
+                : 'N/A';
+
+            $answerData['category_name'] = isset($answerData['category_id'])
+                ? $categories->get($answerData['category_id'], 'Category #'.$answerData['category_id'])
+                : 'N/A';
+
+            $totalScores = $this->gamesService->totalScore($gameId, null, 1);
+            if (isset($answerData['difficulty_id'])) {
+                switch ((int) $answerData['difficulty_id']) {
+                    case 1: $answerData['max_score'] = $totalScores['totalEasy']; break;
+                    case 2: $answerData['max_score'] = $totalScores['totalMedium']; break;
+                    case 3: $answerData['max_score'] = $totalScores['totalDifficult']; break;
+                    default: $answerData['max_score'] = $totalScores['totalEasy'];
+                }
+            } else {
+                $answerData['max_score'] = $totalScores['totalEasy'];
+            }
+
+            $score->answer_json = $answerData;
+            $score->model_id = 1;
             return $score;
         });
 
         return $scores;
     }
+
 
     /**
      * Get AI answer for a specific question using bespoke AI model
@@ -372,33 +400,33 @@ class BespokeAIGameService
             'score' => $totalScore,
         ]);
 
-        // Save performance data
-        $accuracyPercentage = $gameQuestions->count() > 0 ? ($correctAnswers / $gameQuestions->count()) * 100 : 0;
+        // // Save performance data
+        // $accuracyPercentage = $gameQuestions->count() > 0 ? ($correctAnswers / $gameQuestions->count()) * 100 : 0;
         
-        BespokeAIPerformance::create([
-            'model_id' => $modelId,
-            'game_id' => $game->id,
-            'session_id' => $sessionId,
-            'total_questions' => $gameQuestions->count(),
-            'correct_answers' => $correctAnswers,
-            'total_score' => $totalScore,
-            'max_possible_score' => $maxPossibleScore,
-            'accuracy_percentage' => $accuracyPercentage,
-            'improvement_from_baseline' => 0 // TODO: Calculate improvement
-        ]);
+        // BespokeAIPerformance::create([
+        //     'model_id' => $modelId,
+        //     'game_id' => $game->id,
+        //     'session_id' => $sessionId,
+        //     'total_questions' => $gameQuestions->count(),
+        //     'correct_answers' => $correctAnswers,
+        //     'total_score' => $totalScore,
+        //     'max_possible_score' => $maxPossibleScore,
+        //     'accuracy_percentage' => $accuracyPercentage,
+        //     'improvement_from_baseline' => 0 // TODO: Calculate improvement
+        // ]);
 
-        // Trigger model retraining (async)
-        $this->triggerModelRetraining($modelId);
+        // // Trigger model retraining (async)
+        // $this->triggerModelRetraining($modelId);
 
-        Log::info('Bespoke AI answers saved successfully', [
-            'gameId' => $gameId,
-            'modelId' => $modelId,
-            'sessionId' => $sessionId,
-            'bespokeAIScoreId' => $bespokeAIScore->id,
-            'totalScore' => $totalScore,
-            'maxPossibleScore' => $maxPossibleScore,
-            'accuracy' => $accuracyPercentage
-        ]);
+        // Log::info('Bespoke AI answers saved successfully', [
+        //     'gameId' => $gameId,
+        //     'modelId' => $modelId,
+        //     'sessionId' => $sessionId,
+        //     'bespokeAIScoreId' => $bespokeAIScore->id,
+        //     'totalScore' => $totalScore,
+        //     'maxPossibleScore' => $maxPossibleScore,
+        //     'accuracy' => $accuracyPercentage
+        // ]);
 
         return $sessionId;
     }
@@ -453,28 +481,4 @@ class BespokeAIGameService
         }
     }
 
-    /**
-     * Handle steal functionality - notify players and save steal data
-     */
-    public function handleSteal($gameId, $userId, $targetPlayerId, $questionIndex)
-    {
-        Log::info('Steal attempt', [
-            'gameId' => $gameId,
-            'userId' => $userId,
-            'targetPlayerId' => $targetPlayerId,
-            'questionIndex' => $questionIndex
-        ]);
-
-        // Here you can implement steal logic:
-        // 1. Validate steal is allowed
-        // 2. Get target player's answer
-        // 3. Apply steal mechanics
-        // 4. Broadcast to other players
-        // 5. Update scores/game state
-
-        return [
-            'success' => true,
-            'message' => 'Steal successful'
-        ];
-    }
 }

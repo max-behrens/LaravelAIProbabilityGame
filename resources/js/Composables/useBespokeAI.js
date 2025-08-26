@@ -98,7 +98,7 @@ export function createBespokeAI(gameId, getDependencies) {
       }
       
       // Use the bespoke AI API endpoint
-      const response = await axios.post('/api/bespoke-ai/answer', {
+      const response = await axios.post('/api/ai/answer', {
         gameId: gameId,
         modelId: selectedAIModel.value,
         questionIndex: currentQuestion,
@@ -107,6 +107,8 @@ export function createBespokeAI(gameId, getDependencies) {
         difficultyId: deps.selectedDifficulty || null,
         categoryId: deps.selectedCategory || null
       });
+
+      console.log('BESPOKE QUESTION ANSWER: ' + JSON.stringify(response));
       
       if (response.data.success) {
         // Store bespoke AI answer with proper structure
@@ -133,14 +135,14 @@ export function createBespokeAI(gameId, getDependencies) {
 
   // Get bespoke AI answer for a specific question index
   const getBespokeAIAnswerForQuestion = async (questionText, gameId, questionIndex, selectedDifficulty, selectedCategory, playerAnswer = '') => {
-    if (!playWithBespokeAI.value || !selectedAIModel.value || bespokeAILoading.value) return;
+    if (!playWithBespokeAI.value || bespokeAILoading.value) return;
     
     try {
       bespokeAILoading.value = true;
       bespokeAIError.value = null;
             
       // Use the bespoke AI API endpoint
-      const response = await axios.post('/api/bespoke-ai/answer', {
+      const response = await axios.post('/api/ai/answer', {
         gameId: gameId,
         modelId: selectedAIModel.value,
         questionIndex: questionIndex,
@@ -149,8 +151,6 @@ export function createBespokeAI(gameId, getDependencies) {
         difficultyId: selectedDifficulty || null,
         categoryId: selectedCategory || null
       });
-
-      console.log('RETURNED BESPOKE AI ANSWER: ' + JSON.stringify(response));
       
       if (response.data.success) {
         // Store bespoke AI answer with proper structure
@@ -176,42 +176,6 @@ export function createBespokeAI(gameId, getDependencies) {
     }
   };
 
-  // Handle steal functionality
-  const handleSteal = async (targetPlayerId, questionIndex) => {
-    if (!playWithBespokeAI.value || !selectedAIModel.value) return;
-
-    try {
-      bespokeAILoading.value = true;
-      bespokeAIError.value = null;
-
-      const response = await axios.post(`/api/games/${gameId}/bespoke-ai/steal`, {
-        targetPlayerId: targetPlayerId,
-        questionIndex: questionIndex,
-        modelId: selectedAIModel.value
-      });
-
-      if (response.data.success) {
-        console.log('Steal successful:', response.data.message);
-        return {
-          success: true,
-          message: response.data.message,
-          stolenAnswer: response.data.stolenAnswer || null
-        };
-      } else {
-        throw new Error(response.data.message || 'Steal failed');
-      }
-
-    } catch (error) {
-      bespokeAIError.value = error.response?.data?.message || error.message || 'Failed to execute steal';
-      console.error('Bespoke AI Steal Error:', error);
-      return {
-        success: false,
-        message: bespokeAIError.value
-      };
-    } finally {
-      bespokeAILoading.value = false;
-    }
-  };
 
   // Get model performance statistics
   const getModelStats = async (modelId = null) => {
@@ -268,7 +232,6 @@ export function createBespokeAI(gameId, getDependencies) {
     loadAvailableModels,
     getBespokeAIAnswer,
     getBespokeAIAnswerForQuestion,
-    handleSteal,
     getModelStats,
     hasBespokeAIAnswered,
     resetBespokeAI,

@@ -30,8 +30,9 @@ export function usePlayerInteractions(gameId, auth) {
   //  Store pre-answered questions for auto-progression
   const preAnsweredQuestions = ref(new Map()); // questionIndex -> answer
   
-  // AI Module reference - will be set by main component
+  // AI Module references - will be set by main component
   let aiModule = null;
+  let bespokeAIModule = null;
   
   // Pusher instance
   let pusher = null;
@@ -57,6 +58,12 @@ export function usePlayerInteractions(gameId, auth) {
   const setAIModule = (aiModuleRef) => {
     aiModule = aiModuleRef;
     console.log('AI Module set in usePlayerInteractions:', !!aiModule);
+  };
+
+  // Function to set Bespoke AI module reference
+  const setBespokeAIModule = (bespokeAIModuleRef) => {
+    bespokeAIModule = bespokeAIModuleRef;
+    console.log('Bespoke AI Module set in usePlayerInteractions:', !!bespokeAIModule);
   };
 
   // Enhanced debug logging
@@ -162,6 +169,25 @@ export function usePlayerInteractions(gameId, auth) {
   
     console.log('Prepared AI answers for submission:', aiAnswersArray);
     return aiAnswersArray;
+  };
+
+  // Helper function to prepare Bespoke AI answers for submission
+  const prepareBespokeAIAnswersForSubmission = () => {
+    if (!bespokeAIModule || !bespokeAIModule.playWithBespokeAI.value) {
+      console.log('No Bespoke AI module or Bespoke AI not enabled');
+      return [];
+    }
+  
+    const bespokeAIAnswersObj = bespokeAIModule.bespokeAIAnswers.value;
+    const bespokeAIAnswersArray = [];
+  
+    // Convert object to array, ensuring proper indexing
+    for (let i = 0; i < Object.keys(bespokeAIAnswersObj).length; i++) {
+      bespokeAIAnswersArray[i] = bespokeAIAnswersObj[i]?.answer ?? null;
+    }
+  
+    console.log('Prepared Bespoke AI answers for submission:', bespokeAIAnswersArray);
+    return bespokeAIAnswersArray;
   };
 
   // Fetch current players - Fixed API route
@@ -321,6 +347,7 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
 
     try {
         const aiAnswers = prepareAIAnswersForSubmission();
+        const bespokeAIAnswers = prepareBespokeAIAnswersForSubmission();
 
         if (playerCount === 1) {
             // SINGLE PLAYER LOGIC - FIXED TO ENSURE SUBMISSION
@@ -337,6 +364,14 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
                 requestData.aiAnswers = aiAnswers;
                 requestData.playWithAI = true;
                 console.log('Including AI answers in single-player submission:', aiAnswers);
+            }
+
+            // Add Bespoke AI answers if playing with Bespoke AI
+            if (bespokeAIModule?.playWithBespokeAI.value) {
+                requestData.bespokeAIAnswers = bespokeAIAnswers;
+                requestData.playWithBespokeAI = true;
+                // requestData.selectedAIModel = bespokeAIModule.selectedAIModel.value;
+                console.log('Including Bespoke AI answers in single-player submission:', bespokeAIAnswers);
             }
 
             console.log('🚀 Single player submission data:', requestData);
@@ -356,7 +391,8 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
                         timestamp: new Date().toISOString(),
                         difficultyId: difficultyId,
                         categoryId: categoryId,
-                        playedWithAI: aiModule?.playWithAI.value || false
+                        playedWithAI: aiModule?.playWithAI.value || false,
+                        playedWithBespokeAI: bespokeAIModule?.playWithBespokeAI.value || false
                     }
                 });
                 console.log('✅ Single-player completion broadcasted to other players');
@@ -390,6 +426,12 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
             if (aiModule?.playWithAI.value) {
                 requestData.aiAnswers = aiAnswers;
                 requestData.playWithAI = true;
+            }
+
+            if (bespokeAIModule?.playWithBespokeAI.value) {
+                requestData.bespokeAIAnswers = bespokeAIAnswers;
+                requestData.playWithBespokeAI = true;
+                requestData.selectedAIModel = bespokeAIModule.selectedAIModel.value;
             }
 
             // SUBMIT TO SERVER IMMEDIATELY FOR ALL PLAYERS
@@ -615,9 +657,6 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
       }
   });
 
-
-
-
     // Single player game started
     gameChannel.bind('game.started.single', (data) => {
       console.log('🔔 Received game.started.single event:', data);
@@ -760,6 +799,45 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
                 data
             });
         }
+
+        // Store Bespoke AI answer if available
+        if (bespokeAIModule && data.bespokeAIAnswer) {
+            // Ensure the bespokeAIAnswers object exists for this question index
+            if (!bespokeAIModule.bespokeAIAnswers.value[data.questionIndex]) {
+                bespokeAIModule.bespokeAIAnswers.value[data.questionIndex] = {};
+            }
+            
+            // Store ALL the Bespoke AI answer data
+            bespokeAIModule.bespokeAIAnswers.value[data.questionIndex] = {
+                answer: data.bespokeAIAnswer,
+                score: data.bespokeAIScore,
+                predicted_score: data.bespokeAIPredictedScore,
+                isCorrect: data.bespokeAIIsCorrect,
+                cached: false, // Mark as received via broadcast
+                model_id: data.bespokeAIModelId,
+                questionIndex: data.questionIndex, // Add question index for reference
+                timestamp: data.timestamp || new Date().toISOString()
+            };
+            
+            console.log('Bespoke AI answer stored with complete data:', {
+                questionIndex: data.questionIndex,
+                answer: data.bespokeAIAnswer,
+                score: data.bespokeAIScore,
+                isCorrect: data.bespokeAIIsCorrect,
+                storedData: bespokeAIModule.bespokeAIAnswers.value[data.questionIndex]
+            });
+            
+            // Force reactivity update
+            bespokeAIModule.bespokeAIAnswers.value = { ...bespokeAIModule.bespokeAIAnswers.value };
+        } else if (bespokeAIModule && data.bespokeAIData) {
+            // Alternative: if the complete bespoke AI data object is sent
+            bespokeAIModule.bespokeAIAnswers.value[data.questionIndex] = {
+                ...data.bespokeAIData,
+                cached: false,
+                timestamp: data.timestamp || new Date().toISOString()
+            };
+            bespokeAIModule.bespokeAIAnswers.value = { ...bespokeAIModule.bespokeAIAnswers.value };
+        }
         
         // Trigger external callback to progress to next question
         if (callbacks.value.onQuestionProgress) {
@@ -884,6 +962,7 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
     clearFlashMessages,
     registerCallbacks,
     setAIModule, //  Expose setAIModule function
+    setBespokeAIModule, //  Expose setBespokeAIModule function
     
     // Cleanup
     cleanup
