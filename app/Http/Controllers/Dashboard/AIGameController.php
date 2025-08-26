@@ -28,6 +28,7 @@ class AIGameController extends Controller
     public function getAIScores($gameId, Request $request)
     {
         $page = $request->query('page', 1);
+        $perPage = 5; // Set your desired items per page
         $startDate = $request->get('start_date');
         $endDate = $request->get('end_date');
         $excludeAI = $request->get('exclude_ai', 'true') === 'true';
@@ -35,7 +36,7 @@ class AIGameController extends Controller
         $categoryId = $request->get('category');
         $sortField = $request->get('sort_field', 'created_at');
         $sortDirection = $request->get('sort_direction', 'desc');
-
+        
         Log::info('Fetching AI scores request', [
             'game_id'       => $gameId,
             'page'          => $page,
@@ -48,46 +49,100 @@ class AIGameController extends Controller
             'sort_direction'=> $sortDirection,
         ]);
 
+        // Get ALL results from both services (not paginated)
         $aiScores = $this->aiGameService->getAIGameScores(
-            $gameId, $page, $startDate, $endDate,
+            $gameId, 1, $startDate, $endDate,
             $excludeAI, $difficultyId, $categoryId,
-            5, $sortField, $sortDirection
+            999999, $sortField, $sortDirection // Get all results
         );
-
+        
         Log::debug('AI Scores retrieved', [
             'count' => $aiScores ? $aiScores->count() : 0,
         ]);
 
         $bespokeScores = $this->bespokeAIGameService->getBespokeAIGameScores(
-            $gameId, $page, $startDate, $endDate,
+            $gameId, 1, $startDate, $endDate,
             $excludeAI, $difficultyId, $categoryId,
-            5, $sortField, $sortDirection
+            $sortField, $sortDirection
         );
-
+        
         Log::debug('Bespoke AI Scores retrieved', [
             'count' => $bespokeScores ? $bespokeScores->count() : 0,
         ]);
 
-        // Merge collections
+        // Merge collections with null filtering
         $allScores = collect();
-        if ($aiScores) $allScores = $allScores->merge($aiScores->items());
-        if ($bespokeScores) $allScores = $allScores->merge($bespokeScores->items());
+        if ($aiScores) {
+            // Check if aiScores is a paginated result or collection
+            if (method_exists($aiScores, 'items')) {
+                $aiItems = collect($aiScores->items())->filter(function($score) {
+                    return $score !== null && isset($score->id);
+                });
+                $allScores = $allScores->merge($aiItems);
+            } else {
+                $aiItems = collect($aiScores)->filter(function($score) {
+                    return $score !== null && isset($score->id);
+                });
+                $allScores = $allScores->merge($aiItems);
+            }
+        }
+        if ($bespokeScores) {
+            $bespokeItems = collect($bespokeScores)->filter(function($score) {
+                return $score !== null && isset($score->id);
+            });
+            $allScores = $allScores->merge($bespokeItems);
+        }
 
         Log::debug('Merged AI scores', [
             'total_count' => $allScores->count(),
+            'sample_ids' => $allScores->take(3)->pluck('id')->toArray(),
         ]);
 
         // Sort merged results
-        $allScores = $allScores->sortByDesc($sortField)->values();
+        if ($sortDirection === 'desc') {
+            $allScores = $allScores->sortByDesc($sortField);
+        } else {
+            $allScores = $allScores->sortBy($sortField);
+        }
+        
+        // Reset array keys after sorting
+        $allScores = $allScores->values();
 
-        Log::info('Final sorted AI scores response', [
-            'total_count' => $allScores->count(),
-            'first_item'  => $allScores->first(),
+        // Calculate pagination manually
+        $total = $allScores->count();
+        $lastPage = ceil($total / $perPage);
+        $currentPage = max(1, min($page, $lastPage));
+        $offset = ($currentPage - 1) * $perPage;
+        
+        // Get the items for current page
+        $items = $allScores->slice($offset, $perPage)->values();
+
+        // Create pagination response
+        $paginatedResponse = [
+            'current_page' => $currentPage,
+            'data' => $items,
+            'first_page_url' => request()->url() . '?page=1',
+            'from' => $total > 0 ? $offset + 1 : null,
+            'last_page' => $lastPage,
+            'last_page_url' => request()->url() . '?page=' . $lastPage,
+            'next_page_url' => $currentPage < $lastPage ? request()->url() . '?page=' . ($currentPage + 1) : null,
+            'path' => request()->url(),
+            'per_page' => $perPage,
+            'prev_page_url' => $currentPage > 1 ? request()->url() . '?page=' . ($currentPage - 1) : null,
+            'to' => min($total, $offset + $perPage),
+            'total' => $total,
+        ];
+
+        Log::info('Final paginated AI scores response', [
+            'total_count' => $total,
+            'current_page' => $currentPage,
+            'per_page' => $perPage,
+            'last_page' => $lastPage,
+            'items_count' => $items->count(),
         ]);
 
-        return response()->json($allScores);
+        return response()->json($paginatedResponse);
     }
-
 
 
     /**

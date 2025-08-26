@@ -272,10 +272,10 @@ const fetchAIScores = async (page = 1, sortField = null, sortDirection = null) =
         
         const response = await axios.get(url);
 
-        aiScores.value = response.data || []; // Ensure it's always an array
+        aiScores.value = response.data.data || []; // Ensure it's always an array
 
-        aiScoresTotalPages.value = response.data.last_page || 1;
-        aiScoresCurrentPage.value = response.data.current_page || 1;
+        aiScoresTotalPages.value = parseInt(response.data.last_page) || 1;
+        aiScoresCurrentPage.value = parseInt(response.data.current_page) || 1;
     } catch (error) {
         errorMessage.value = 'Failed to load AI scores.';
         console.error(error);

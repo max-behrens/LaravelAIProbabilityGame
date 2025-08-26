@@ -39,12 +39,11 @@ class BespokeAIGameService
         bool $excludeAI = true, 
         ?int $difficultyId = null, 
         ?int $categoryId = null, 
-        $perPage = 5,
         string $sortField = 'created_at',
         string $sortDirection = 'desc')
     {
         if ($excludeAI) {
-            return null;
+            return collect(); // Return empty collection instead of null
         }
 
         Log::debug('Fetching Bespoke AI scores', [
@@ -95,19 +94,20 @@ class BespokeAIGameService
             });
         }
 
+        // Get all results (no pagination at this level)
         $scores = $query
             ->orderBy($sortField, $sortDirection)
-            ->paginate($perPage, ['*'], 'page', $page);
+            ->get();
 
-        return $this->transformAIScores($scores, $gameId);
+        return $this->transformAIScoresToCollection($scores, $gameId);
     }
 
-    private function transformAIScores($scores, $gameId)
+    private function transformAIScoresToCollection($scores, $gameId)
     {
         $difficultyIds = [];
         $categoryIds = [];
 
-        foreach ($scores->items() as $score) {
+        foreach ($scores as $score) {
             $answerData = is_string($score->answer_json) ? json_decode($score->answer_json, true) : $score->answer_json;
             if (isset($answerData['difficulty_id'])) {
                 $difficultyIds[] = $answerData['difficulty_id'];
@@ -125,7 +125,10 @@ class BespokeAIGameService
             ? \DB::table('game_type_categories')->whereIn('id', array_unique($categoryIds))->pluck('name', 'id')
             : collect();
 
-        $scores->getCollection()->transform(function ($score) use ($difficulties, $categories, $gameId) {
+        // Transform the collection directly without pagination wrapper
+        return $scores->filter(function($score) {
+            return $score !== null && isset($score->id);
+        })->map(function ($score) use ($difficulties, $categories, $gameId) {
             $answerData = $score->answer_json;
 
             if (is_string($answerData)) {
@@ -161,8 +164,6 @@ class BespokeAIGameService
             $score->model_id = 1;
             return $score;
         });
-
-        return $scores;
     }
 
 

@@ -374,45 +374,6 @@ class GamesController extends Controller
         ]);
     }
 
-    public function getBespokeAIAnswerForQuestion(Request $request, $gameId)
-    {
-        $request->validate([
-            'modelId' => 'required|integer|exists:bespoke_ai_models,id',
-            'questionIndex' => 'required|integer|min:0',
-            'questionText' => 'required|string',
-            'playerAnswer' => 'sometimes|string',
-            'difficultyId' => 'sometimes|integer',
-            'categoryId' => 'sometimes|integer'
-        ]);
-
-        try {
-            $result = $this->bespokeAIGameService->getBespokeAIAnswerForQuestion(
-                $gameId,
-                $request->input('modelId'),
-                $request->input('questionIndex'),
-                $request->input('questionText'),
-                $request->input('playerAnswer', ''),
-                $request->input('difficultyId'),
-                $request->input('categoryId')
-            );
-
-            return response()->json($result);
-
-        } catch (\Exception $e) {
-            Log::error('Failed to get bespoke AI answer for question', [
-                'gameId' => $gameId,
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get bespoke AI answer',
-                'answer' => 'I need more training data',
-                'score' => 0,
-                'isCorrect' => false
-            ], 500);
-        }
-    }
 
     public function start(Games $game)
     {
