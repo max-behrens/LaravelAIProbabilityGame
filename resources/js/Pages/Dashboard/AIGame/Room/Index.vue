@@ -268,6 +268,7 @@ const fetchGameQuestions = async (difficultyId = null, categoryId = null) => {
         console.log('difficultyId: ' + difficultyId);
         
         currentGameQuestions.value = response.data.questions;
+
         console.log('Fetched questions:', currentGameQuestions.value);
     } catch (error) {
         console.error('Failed to fetch game questions:', error);
@@ -744,7 +745,7 @@ const updateNavigation = () => {
     const windowHeight = window.innerHeight;
 
     // This part should *always* update, regardless of programmatic navigation
-    showVerticalNav.value = scrollY > windowHeight * 0.3;
+    showVerticalNav.value = scrollY > windowHeight * 0.1;
 
     // Only update currentNavSection if not navigating programmatically
     if (isNavigatingProgrammatically.value) {
@@ -1047,7 +1048,7 @@ onUnmounted(() => {
 
                 <transition name="fade">
                     <div
-                        v-if="currentNavSection === 1 && showVerticalNav"
+                        v-if="currentNavSection !== 0 && showVerticalNav"
                         class="fixed left-2 top-1/2 transform -translate-y-1/2 translate-x-20 z-10 hidden sm:block"
                     >
                         <button 
@@ -1259,12 +1260,6 @@ onUnmounted(() => {
                             </div>
                         </div>
 
-                        <section id="scores">
-                        </section>
-
-                        <section id="tats">
-                        </section>
-
                         <div v-if="playWithAI" class="flex flex-wrap gap-6 w-full">
                           <div class="bg-gray-800 min-w-[300px] basis-1/4 p-4 rounded border border-gray-700">
                               <h4 class="text-white font-semibold mb-2">AI Player Status</h4>
@@ -1404,6 +1399,11 @@ onUnmounted(() => {
                         </div>
 
 
+                        
+                        <section id="scores">
+                        </section>
+
+
 
                         <div class="flex flex-wrap gap-6 w-full">
                             <div class="min-w-[300px] basis-1/4 p-4 bg-gray-800 rounded shadow">
@@ -1511,6 +1511,9 @@ onUnmounted(() => {
                                     @change-page="changeScoresPage" />
                             </div>
                         </div>
+
+                        <section id="stats">
+                        </section>
 
                         <div class="flex flex-col lg:flex-row gap-6 w-full">
                             <div class="w-full lg:w-1/2 lg:max-w-[50%] overflow-hidden">

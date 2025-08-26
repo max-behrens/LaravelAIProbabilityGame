@@ -14,6 +14,8 @@ const props = defineProps({
   },
 });
 
+
+
 // Reactive state
 const allGameScores = ref([]);
 const questionTotals = ref({});
@@ -54,7 +56,9 @@ const getInitialFilters = () => {
 // Fetch all game scores for heatmap with filters
 const fetchAllGameScores = async () => {
   try {
+    
     const params = new URLSearchParams();
+
     
     // Add date range
     if (dateRange.value[0] && dateRange.value[1]) {
@@ -78,6 +82,8 @@ const fetchAllGameScores = async () => {
     if (categoryId.value !== null && categoryId.value !== '') {
       params.set('category', categoryId.value);
     }
+
+    console.log('HERE Q FETCH')
 
     const url = `/games/${props.gameId}/game-heatmap-scores${params.toString() ? '?' + params.toString() : ''}`;
     const response = await axios.get(url);
@@ -139,6 +145,7 @@ const getTotalScoreForDifficulty = (difficulty) => {
 
 // Get the number of questions in the game
 const getQuestionCount = () => {
+  
   // Use props.gameQuestions if available
   if (props.gameQuestions && props.gameQuestions.length > 0) {
     return props.gameQuestions.length;
@@ -260,11 +267,6 @@ const getQuestionAveragesByUser = () => {
 
       const label = `Q${questionNumber}`;
 
-      // Only include questions that exist in props.gameQuestions
-      if (!maxScoresByQuestion.hasOwnProperty(label)) {
-        return;
-      }
-
       if (!questionCorrectCounts[playerName][label]) {
         questionCorrectCounts[playerName][label] = 0;
       }
@@ -283,8 +285,8 @@ const getQuestionAveragesByUser = () => {
 
   // Build series
   return Object.entries(grouped).map(([playerName, questions]) => {
-    const playerAttempts = userAttempts[playerName] || 0;
-    
+    const playerAttempts = userAttempts[playerName] || 0;  
+        
     return {
       name: playerName,
       data: Object.entries(questions)
@@ -299,6 +301,7 @@ const getQuestionAveragesByUser = () => {
           if (difficultyId.value !== null) {
             totalScore = getTotalScoreForDifficulty(parseInt(difficultyId.value));
           }
+          
           
           return {
             x: label,
@@ -539,6 +542,7 @@ onMounted(async () => {
 onUnmounted(() => {
   // Clean up event listener
   window.removeEventListener('gameFiltersChanged', handleFilterChange);
+
 });
 
 // Expose method to refresh heatmap externally

@@ -775,8 +775,8 @@ onUnmounted(() => {
                 <div class="flex items-center justify-between">
                   <div class="flex items-center">
                     <div class="flex-shrink-0">
-                      <div class="h-8 w-8 rounded-full bg-gray-600 flex items-center justify-center">
-                        <span class="text-sm font-medium text-white">
+                      <div class="h-8 w-8 rounded-full bg-gray-500 flex items-center justify-center">
+                        <span class="text-sm font-medium !text-white">
                           {{ $page.props.auth.user.name.charAt(0).toUpperCase() }}
                         </span>
                       </div>
@@ -790,7 +790,7 @@ onUnmounted(() => {
                     class="p-1 ml-6 rounded-md text-gray-400 hover:text-white hover:bg-gray-700"
                   >
                     <svg
-                      class="h-4 w-4 text-gray-400"
+                      class="h-4 w-4 text-gray-500"
                       xmlns="http://www.w3.org/2000/svg"
                       fill="currentColor"
                       viewBox="0 0 24 24"
