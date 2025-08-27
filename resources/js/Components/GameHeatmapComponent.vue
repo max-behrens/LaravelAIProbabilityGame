@@ -180,7 +180,6 @@ const getQuestionCount = () => {
 
 // Get attempt counts for a player filtered by difficulty and category
 const getPlayerAttemptCounts = (playerName) => {
-  console.log('Player Name: ' + JSON.stringify(playerName));
   const counts = { 1: 0, 2: 0, 3: 0 }; // Easy, Medium, Hard
   
   allGameScores.value.forEach(score => {

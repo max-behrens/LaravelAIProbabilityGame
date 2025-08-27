@@ -952,11 +952,6 @@ class GamesService
 
     public function totalScore($gameId, $difficultyId, $categoryId)
     {
-        Log::debug('Calculating total score for game', [
-            'gameId' => $gameId,
-            'difficultyId' => $difficultyId,
-            'categoryId' => $categoryId
-        ]);
 
         $game = Games::findOrFail($gameId);
 

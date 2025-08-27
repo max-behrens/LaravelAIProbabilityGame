@@ -264,6 +264,8 @@ class GamesController extends Controller
             'aiAnswers.*' => 'nullable|string',
             'bespokeAIAnswers' => 'sometimes|array',
             'bespokeAIAnswers.*' => 'nullable|string',
+            'teamPlayerLeader' => 'sometimes|boolean',
+            'teamAILeader' => 'sometimes|boolean',
             'playWithAI' => 'sometimes|boolean',
             'playWithBespokeAI' => 'sometimes|boolean',
             'bespokeAIModelId' => 'sometimes|nullable|integer|exists:bespoke_ai_models,id',
@@ -279,6 +281,9 @@ class GamesController extends Controller
         // Get difficulty and category IDs
         $difficultyId = $request->get('difficulty_id');
         $categoryId = $request->get('category_id');
+
+        $teamPlayerLeader = $request->get('teamPlayerLeader');
+        $teamAILeader = $request->get('teamPlayerLeader');
 
         if (is_null($difficultyId) || is_null($categoryId)) {
             $settingsKey = "game:{$gameId}:gameSettings";
@@ -303,7 +308,7 @@ class GamesController extends Controller
         $sessionId = Cache::rememberForever($sessionKey, fn () => Str::uuid()->toString());
 
         // Submit player answers
-        $this->gamesService->submitAnswers($gameId, $user->id, $request->answers, $sessionId, $difficultyId, $categoryId);
+        $this->gamesService->submitAnswers($gameId, $user->id, $request->answers, $sessionId, $difficultyId, $categoryId, $teamPlayerLeader, $teamAILeader);
 
         // Submit regular AI answers if enabled
         if ($request->boolean('playWithAI', false) && $request->has('aiAnswers') && is_array($request->aiAnswers)) {
@@ -547,6 +552,7 @@ class GamesController extends Controller
         return response()->json(['success' => true]);
     }
 
+
     public function validateMultiplayerStart(Request $request, $gameId)
     {
         Log::info('Validating multiplayer start', ['gameId' => $gameId, 'userId' => auth()->id()]);
@@ -565,31 +571,54 @@ class GamesController extends Controller
         // Get all players currently in the game
         $playersInGame = $game->users;
         
-        // FIXED: Check for OTHER players with playerCount > 1 (not just == 2)
         $otherPlayersWithMultiplayerCount = 0;
+        $playerCountDetails = []; // For debugging
         
         foreach ($playersInGame as $player) {
-            // FIXED: Only check OTHER players (exclude current user who is clicking start)
             if ($player && $player->id !== $currentUser->id) {
-                // Check if this player has their player count set to > 1 (multiplayer)
                 $playerCountKey = "game:{$gameId}:player:{$player->id}:playerCount";
-                $playerCount = Cache::get($playerCountKey, 1); // Default to 1 if not set
+
+
+                
+                // CRITICAL FIX: Check if cache exists first
+                $cachedPlayerCount = Cache::get($playerCountKey);
+
+                Log::info('PLAYER COUNT KEY', [
+                    'playerCountKey' => $playerCountKey,
+                    'cachedPlayerCount' => $cachedPlayerCount,
+                    ]);
+                
+                if ($cachedPlayerCount === null) {
+                    // No cache entry exists - this player hasn't changed their count
+                    // Default to 1 (single player) - this is the correct assumption
+                    $playerCount = 1;
+                    $cacheStatus = 'not_set_defaults_to_1';
+                } else {
+                    $playerCount = (int) $cachedPlayerCount;
+                    $cacheStatus = 'cached_value';
+                }
+                
+                $playerCountDetails[] = [
+                    'playerId' => $player->id,
+                    'playerName' => $player->name,
+                    'playerCount' => $playerCount,
+                    'cacheStatus' => $cacheStatus
+                ];
                 
                 Log::info('Checking other player count', [
                     'playerId' => $player->id,
                     'playerName' => $player->name,
                     'playerCount' => $playerCount,
+                    'cacheStatus' => $cacheStatus,
                     'currentUserId' => $currentUser->id
                 ]);
                 
-                // FIXED: Check for > 1 instead of == 2
                 if ($playerCount > 1) {
                     $otherPlayersWithMultiplayerCount++;
                 }
             }
         }
         
-        // FIXED: Only allow multiplayer start if OTHER players have multiplayer count
         $canStartMultiplayer = $otherPlayersWithMultiplayerCount > 0;
         
         Log::info('Multiplayer validation result', [
@@ -598,13 +627,17 @@ class GamesController extends Controller
             'userName' => $currentUser->name,
             'otherPlayersWithMultiplayerCount' => $otherPlayersWithMultiplayerCount,
             'canStartMultiplayer' => $canStartMultiplayer,
-            'totalPlayersInGame' => $playersInGame->count()
+            'totalPlayersInGame' => $playersInGame->count(),
+            'playerCountDetails' => $playerCountDetails
         ]);
         
         return response()->json([
             'canStartMultiplayer' => $canStartMultiplayer,
             'otherPlayersWithMultiplayerCount' => $otherPlayersWithMultiplayerCount,
-            'totalPlayersInGame' => $playersInGame->count()
+            'totalPlayersInGame' => $playersInGame->count(),
+            'debug' => [
+                'playerCountDetails' => $playerCountDetails
+            ]
         ]);
     }
 
@@ -624,19 +657,40 @@ class GamesController extends Controller
             return response()->json(['error' => 'User not in game'], 400);
         }
         
-        // Store player count preference in cache (expires in 1 hour)
+        // Store player count preference in cache with longer expiry
         $playerCountKey = "game:{$gameId}:player:{$userId}:playerCount";
-        Cache::put($playerCountKey, $playerCount, now()->addHour());
+        
+        // CRITICAL FIX: Use longer cache duration and add verification
+        Cache::put($playerCountKey, $playerCount, now()->addHours(2)); // Increased from 1 hour
+
+                        Log::info('PLAYER COUNT KEY - STORE', [
+                    'playerCountKey' => $playerCountKey,
+                    'playerCount' => $playerCount,
+                    ]);
+        
+        // Verify the cache was written correctly
+        $verifyCache = Cache::get($playerCountKey);
         
         Log::info('Player count preference stored', [
             'gameId' => $gameId,
             'userId' => $userId,
-            'playerCount' => $playerCount
+            'playerCount' => $playerCount,
+            'verifyCache' => $verifyCache,
+            'cacheWriteSuccess' => ($verifyCache == $playerCount)
         ]);
+        
+        if ($verifyCache != $playerCount) {
+            Log::error('Cache write verification failed', [
+                'expected' => $playerCount,
+                'actual' => $verifyCache,
+                'key' => $playerCountKey
+            ]);
+        }
         
         return response()->json([
             'success' => true,
-            'message' => 'Player count preference stored'
+            'message' => 'Player count preference stored',
+            'verified' => ($verifyCache == $playerCount)
         ]);
     }
 
@@ -690,10 +744,15 @@ class GamesController extends Controller
         $requiredCount = (int) $request->requiredCount;
         
         // Get game settings from the request
-        $difficultyId = $request->get('difficulty_id', 1);
-        $categoryId = $request->get('category_id', 1);
+        $difficultyId = $request->get('difficulty_id');
+        $categoryId = $request->get('category_id');
         $playWithAI = $request->boolean('play_with_ai', false);
         $playWithBespokeAI = $request->boolean('play_with_bespoke_ai', false);
+
+        
+        // Get team settings
+        $joinTeamWithPlayers = $request->boolean('join_team_with_players', false);
+        $joinTeamWithAI = $request->boolean('join_team_with_ai', false);
 
         // CHECK IF THIS IS A SINGLE-PLAYER GAME
         if ($requiredCount === 1) {
@@ -710,25 +769,42 @@ class GamesController extends Controller
                     'category_id' => $categoryId,
                     'play_with_ai' => $playWithAI,
                     'play_with_bespoke_ai' => $playWithBespokeAI,
+                    'join_team_with_players' => $joinTeamWithPlayers,
+                    'join_team_with_ai' => $joinTeamWithAI,
                     'starter_name' => $userName
                 ]
             ]);
         }
 
-        // MULTIPLAYER LOGIC
+        // MULTIPLAYER LOGIC - CRITICAL FIX: Use atomic operations
         Log::info('Multiplayer game detected - using ready system', [
             'gameId' => $game->id,
             'userId' => $userId,
-            'requiredCount' => $requiredCount
+            'requiredCount' => $requiredCount,
+            'teamSettings' => [
+                'joinTeamWithPlayers' => $joinTeamWithPlayers,
+                'joinTeamWithAI' => $joinTeamWithAI
+            ]
         ]);
 
         $cacheKey = "game:{$game->id}:readyPlayers";
-        $readyPlayers = Cache::get($cacheKey, []);
-
         $settingsKey = "game:{$game->id}:gameSettings";
-        $currentSettings = Cache::get($settingsKey);
         
-        if (!$currentSettings) {
+        // CRITICAL FIX: Use cache locks to prevent race conditions
+        $lockKey = "game:{$game->id}:ready_lock";
+        
+        return Cache::lock($lockKey, 10)->get(function () use ($game, $userId, $userName, $requiredCount, $difficultyId, $categoryId, $playWithAI, $playWithBespokeAI, $joinTeamWithPlayers, $joinTeamWithAI, $cacheKey, $settingsKey) {
+            
+            // Get current ready players with atomic read
+            $readyPlayers = Cache::get($cacheKey, []);
+            
+            // Ensure it's an array
+            if (!is_array($readyPlayers)) {
+                $readyPlayers = [];
+            }
+            
+            $currentSettings = Cache::get($settingsKey);
+            
             $gameQuestions = $this->gamesService->getGameQuestionsByDifficultyAndCategory(
                 $game, 
                 $difficultyId, 
@@ -740,6 +816,8 @@ class GamesController extends Controller
                 'category_id' => $categoryId,
                 'play_with_ai' => $playWithAI,
                 'play_with_bespoke_ai' => $playWithBespokeAI,
+                'join_team_with_players' => $joinTeamWithPlayers,
+                'join_team_with_ai' => $joinTeamWithAI,
                 'questions' => $gameQuestions,
                 'starter_name' => $userName
             ];
@@ -752,58 +830,73 @@ class GamesController extends Controller
                 'userId' => $userId,
                 'settings' => $gameSettings
             ]);
-        }
 
-        if (!in_array($userId, $readyPlayers)) {
-            $readyPlayers[] = $userId;
-            Cache::put($cacheKey, $readyPlayers, now()->addMinutes(30));
-        }
+            // Add player to ready list if not already there
+            if (!in_array($userId, $readyPlayers)) {
+                $readyPlayers[] = $userId;
+                // CRITICAL FIX: Use put instead of increment operations
+                Cache::put($cacheKey, $readyPlayers, now()->addMinutes(30));
+            }
 
-        $readyCount = count($readyPlayers);
-        
-        Log::info('Player marked ready for multiplayer', [
-            'gameId' => $game->id,
-            'userId' => $userId,
-            'readyCount' => $readyCount,
-            'requiredCount' => $requiredCount,
-            'allReadyPlayers' => $readyPlayers
-        ]);
-
-        broadcast(new PlayerReady(
-            $game->id, 
-            $userId, 
-            $userName, 
-            $readyCount, 
-            $requiredCount, 
-            $currentSettings
-        ))->toOthers();
-
-        if ($readyCount >= $requiredCount) {
-            $game->status = 'in_progress';
-            $game->save();
+            $readyCount = count($readyPlayers);
             
-            Cache::forget($cacheKey);
-            Cache::forget($settingsKey);
-            
-            $this->triggerGameUpdate($game->id, 'game.started.all.ready', [
+            Log::info('Player marked ready for multiplayer', [
                 'gameId' => $game->id,
-                'playerCount' => $requiredCount,
+                'userId' => $userId,
+                'userName' => $userName,
                 'readyCount' => $readyCount,
-                'gameSettings' => $currentSettings,
-                'timestamp' => now()->toISOString()
+                'requiredCount' => $requiredCount,
+                'allReadyPlayers' => $readyPlayers, // This should now be populated
+                'cacheKey' => $cacheKey
             ]);
-            
-            Log::info('All players ready - multiplayer game starting', [
-                'gameId' => $game->id,
-                'playerCount' => $requiredCount,
-                'finalReadyPlayers' => $readyPlayers,
-                'finalSettings' => $currentSettings
-            ]);
-            
-            return response()->json(['status' => 'started', 'gameSettings' => $currentSettings]);
-        }
 
-        return response()->json(['status' => 'waiting', 'gameSettings' => $currentSettings]);
+            // CRITICAL FIX: Verify ready players array before broadcasting
+            if (empty($readyPlayers)) {
+                Log::error('Ready players array is empty after adding player', [
+                    'gameId' => $game->id,
+                    'userId' => $userId,
+                    'cacheKey' => $cacheKey,
+                    'attemptedReadyPlayers' => $readyPlayers
+                ]);
+            }
+
+            broadcast(new PlayerReady(
+                $game->id, 
+                $userId, 
+                $userName, 
+                $readyCount, 
+                $requiredCount, 
+                $currentSettings
+            ))->toOthers();
+
+            if ($readyCount >= $requiredCount) {
+                $game->status = 'in_progress';
+                $game->save();
+                
+                // Clean up cache
+                Cache::forget($cacheKey);
+                Cache::forget($settingsKey);
+                
+                $this->triggerGameUpdate($game->id, 'game.started.all.ready', [
+                    'gameId' => $game->id,
+                    'playerCount' => $requiredCount,
+                    'readyCount' => $readyCount,
+                    'gameSettings' => $currentSettings,
+                    'timestamp' => now()->toISOString()
+                ]);
+                
+                Log::info('All players ready - multiplayer game starting', [
+                    'gameId' => $game->id,
+                    'playerCount' => $requiredCount,
+                    'finalReadyPlayers' => $readyPlayers,
+                    'finalSettings' => $currentSettings
+                ]);
+                
+                return response()->json(['status' => 'started', 'gameSettings' => $currentSettings]);
+            }
+
+            return response()->json(['status' => 'waiting', 'gameSettings' => $currentSettings]);
+        });
     }
 
 

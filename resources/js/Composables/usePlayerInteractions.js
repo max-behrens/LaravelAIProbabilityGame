@@ -18,6 +18,8 @@ export function usePlayerInteractions(gameId, auth) {
     gameSettings: null,
     starterName: null
   });
+
+
   const error = ref(null);
   
   const preReadyPlayers = ref(new Set());
@@ -53,6 +55,16 @@ export function usePlayerInteractions(gameId, auth) {
   const isInGame = computed(() => 
     players.value.some(player => player.id === currentUserId.value)
   );
+
+
+  const teamPlayerLeader = computed(() => {
+    return gameState.value.gameSettings?.join_team_with_players ?? false;
+  });
+
+  const teamAILeader = computed(() => {
+    return gameState.value.gameSettings?.join_team_with_ai ?? false;
+  });
+
 
   // Function to set AI module reference
   const setAIModule = (aiModuleRef) => {
@@ -190,6 +202,7 @@ export function usePlayerInteractions(gameId, auth) {
     return bespokeAIAnswersArray;
   };
 
+
   // Fetch current players - Fixed API route
   const fetchPlayers = async () => {
     try {
@@ -212,8 +225,8 @@ export function usePlayerInteractions(gameId, auth) {
         return;
       }
       
-      console.log('Changing player count to:', count);
-      gameState.value.currentPlayerCount = count;
+      // console.log('Changing player count to:', count);
+      // gameState.value.currentPlayerCount = count;
 
       // NEW: Store player count preference in backend cache
       try {
@@ -302,7 +315,8 @@ export function usePlayerInteractions(gameId, auth) {
 
         // Check if all players have pre-answered this question
         const preAnsweredCount = gameState.value.playersPreAnswered.get(questionIndex).size;
-        if (preAnsweredCount >= playerCount) {
+        if ((preAnsweredCount >= playerCount))
+           {
           console.log('✅ All players pre-answered question', questionIndex, '- triggering progression');
           
           // All players pre-answered - mark as officially answered for everyone
@@ -434,6 +448,13 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
                 requestData.selectedAIModel = bespokeAIModule.selectedAIModel.value;
             }
 
+            if (teamPlayerLeader.value) {
+                requestData.teamPlayerLeader = true;
+            }
+            if (teamAILeader.value) {
+                requestData.teamAILeader = true;
+            }
+
             // SUBMIT TO SERVER IMMEDIATELY FOR ALL PLAYERS
             console.log('🚀 Multiplayer player submitting to server:', requestData);
             await axios.post(`/games/${gameId}/submit-answer`, requestData);
@@ -459,7 +480,7 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
                 }
             });
 
-            if (isLastPlayer) {
+            if (isLastPlayer || (teamPlayerLeader.value || teamAILeader.value)) {
                 console.log('✅ Last player - broadcasting game completion');
                 
                 // Broadcast final completion
@@ -472,7 +493,9 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
                 });
 
                 addFlashMessage('All players submitted! Game completed!', 'success');
+      
                 resetGameState();
+                
                 return { submitted: true, waitingForOthers: false };
             } else {
                 // Not the last player - wait for completion event
@@ -506,6 +529,7 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
       // Clear ready state
       preReadyPlayers.value.clear();
       isWaitingToStart.value = false;
+
   };
 
   // Enhanced Pusher setup with better connection handling
@@ -596,10 +620,11 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
     });
 
     // Player ready (multiplayer start)
-    gameChannel.bind('player.ready', (data) => {
+    gameChannel.bind('player.ready', async (data) => {
         console.log('🔔 Received player.ready event:', data);
         
         if (data.userId !== currentUserId.value) {
+          
             // Another player clicked start
             gameState.value.playersReady.add(data.userId);
             
@@ -608,11 +633,19 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
                 gameState.value.gameSettings = data.gameSettings;
                 gameState.value.starterName = data.gameSettings.starter_name;
                 console.log('Game settings received from ready player:', data.gameSettings);
+
+                                
+                      
+                // Apply game settings for all players
+                if (callbacks.value.onApplyGameSettings) {
+                    await callbacks.value.onApplyGameSettings(data.gameSettings);
+                }
+      
             }
             
             addFlashMessage(`${data.userName} is ready to start! (${data.readyCount}/${data.requiredCount} ready)`, 'info');
             
-          // Check if all required players are now ready for auto-start
+              // Check if all required players are now ready for auto-start
                 const allPlayersReady = data.readyCount >= data.requiredCount;
                 const iAmReady = preReadyPlayers.value.has(currentUserId.value);
                 const gameNotStartedYet = !gameState.value.gameInProgress;
@@ -711,7 +744,9 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
           questionIndex: data.questionIndex
         });
         
-        if (allPlayersAnswered && iHavePreAnswered && !iAlreadyReallyAnswered) {
+        if ((allPlayersAnswered && iHavePreAnswered && !iAlreadyReallyAnswered)
+            || (teamPlayerLeader.value || teamAILeader.value))
+        {
           console.log('🚀 Auto-progressing pre-saved answer for question', data.questionIndex);
           try {
             // Mark as officially answered
@@ -746,7 +781,8 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
       console.log('🔔 Received question.all.answered event:', data);
       
       // Trigger question progression for all players who haven't progressed yet
-      if (preAnsweredQuestions.value.has(data.questionIndex)) {
+      if (preAnsweredQuestions.value.has(data.questionIndex)
+        || (teamPlayerLeader.value || teamAILeader.value)) {
         console.log('🔄 Triggering auto-progression for question:', data.questionIndex);
         
         // Get all current answers to pass to the callback
@@ -910,6 +946,53 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
         resetGameState();
     });
 
+    // Team settings changed
+  gameChannel.bind('team.settings.changed', async (data) => {
+      console.log('🔔 Received team.settings.changed event:', data);
+      if (data.userId !== currentUserId.value) {
+          const teamModes = [];
+          if (data.joinTeamWithPlayers) teamModes.push('Lobby Players');
+          if (data.joinTeamWithAI) teamModes.push('AI');
+          
+          if (teamModes.length > 0) {
+              addFlashMessage(`${data.userName} enabled team mode with: ${teamModes.join(' and ')}`, 'info');
+          } else {
+              addFlashMessage(`${data.userName} disabled team mode`, 'info');
+          }
+
+          console.log('GAME SETTINGS RECEIVED: ' + JSON.stringify(data.gameSettings));
+          
+          // CRITICAL FIX: Apply game settings if provided
+          if (data.gameSettings) {
+              // Store the game settings so the waiting indicator shows updated values
+              gameState.value.gameSettings = data.gameSettings;
+              gameState.value.starterName = data.gameSettings.starter_name;
+              
+              console.log('Team settings changed - updating game settings:', data.gameSettings);
+              
+              // Apply game settings via callback so main component updates its UI
+              if (callbacks.value.onApplyGameSettings) {
+                  await callbacks.value.onApplyGameSettings(gameState.value.gameSettings);
+              }
+          }
+      }
+  });
+
+    // Team suggestion received
+    gameChannel.bind('team.suggestion', (data) => {
+        console.log('🔔 Received team.suggestion event:', data);
+        if (data.userId !== currentUserId.value) {
+            const direction = data.isToLeader ? 'to team leader' : 'from team leader';
+            addFlashMessage(`${data.userName} suggests ${direction}: "${data.suggestion}"`, 'info');
+        }
+    });
+
+    // AI suggestion received
+    gameChannel.bind('team.ai.suggestion', (data) => {
+        console.log('🔔 Received team.ai.suggestion event:', data);
+        addFlashMessage(`${data.aiType} suggests: "${data.suggestion}"`, 'info');
+    });
+
     // Bind to all events for debugging
     gameChannel.bind_global((eventName, data) => {
       console.log('🌐 Global event received:', eventName, data);
@@ -932,9 +1015,13 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
   };
 
   // Lifecycle hooks
-  onMounted(() => {
+  onMounted(async () => {
     console.log('🚀 usePlayerInteractions mounted');
     fetchPlayers();
+        await axios.post(`/api/games/${gameId}/store-player-count`, {
+          playerCount: 1,
+          userId: currentUserId.value
+        });
     setupPusher();
   });
 

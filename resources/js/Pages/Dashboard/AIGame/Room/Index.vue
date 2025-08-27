@@ -71,6 +71,14 @@ const playWithAISection = ref(false);
 
 const isStealAnimating = ref(false);
 
+const joinTeamWithPlayers = ref(false);
+const joinTeamWithAI = ref(false);
+const suggestionInput = ref('');
+const isTeamMode = ref(false);
+const isTeamLeader = ref(false);
+const teamLeaderName = ref('');
+
+
 // Initialize player interactions first
 const {
     players,
@@ -316,6 +324,8 @@ const onDifficultyOrCategoryChange = async () => {
     await fetchGameQuestions(selectedDifficulty.value, selectedCategory.value);
     await fetchGameScores(1, playerSortField.value, playerSortDirection.value);
     await fetchAIScores(1, aiSortField.value, aiSortDirection.value);
+
+    updateGameSettings();
 };
 
 // Pagination handler
@@ -341,18 +351,20 @@ const startGame = async () => {
 
     try {
         console.log('Starting game with player count:', playerCount.value);
-        // Check if this is a multiplayer attempt and validate other players' settings
+        
+        // Set team mode and leader status
+        isTeamMode.value = joinTeamWithPlayers.value || joinTeamWithAI.value;
+        if (playerCount.value > 1 && isTeamMode.value) {
+            isTeamLeader.value = true; // First player to start is team leader
+            teamLeaderName.value = props.auth.user.name;
+        }
+        
         const playerCountNum = parseInt(playerCount.value);
         
-        // Check if this is a multiplayer attempt and validate other players' settings
         if (playerCountNum > 1) {
-            console.log('Starting multiplayer game with 2 players...');
-            // Check if any other players in the game have their player count set to 2
+            console.log('Starting multiplayer game with team settings...');
             const response = await axios.get(`/games/${props.gameId}/validate-multiplayer-start`);
 
-            console.log('Multiplayer start validation response:', JSON.stringify(response.data));
-            console.log('Can start multiplayer:', response.data.canStartMultiplayer);
-            
             if (!response.data.canStartMultiplayer) {
                 addFlashMessage(
                     'Cannot start multiplayer game. At least one other player must also have "2 Players" selected to start a multiplayer game.', 
@@ -362,12 +374,12 @@ const startGame = async () => {
             }
         }
 
-        // Reset AI state
         resetAI();
-        resetBespokeAI(); // Reset Bespoke AI state
+        resetBespokeAI();
 
-        // Reset session before starting new game
         await axios.post(`/games/${props.gameId}/reset-session`);
+
+        console.log('PLAYER READY DIFFICULTY: ' + selectedDifficulty.value);
         
         const response = await axios.post(`/games/${props.gameId}/player-ready`, {
             userId: props.auth.user.id,
@@ -377,14 +389,14 @@ const startGame = async () => {
             category_id: selectedCategory.value,
             play_with_ai: playWithAI.value,
             play_with_bespoke_ai: playWithBespokeAI.value,
-            selected_ai_model: selectedAIModel.value, // Include selected Bespoke AI model
+            selected_ai_model: selectedAIModel.value,
+            // Add team settings
+            join_team_with_players: joinTeamWithPlayers.value,
+            join_team_with_ai: joinTeamWithAI.value,
         });
-
-        console.log('playerCount.value: ' + playerCount.value);
 
         if (response.data.status === 'waiting') {
             if (playerCount.value === 1) {
-                // Single player - start immediately
                 if (showSinglePlayerAIWarning.value) {
                     addFlashMessage('Cannot start game. Please enable "Play With ChatGPT" or "Play With Learning Model" or add more players.', 'warning');
                     return;
@@ -393,7 +405,6 @@ const startGame = async () => {
                     gameIsOver.value = false;
                     addFlashMessage('Game started!', 'success');
                     
-                    // Broadcast single-player game start to other players
                     try {
                         await axios.post(`/api/games/${props.gameId}/broadcast`, {
                             event: 'game.started.single',
@@ -406,23 +417,21 @@ const startGame = async () => {
                                 play_with_ai: playWithAI.value,
                                 play_with_bespoke_ai: playWithBespokeAI.value,
                                 selected_ai_model: selectedAIModel.value,
+                                join_team_with_players: joinTeamWithPlayers.value,
+                                join_team_with_ai: joinTeamWithAI.value,
                                 timestamp: new Date().toISOString()
                             }
                         });
-                        console.log('Single-player game start broadcasted to other players');
                     } catch (error) {
                         console.error('Failed to broadcast single-player start:', error);
-                        // Don't fail the game start if broadcast fails
                     }
                 }
             } else {
-                // Multiplayer - store ready state and wait for others
                 preReadyPlayers.value.add(props.auth.user.id);
                 isWaitingToStart.value = true;
                 addFlashMessage('You are ready! Waiting for other players to start...', 'success');
             }
         } else if (response.data.status === 'started') {
-            // All players are ready - apply the game settings and start immediately
             if (response.data.gameSettings) {
                 await applyGameSettings(response.data.gameSettings);
             }
@@ -444,7 +453,6 @@ const startGame = async () => {
     }
 };
 
-
 const applyGameSettings = async (settings) => {
     console.log('Applying game settings from ready player:', settings);
     
@@ -454,22 +462,45 @@ const applyGameSettings = async (settings) => {
     playWithAI.value = settings.play_with_ai;
     playWithBespokeAI.value = settings.play_with_bespoke_ai;
     
-    // Update Bespoke AI model if provided
+    // Apply team settings
+    if (settings.join_team_with_players !== undefined) {
+        joinTeamWithPlayers.value = settings.join_team_with_players;
+    }
+    if (settings.join_team_with_ai !== undefined) {
+        joinTeamWithAI.value = settings.join_team_with_ai;
+    }
+    
+    // Set team mode and leader status
+    isTeamMode.value = joinTeamWithPlayers.value || joinTeamWithAI.value;
+    if (isTeamMode.value && playerCount.value > 1) {
+        // Check if current user is the starter/leader
+        if (props.auth.user.name === settings.starter_name) {
+            isTeamLeader.value = false; // Others are not team leaders
+            teamLeaderName.value = settings.starter_name;
+        } else {
+            isTeamLeader.value = true;
+            teamLeaderName.value = props.auth.user.name;
+        }
+    }
+    
     if (settings.selected_ai_model) {
         selectedAIModel.value = settings.selected_ai_model;
     }
     
-    // Update questions if provided
     if (settings.questions && settings.questions.length > 0) {
         currentGameQuestions.value = settings.questions;
         console.log('Questions updated from game settings:', settings.questions.length, 'questions');
     } else {
-        // Fallback: fetch questions for these settings
         await fetchGameQuestions(settings.difficulty_id, settings.category_id);
     }
 
-    addFlashMessage(`Game settings updated to match ${settings.starter_name}'s preferences!`, 'info');
+    let message = `Game settings updated to match ${settings.starter_name}'s preferences!`;
+    if (isTeamMode.value) {
+        message += ` Team mode activated with ${settings.starter_name} as team leader.`;
+    }
+    addFlashMessage(message, 'info');
 };
+
 // Join the game with real-time updates
 const joinGame = async () => {
     try {
@@ -500,20 +531,199 @@ const leaveGame = async () => {
     }
 };
 
+// Add team mode computed properties
+const canSubmitAnswers = computed(() => {
+    if (playerCount.value === 1) return true; // Single player can always submit
+    if (!isTeamMode.value) return true; // Not in team mode, everyone can submit
+    return isTeamLeader.value; // In team mode, only team leader can submit
+});
+
+const shouldShowSuggestionInput = computed(() => {
+    return isGameStarted.value && isTeamMode.value && playerCount.value > 1;
+});
+
+const shouldShowAISuggestionButtons = computed(() => {
+    return isGameStarted.value && joinTeamWithAI.value && isTeamLeader.value && playerCount.value > 1;
+});
+
+const toggleBespokeAICheckbox = async () => {
+    playWithBespokeAI.value = !playWithBespokeAI.value;
+
+    updateGameSettings();
+}
+
+const onTeamPlayerSettingChange = async () => {
+    if (!isInGame.value || playerCount.value === 1) return;
+
+    if (joinTeamWithPlayers.value && joinTeamWithAI.value) {
+        joinTeamWithAI.value = false;
+    }
+    
+    // Update team mode status
+    isTeamMode.value = joinTeamWithPlayers.value || joinTeamWithAI.value;
+
+    updateGameSettings();
+    
+};
+
+const onTeamAISettingChange = async () => {
+    if (!isInGame.value || playerCount.value === 1) return;
+
+    if (joinTeamWithPlayers.value && joinTeamWithAI.value) {
+        joinTeamWithPlayers.value = false;
+    }
+    
+    
+    // Update team mode status
+    isTeamMode.value = joinTeamWithPlayers.value || joinTeamWithAI.value;
+
+    updateGameSettings();
+    
+};
+
+const updateGameSettings = async () => {
+        // Broadcast team setting change WITH FULL GAME SETTINGS
+    try {
+        console.log('DIFFICULTY GAME SETTINGS: ' + selectedDifficulty.value);
+        await axios.post(`/api/games/${props.gameId}/broadcast`, {
+            event: 'team.settings.changed',
+            data: {
+                userId: props.auth.user.id,
+                userName: props.auth.user.name,
+                joinTeamWithPlayers: joinTeamWithPlayers.value,
+                joinTeamWithAI: joinTeamWithAI.value,
+                // Add full game settings so other players can update their waiting indicator
+                gameSettings: {
+                    difficulty_id: selectedDifficulty.value,
+                    category_id: selectedCategory.value,
+                    play_with_ai: playWithAI.value,
+                    play_with_bespoke_ai: playWithBespokeAI.value,
+                    selected_ai_model: selectedAIModel.value,
+                    join_team_with_players: joinTeamWithPlayers.value,
+                    join_team_with_ai: joinTeamWithAI.value,
+                    starter_name: props.auth.user.name,
+                    questions: currentGameQuestions.value // Include current questions
+                },
+                timestamp: new Date().toISOString()
+            }
+        });
+    } catch (error) {
+        console.error('Failed to broadcast team setting change:', error);
+    }
+}
+
+const sendSuggestion = async () => {
+    if (!suggestionInput.value.trim() || !isTeamMode.value) return;
+    
+    try {
+        await axios.post(`/api/games/${props.gameId}/broadcast`, {
+            event: 'team.suggestion',
+            data: {
+                userId: props.auth.user.id,
+                userName: props.auth.user.name,
+                suggestion: suggestionInput.value.trim(),
+                isToLeader: !isTeamLeader.value,
+                timestamp: new Date().toISOString()
+            }
+        });
+        
+        const messageType = isTeamLeader.value ? 'to team members' : 'to team leader';
+        addFlashMessage(`Suggestion sent ${messageType}: "${suggestionInput.value.trim()}"`, 'info');
+        suggestionInput.value = '';
+    } catch (error) {
+        console.error('Failed to send suggestion:', error);
+        addFlashMessage('Failed to send suggestion', 'error');
+    }
+};
+
+const getAISuggestion = async () => {
+    if (!joinTeamWithAI.value || !isTeamLeader.value || !currentGameQuestions.value[currentQuestionIndex.value]) return;
+    
+    try {
+        const questionText = currentGameQuestions.value[currentQuestionIndex.value].question;
+        const response = await getAIAnswerForQuestion(
+            questionText,
+            props.gameId,
+            currentQuestionIndex.value,
+            selectedDifficulty.value,
+            selectedCategory.value
+        );
+        
+        if (response) {
+            // Broadcast AI suggestion to all team members
+            await axios.post(`/api/games/${props.gameId}/broadcast`, {
+                event: 'team.ai.suggestion',
+                data: {
+                    suggestion: response,
+                    aiType: 'ChatGPT',
+                    questionIndex: currentQuestionIndex.value,
+                    timestamp: new Date().toISOString()
+                }
+            });
+            
+            addFlashMessage(`ChatGPT suggests: "${response}"`, 'info');
+        }
+    } catch (error) {
+        console.error('Failed to get AI suggestion:', error);
+        addFlashMessage('Failed to get AI suggestion', 'error');
+    }
+};
+
+const getBespokeAISuggestion = async () => {
+    if (!joinTeamWithAI.value || !isTeamLeader.value || !currentGameQuestions.value[currentQuestionIndex.value]) return;
+    
+    try {
+        const questionText = currentGameQuestions.value[currentQuestionIndex.value].question;
+        const response = await getBespokeAIAnswerForQuestion(
+            questionText,
+            props.gameId,
+            currentQuestionIndex.value,
+            selectedDifficulty.value,
+            selectedCategory.value
+        );
+        
+        if (response) {
+            // Broadcast Bespoke AI suggestion to all team members
+            await axios.post(`/api/games/${props.gameId}/broadcast`, {
+                event: 'team.ai.suggestion',
+                data: {
+                    suggestion: response,
+                    aiType: 'Learning Model',
+                    questionIndex: currentQuestionIndex.value,
+                    timestamp: new Date().toISOString()
+                }
+            });
+            
+            addFlashMessage(`Learning Model suggests: "${response}"`, 'info');
+        }
+    } catch (error) {
+        console.error('Failed to get Bespoke AI suggestion:', error);
+        addFlashMessage('Failed to get Bespoke AI suggestion', 'error');
+    }
+};
+
 // Handle player count changes - FIXED to ensure numeric value
 const onPlayerCountChange = async (newCount) => {
-    // Convert to number to ensure consistent type
     const numericCount = parseInt(newCount);
     playerCount.value = numericCount;
     
-    console.log('Player count changed to:', numericCount, 'Type:', typeof numericCount);
-    
     if (isInGame.value) {
-        await changePlayerCount(numericCount);
+        // Immediately update backend cache
+        try {
+            await changePlayerCount(numericCount);
+        } catch (error) {
+            console.error('Failed to sync player count:', error);
+        }
     }
 };
 
 const nextOrSubmit = async () => {
+    // Check if player can submit answers (team mode restriction)
+    if (!canSubmitAnswers.value) {
+        addFlashMessage(`Only the team leader (${teamLeaderName.value}) can submit answers in team mode.`, 'warning');
+        return;
+    }
+
     if (!isLastQuestion.value) {
         // ENHANCED: Use the new answerQuestion function with auto-progression
         const result = await answerQuestion(currentQuestionIndex.value, answers.value[currentQuestionIndex.value], playerCount.value);
@@ -599,7 +809,7 @@ const nextOrSubmit = async () => {
                                 aiScore: aiAnswers.value[currentQuestionIndex.value]?.score,
                                 isCorrect: aiAnswers.value[currentQuestionIndex.value]?.isCorrect,
                                 steal: aiAnswers.value[currentQuestionIndex.value]?.steal,
-                                aiData: aiAnswers.value[currentQuestionIndex.value], // Send complete AI object
+                                aiData: aiAnswers.value[currentQuestionIndex.value],
                                 // Bespoke AI data
                                 bespokeAIAnswer: bespokeAIAnswers.value[currentQuestionIndex.value]?.answer,
                                 bespokeAIScore: bespokeAIAnswers.value[currentQuestionIndex.value]?.score,
@@ -607,7 +817,7 @@ const nextOrSubmit = async () => {
                                 bespokeAIIsCorrect: bespokeAIAnswers.value[currentQuestionIndex.value]?.isCorrect,
                                 bespokeAISteal: bespokeAIAnswers.value[currentQuestionIndex.value]?.steal,
                                 bespokeAIModelId: bespokeAIAnswers.value[currentQuestionIndex.value]?.model_id,
-                                bespokeAIData: bespokeAIAnswers.value[currentQuestionIndex.value], // Send complete Bespoke AI object
+                                bespokeAIData: bespokeAIAnswers.value[currentQuestionIndex.value],
                                 gameId: props.gameId,
                                 timestamp: new Date().toISOString()
                             }
@@ -663,8 +873,8 @@ const nextOrSubmit = async () => {
                 }
             }
             
-            // For multiplayer: Check if AI needs to answer
-            if (playerCount.value > 1) {
+            // For multiplayer: Check if AI needs to answer (only team leader can trigger this)
+            if (playerCount.value > 1 && isTeamLeader.value) {
                 if (playWithAI.value && !hasAIAnswered(currentQuestionIndex.value)) {
                     addFlashMessage('Waiting for ChatGPT AI to answer the final question...', 'info');
                     console.log('Multiplayer: Triggering ChatGPT AI answer for final question:', currentQuestionIndex.value);
@@ -716,7 +926,11 @@ const nextOrSubmit = async () => {
                                 difficultyId: selectedDifficulty.value,
                                 categoryId: selectedCategory.value,
                                 playedWithAI: playWithAI.value,
-                                playedWithBespokeAI: playWithBespokeAI.value
+                                playedWithBespokeAI: playWithBespokeAI.value,
+                                teamSettings: {
+                                    joinTeamWithPlayers: joinTeamWithPlayers.value,
+                                    joinTeamWithAI: joinTeamWithAI.value
+                                }
                             }
                         });
                         console.log('Single-player game completion broadcasted');
@@ -779,12 +993,16 @@ const startNewGame = () => {
     addFlashMessage('Ready to start a new game!', 'success');
 };
 
+
+// Replace your existing resetGameState function with this updated version
 const resetGameState = () => {
     console.log('Resetting game state - before reset:', {
         currentQuestionIndex: currentQuestionIndex.value,
         answersLength: answers.value.length,
         isGameStarted: isGameStarted.value,
-        gameIsOver: gameIsOver.value
+        gameIsOver: gameIsOver.value,
+        isTeamMode: isTeamMode.value,
+        isTeamLeader: isTeamLeader.value
     });
     
     // CRITICAL: Reset question index to 0
@@ -801,14 +1019,24 @@ const resetGameState = () => {
     gameState.value.waitingForOthers = false;
     gameState.value.playersReady.clear();
     
+    // Reset team settings
+    isTeamMode.value = false;
+    isTeamLeader.value = false;
+    teamLeaderName.value = '';
+    suggestionInput.value = '';
+    
+    // Note: Don't reset joinTeamWithPlayers and joinTeamWithAI here
+    // so users don't have to re-select their team preferences for next game
+    
     console.log('Game state fully reset - after reset:', {
         currentQuestionIndex: currentQuestionIndex.value,
         answersLength: answers.value.length,
         isGameStarted: isGameStarted.value,
-        gameIsOver: gameIsOver.value
+        gameIsOver: gameIsOver.value,
+        isTeamMode: isTeamMode.value,
+        isTeamLeader: isTeamLeader.value
     });
 };
-
 // Vertical Nav Section:
 const navSections = [
     { id: 'main', name: 'Main' },
@@ -1033,13 +1261,15 @@ watch(() => gameState.value.gameInProgress, (newVal, oldVal) => {
 });
 
 // Lifecycle: fetch data
-onMounted(() => {
+onMounted( () => {
     fetchCurrentGame();
     fetchGameScores();
     fetchAIScores();
     
     // Fetch initial game questions with default difficulty and category
     fetchGameQuestions();
+
+    
 
     // Vertical Nav:
     window.addEventListener('scroll', updateNavigation);
@@ -1197,7 +1427,7 @@ onUnmounted(() => {
                         
 
             <div class="py-4 mb-6">
-                <div class="w-1/2 sm:w-auto pl-6 main-width mx-auto sm:px-6 lg:px-8">
+                <div class="w-min-[100px] sm:w-auto pl-6 main-width mx-auto sm:px-6 lg:px-8">
                     <div v-if="errorMessage" class="mb-4 p-4 bg-red-900 text-red-200 rounded border border-red-700">
                         {{ errorMessage }}
                     </div>
@@ -1210,35 +1440,81 @@ onUnmounted(() => {
                             <div class="text-center mb-4 text-white text-xl font-semibold">
                                 {{ currentGameQuestions[currentQuestionIndex]?.question }}
                             </div>
-                                <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                                    <button 
-                                        :disabled="submitting || isStealAnimating" 
-                                        @click="stealAnimation"
-                                        class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50 transition-colors">
-                                        Steal
-                                    </button>
-                                    
-                                    <div class="relative w-full sm:w-2/3">
-                                        <input 
-                                            v-model="answers[currentQuestionIndex]"
-                                            :class="{
-                                                'animate-pulse bg-white !text-white': isStealAnimating,
-                                                'bg-gray-100 !text-white': !isStealAnimating
-                                            }"
-                                            :disabled="isStealAnimating"
-                                            class="px-4 py-2 rounded w-full !placeholder-white transition-all duration-500"
-                                            :placeholder="isStealAnimating ? '' : 'Your answer'" 
-                                        />
-
+                            
+                            <!-- Team Mode Indicator -->
+                            <div v-if="isTeamMode && playerCount > 1" class="text-center mb-4">
+                                <div class="inline-block px-4 py-2 bg-blue-900 text-blue-200 rounded-lg border border-blue-700">
+                                    <div v-if="isTeamLeader" class="text-sm font-semibold">
+                                        You are the team leader - you submit answers for the team
                                     </div>
-
-                                    <button 
-                                        :disabled="submitting || isStealAnimating" 
-                                        @click="nextOrSubmit"
-                                        class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50 transition-colors">
-                                        {{ isLastQuestion ? (submitting ? 'Submitting...' : 'Submit') : 'Next' }}
-                                    </button>
+                                    <div v-else class="text-sm font-semibold">
+                                        {{ teamLeaderName }} is submitting answers for the team
+                                    </div>
                                 </div>
+                            </div>
+
+                            <!-- Answer Input (only for team leader or non-team mode) -->
+                            <div v-if="canSubmitAnswers" class="flex flex-col sm:flex-row gap-4 justify-center mb-4">
+                                <button 
+                                    :disabled="submitting || isStealAnimating" 
+                                    @click="stealAnimation"
+                                    class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50 transition-colors">
+                                    Steal
+                                </button>
+                                
+                                <div class="relative w-full sm:w-2/3">
+                                    <input 
+                                        v-model="answers[currentQuestionIndex]"
+                                        :class="{
+                                            'animate-pulse bg-white !text-white': isStealAnimating,
+                                            'bg-gray-100 !text-white': !isStealAnimating
+                                        }"
+                                        :disabled="isStealAnimating"
+                                        class="px-4 py-2 rounded w-full !placeholder-white transition-all duration-500"
+                                        :placeholder="isStealAnimating ? '' : 'Your answer'" 
+                                    />
+                                </div>
+
+                                <button 
+                                    :disabled="submitting || isStealAnimating" 
+                                    @click="nextOrSubmit"
+                                    class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50 transition-colors">
+                                    {{ isLastQuestion ? (submitting ? 'Submitting...' : 'Submit') : 'Next' }}
+                                </button>
+                            </div>
+
+                            <!-- AI Suggestion Buttons (only for team leader with AI team mode) -->
+                            <div v-if="shouldShowAISuggestionButtons" class="flex justify-center gap-4 mb-4">
+                                <button 
+                                    @click="getAISuggestion"
+                                    :disabled="aiLoading"
+                                    class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 disabled:opacity-50 transition-colors">
+                                    Get ChatGPT Suggestion
+                                </button>
+                                <button 
+                                    @click="getBespokeAISuggestion"
+                                    :disabled="bespokeAILoading"
+                                    class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                                    Get Learning Model Suggestion
+                                </button>
+                            </div>
+
+                            <!-- Team Suggestion Input (for all players in team mode) -->
+                            <div v-if="shouldShowSuggestionInput" class="flex justify-center gap-4">
+                                <div class="relative w-full sm:w-2/3">
+                                    <input 
+                                        v-model="suggestionInput"
+                                        class="px-4 py-2 rounded w-full bg-gray-600 text-white placeholder-gray-300"
+                                        :placeholder="isTeamLeader ? 'Send suggestion to team members...' : 'Send suggestion to team leader...'"
+                                    />
+                                </div>
+                                <button 
+                                    @click="sendSuggestion"
+                                    :disabled="!suggestionInput.trim()"
+                                    class="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 disabled:opacity-50 transition-colors">
+                                    Send Suggestion
+                                </button>
+                            </div>
                         </div>
 
 
@@ -1303,7 +1579,7 @@ onUnmounted(() => {
                                     </div>
                                 </div>
 
-                                <!-- NEW: Waiting indicator for when others are ready but I'm not -->
+                                <!-- Waiting menu for multiplayer start -->
                                 <div v-if="!isWaitingToStart && !isGameStarted && gameState.playersReady.size > 0 && !gameIsOver && !gameState.waitingForOthers" class="basis-full mb-6 text-center">
                                     <div class="p-4 bg-yellow-900 text-yellow-200 rounded border border-yellow-700">
                                         <div class="text-lg font-semibold mb-3">
@@ -1325,8 +1601,20 @@ onUnmounted(() => {
                                                     {{ getCategoryName(gameState.gameSettings?.category_id) }}
                                                 </div>
                                                 <div>
+                                                    <span class="font-semibold">Play With Bespoke AI:</span> 
+                                                    {{ gameState.gameSettings?.play_with_ai ? 'Yes' : 'No' }}
+                                                </div>
+                                                <div>
                                                     <span class="font-semibold">Play With ChatGPT:</span> 
                                                     {{ gameState.gameSettings?.play_with_ai ? 'Yes' : 'No' }}
+                                                </div>
+                                                <div>
+                                                    <span class="font-semibold">Team with Lobby Players:</span> 
+                                                    {{ gameState.gameSettings?.join_team_with_players ? 'Yes' : 'No' }}
+                                                </div>
+                                                <div>
+                                                    <span class="font-semibold">Team with AI:</span> 
+                                                    {{ gameState.gameSettings?.join_team_with_ai ? 'Yes' : 'No' }}
                                                 </div>
                                             </div>
                                         </div>
@@ -1367,6 +1655,22 @@ onUnmounted(() => {
                                     </select>
                                 </div>
 
+                                <!-- Team Options (only show for multiplayer) -->
+                                <div v-if="playerCount > 1" class="flex items-center gap-4">
+                                    <div class="flex items-center gap-2">
+                                        <input type="checkbox" v-model="joinTeamWithPlayers" 
+                                            :disabled="isGameInProgress || isWaitingForOthers || gameIsOver" 
+                                            @change="onTeamPlayerSettingChange" />
+                                        <label>Join Team with Lobby Players</label>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <input type="checkbox" v-model="joinTeamWithAI" 
+                                            :disabled="isGameInProgress || isWaitingForOthers || gameIsOver"
+                                            @change="onTeamAISettingChange" />
+                                        <label>Join Team With AI</label>
+                                    </div>
+                                </div>
+
                                 <!-- Difficulty -->
                                 <div class="flex items-center gap-2">
                                     <label for="difficulty">Difficulty:</label>
@@ -1395,7 +1699,7 @@ onUnmounted(() => {
 
                                 <!-- Play With AI Section Toggle -->
                                 <div class="flex items-center gap-2">
-                                    <input type="checkbox" v-model="playWithAISection"
+                                    <input type="checkbox" v-model="playWithAISection" @click="toggleBespokeAICheckbox"
                                         :disabled="isGameInProgress || isWaitingForOthers || gameIsOver" />
                                     <label>Play With AI</label>
                                 </div>
@@ -1418,10 +1722,10 @@ onUnmounted(() => {
                                     <h4 class="text-white font-semibold mb-4">AI Players</h4>
                                     <div class="flex flex-col gap-4 items-center">
                                         <div class="flex flex-row gap-4">
-                                            <input type="checkbox" v-model="playWithBespokeAI"
+                                            <input type="checkbox" v-model="playWithBespokeAI" @change="updateGameSettings"
                                                 :disabled="isGameInProgress || isWaitingForOthers || gameIsOver" />
                                             <label>Play With Learning Model</label>
-                                            <input type="checkbox" v-model="playWithAI"
+                                            <input type="checkbox" v-model="playWithAI" @change="updateGameSettings"
                                                 :disabled="isGameInProgress || isWaitingForOthers || gameIsOver" />
                                             <label>Play With ChatGPT</label>
                                         </div>
