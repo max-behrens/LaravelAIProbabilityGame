@@ -197,6 +197,9 @@ export function createBespokeAI(gameId, getDependencies) {
 
   // Check if bespoke AI has answered a specific question
   const hasBespokeAIAnswered = (questionIndex) => {
+
+    console.log('BESPOKE AI ANSWERS: ' + JSON.stringify(bespokeAIAnswers.value));
+
     const answer = bespokeAIAnswers.value[questionIndex];
     return answer && answer.answer !== undefined && answer.answer !== null && answer.answer !== '';
   };

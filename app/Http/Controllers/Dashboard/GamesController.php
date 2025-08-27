@@ -254,7 +254,10 @@ class GamesController extends Controller
             'playWithBespokeAI' => $request->boolean('playWithBespokeAI', false),
             'bespokeAIModelId' => $request->get('bespokeAIModelId'),
             'difficultyId' => $request->get('difficulty_id'),
-            'categoryId' => $request->get('category_id')
+            'categoryId' => $request->get('category_id'),
+            'teamPlayerGame' => $request->boolean('teamPlayerGame', false),
+            'teamAIGame' => $request->boolean('teamAIGame', false),
+            'isTeamLeader' => $request->boolean('isTeamLeader', false)
         ]);
 
         $request->validate([
@@ -270,7 +273,10 @@ class GamesController extends Controller
             'playWithBespokeAI' => 'sometimes|boolean',
             'bespokeAIModelId' => 'sometimes|nullable|integer|exists:bespoke_ai_models,id',
             'difficulty_id' => 'sometimes|nullable|integer',
-            'category_id' => 'sometimes|nullable|integer'
+            'category_id' => 'sometimes|nullable|integer',
+            'teamPlayerGame' => 'sometimes|boolean',
+            'teamAIGame' => 'sometimes|boolean',
+            'isTeamLeader' => 'sometimes|boolean'
         ]);
 
         $user = $request->user();
@@ -284,6 +290,9 @@ class GamesController extends Controller
 
         $teamPlayerLeader = $request->get('teamPlayerLeader');
         $teamAILeader = $request->get('teamPlayerLeader');
+        $teamPlayerGame = $request->boolean('teamPlayerGame', false);
+        $teamAIGame = $request->boolean('teamAIGame', false);
+        $isTeamLeader = $request->boolean('isTeamLeader', false);
 
         if (is_null($difficultyId) || is_null($categoryId)) {
             $settingsKey = "game:{$gameId}:gameSettings";
@@ -307,18 +316,91 @@ class GamesController extends Controller
         $sessionKey = "game:{$gameId}:session_id:{$gameStartTime}";
         $sessionId = Cache::rememberForever($sessionKey, fn () => Str::uuid()->toString());
 
-        // Submit player answers
-        $this->gamesService->submitAnswers($gameId, $user->id, $request->answers, $sessionId, $difficultyId, $categoryId, $teamPlayerLeader, $teamAILeader);
+        // TEAM GAME LOGIC - Store or retrieve consolidated answers
+        $finalPlayerAnswers = $request->answers;
+        $finalAIAnswers = $request->aiAnswers ?? [];
+        $finalBespokeAIAnswers = $request->bespokeAIAnswers ?? [];
 
-        // Submit regular AI answers if enabled
-        if ($request->boolean('playWithAI', false) && $request->has('aiAnswers') && is_array($request->aiAnswers)) {
-            Log::info('Submitting regular AI answers');
+        if ($teamPlayerGame) {
+            // Team Player Game: All non-AI players use team leader's answers
+            if ($isTeamLeader) {
+                // Store team leader's answers in cache for other team members
+                $teamAnswersKey = "game:{$gameId}:team_player_answers";
+                Cache::put($teamAnswersKey, $request->answers, now()->addHours(1));
+                Log::info('Stored team leader answers for team player game', ['answers' => $request->answers]);
+            } else {
+                // Non-leader: Use team leader's answers
+                $teamAnswersKey = "game:{$gameId}:team_player_answers";
+                $teamLeaderAnswers = Cache::get($teamAnswersKey);
+                
+                if ($teamLeaderAnswers) {
+                    $finalPlayerAnswers = $teamLeaderAnswers;
+                    Log::info('Using team leader answers for non-leader player', ['answers' => $teamLeaderAnswers]);
+                } else {
+                    Log::warning('Team leader answers not found in cache for non-leader player');
+                }
+            }
+        } elseif ($teamAIGame) {
+            // Team AI Game: Compare human + AI answers and use highest scoring ones
+            if ($isTeamLeader) {
+                // Store all answers for comparison and consolidation
+                $teamAIAnswersKey = "game:{$gameId}:team_ai_answers";
+                
+                $answerSets = [
+                    'human' => $request->answers
+                ];
+                
+                if ($request->boolean('playWithAI', false) && !empty($request->aiAnswers)) {
+                    $answerSets['ai'] = $request->aiAnswers;
+                }
+                
+                if ($request->boolean('playWithBespokeAI', false) && !empty($request->bespokeAIAnswers)) {
+                    $answerSets['bespokeAI'] = $request->bespokeAIAnswers;
+                }
+
+                // Get consolidated answers based on highest scores
+                $consolidatedAnswers = $this->consolidateTeamAIAnswers($answerSets, $difficultyId, $categoryId);
+                
+                // Store consolidated answers for other team members
+                Cache::put($teamAIAnswersKey, $consolidatedAnswers, now()->addHours(1));
+                
+                // Use consolidated answers
+                $finalPlayerAnswers = $consolidatedAnswers;
+                $finalAIAnswers = $consolidatedAnswers;
+                $finalBespokeAIAnswers = $consolidatedAnswers;
+                
+                Log::info('Consolidated team AI answers', [
+                    'originalSets' => $answerSets,
+                    'consolidated' => $consolidatedAnswers
+                ]);
+            } else {
+                // Non-leader: Use consolidated answers from cache
+                $teamAIAnswersKey = "game:{$gameId}:team_ai_answers";
+                $consolidatedAnswers = Cache::get($teamAIAnswersKey);
+                
+                if ($consolidatedAnswers) {
+                    $finalPlayerAnswers = $consolidatedAnswers;
+                    $finalAIAnswers = $consolidatedAnswers;
+                    $finalBespokeAIAnswers = $consolidatedAnswers;
+                    Log::info('Using consolidated team AI answers for non-leader', ['answers' => $consolidatedAnswers]);
+                } else {
+                    Log::warning('Consolidated team AI answers not found in cache for non-leader');
+                }
+            }
+        }
+
+        // Submit player answers (using final consolidated answers)
+        $this->gamesService->submitAnswers($gameId, $user->id, $finalPlayerAnswers, $sessionId, $difficultyId, $categoryId, $teamPlayerLeader, $teamAILeader);
+
+        // Submit regular AI answers if enabled (using final consolidated answers)
+        if ($request->boolean('playWithAI', false) && !empty($finalAIAnswers)) {
+            Log::info('Submitting regular AI answers (potentially consolidated)');
 
             try {
                 $this->aiGameService->submitAIAnswers(
                     $gameId,
                     $user->id,
-                    $request->aiAnswers,
+                    $finalAIAnswers,
                     $sessionId,
                     $difficultyId,
                     $categoryId
@@ -329,15 +411,11 @@ class GamesController extends Controller
             }
         }
 
-        // Submit bespoke AI answers if enabled
-        if ($request->boolean('playWithBespokeAI', false) && 
-            $request->has('bespokeAIAnswers') && 
-            is_array($request->bespokeAIAnswers))
-            {
-            
-            Log::info('Submitting bespoke AI answers', [
+        // Submit bespoke AI answers if enabled (using final consolidated answers)
+        if ($request->boolean('playWithBespokeAI', false) && !empty($finalBespokeAIAnswers)) {
+            Log::info('Submitting bespoke AI answers (potentially consolidated)', [
                 'modelId' => $request->get('bespokeAIModelId'),
-                'answersCount' => count($request->bespokeAIAnswers)
+                'answersCount' => count($finalBespokeAIAnswers)
             ]);
 
             try {
@@ -345,7 +423,7 @@ class GamesController extends Controller
                     $gameId,
                     1,
                     $user->id,
-                    $request->bespokeAIAnswers,
+                    $finalBespokeAIAnswers,
                     $sessionId,
                     $difficultyId,
                     $categoryId
@@ -361,22 +439,133 @@ class GamesController extends Controller
             'userId' => $user->id,
             'userName' => $user->name,
             'timestamp' => now()->toISOString(),
-            'withRegularAI' => $request->boolean('playWithAI', false) && $request->has('aiAnswers'),
-            'withBespokeAI' => $request->boolean('playWithBespokeAI', false) && $request->has('bespokeAIAnswers'),
+            'withRegularAI' => $request->boolean('playWithAI', false) && !empty($finalAIAnswers),
+            'withBespokeAI' => $request->boolean('playWithBespokeAI', false) && !empty($finalBespokeAIAnswers),
             'bespokeAIModelId' => $request->get('bespokeAIModelId'),
             'difficultyId' => $difficultyId,
-            'categoryId' => $categoryId
+            'categoryId' => $categoryId,
+            'teamPlayerGame' => $teamPlayerGame,
+            'teamAIGame' => $teamAIGame,
+            'isTeamLeader' => $isTeamLeader
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Game completed successfully!',
             'session_id' => $sessionId,
-            'ai_submitted' => $request->boolean('playWithAI', false) && $request->has('aiAnswers'),
-            'bespoke_ai_submitted' => $request->boolean('playWithBespokeAI', false) && $request->has('bespokeAIAnswers'),
+            'ai_submitted' => $request->boolean('playWithAI', false) && !empty($finalAIAnswers),
+            'bespoke_ai_submitted' => $request->boolean('playWithBespokeAI', false) && !empty($finalBespokeAIAnswers),
             'difficulty_id' => $difficultyId,
-            'category_id' => $categoryId
+            'category_id' => $categoryId,
+            'team_player_game' => $teamPlayerGame,
+            'team_ai_game' => $teamAIGame,
+            'used_consolidated_answers' => $teamPlayerGame || $teamAIGame
         ]);
+    }
+
+    /**
+     * Consolidate answers from multiple sources (human + AI) by selecting highest scoring answer for each question
+     */
+    private function consolidateTeamAIAnswers(array $answerSets, int $difficultyId, int $categoryId): array
+    {
+        if (empty($answerSets)) {
+            return [];
+        }
+
+        // Get the first set to determine the number of questions
+        $firstSet = reset($answerSets);
+        $questionCount = count($firstSet);
+        $consolidatedAnswers = [];
+
+        // For each question position
+        for ($i = 0; $i < $questionCount; $i++) {
+            $candidateAnswers = [];
+            
+            // Collect all non-empty answers for this question
+            foreach ($answerSets as $source => $answers) {
+                if (isset($answers[$i]) && !empty(trim($answers[$i]))) {
+                    $candidateAnswers[$source] = trim($answers[$i]);
+                }
+            }
+
+            if (empty($candidateAnswers)) {
+                $consolidatedAnswers[$i] = '';
+                continue;
+            }
+
+            if (count($candidateAnswers) === 1) {
+                // Only one answer available, use it
+                $consolidatedAnswers[$i] = reset($candidateAnswers);
+            } else {
+                // Multiple answers available, score them and pick the best
+                $bestAnswer = $this->selectBestAnswerByScore($candidateAnswers, $i, $difficultyId, $categoryId);
+                $consolidatedAnswers[$i] = $bestAnswer;
+            }
+        }
+
+        return $consolidatedAnswers;
+    }
+
+    /**
+     * Select the best answer from candidates based on scoring
+     */
+    private function selectBestAnswerByScore(array $candidateAnswers, int $questionIndex, int $difficultyId, int $categoryId): string
+    {
+        // If you have access to a scoring service, use it here
+        // For now, implementing a simple length-based + keyword scoring heuristic
+        
+        $scores = [];
+        
+        foreach ($candidateAnswers as $source => $answer) {
+            $score = 0;
+            
+            // Length scoring (reasonable length gets higher score)
+            $length = strlen($answer);
+            if ($length >= 10 && $length <= 100) {
+                $score += 10;
+            } elseif ($length > 5) {
+                $score += 5;
+            }
+            
+            // Keyword/content quality scoring
+            // Check for complete sentences
+            if (preg_match('/[.!?]$/', $answer)) {
+                $score += 5;
+            }
+            
+            // Check for proper capitalization
+            if (ctype_upper($answer[0])) {
+                $score += 3;
+            }
+            
+            // Avoid very short or very long answers
+            if ($length < 3) {
+                $score -= 10;
+            }
+            if ($length > 200) {
+                $score -= 5;
+            }
+            
+            // Prefer human answers slightly in case of ties
+            if ($source === 'human') {
+                $score += 2;
+            }
+            
+            $scores[$source] = $score;
+        }
+        
+        // Return the answer with the highest score
+        $bestSource = array_keys($scores, max($scores))[0];
+        
+        Log::info('Answer scoring results', [
+            'questionIndex' => $questionIndex,
+            'candidates' => $candidateAnswers,
+            'scores' => $scores,
+            'selected' => $bestSource,
+            'selectedAnswer' => $candidateAnswers[$bestSource]
+        ]);
+        
+        return $candidateAnswers[$bestSource];
     }
 
 

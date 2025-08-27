@@ -180,7 +180,6 @@ const showQuestionInput = computed(() => {
     return isGameStarted.value && !isWaitingForOthers.value && !gameIsOver.value && currentGameQuestions.value.length > 0;
 });
 
-console.log('NO. PLAYERS: ' + playerCount.value);
 // Format date helper
 const formatDate = (dateString) => {
     if (!dateString) return '';
@@ -378,8 +377,6 @@ const startGame = async () => {
         resetBespokeAI();
 
         await axios.post(`/games/${props.gameId}/reset-session`);
-
-        console.log('PLAYER READY DIFFICULTY: ' + selectedDifficulty.value);
         
         const response = await axios.post(`/games/${props.gameId}/player-ready`, {
             userId: props.auth.user.id,
@@ -461,6 +458,10 @@ const applyGameSettings = async (settings) => {
     selectedCategory.value = settings.category_id;
     playWithAI.value = settings.play_with_ai;
     playWithBespokeAI.value = settings.play_with_bespoke_ai;
+
+    if (playWithAI.value || playWithBespokeAI.value) {
+        playWithAISection.value = true;
+    }
     
     // Apply team settings
     if (settings.join_team_with_players !== undefined) {
@@ -535,6 +536,7 @@ const leaveGame = async () => {
 const canSubmitAnswers = computed(() => {
     if (playerCount.value === 1) return true; // Single player can always submit
     if (!isTeamMode.value) return true; // Not in team mode, everyone can submit
+    if (joinTeamWithAI.value) return true; // All players can submit in AI Team setting.
     return isTeamLeader.value; // In team mode, only team leader can submit
 });
 
@@ -542,11 +544,8 @@ const shouldShowSuggestionInput = computed(() => {
     return isGameStarted.value && isTeamMode.value && playerCount.value > 1;
 });
 
-const shouldShowAISuggestionButtons = computed(() => {
-    return isGameStarted.value && joinTeamWithAI.value && isTeamLeader.value && playerCount.value > 1;
-});
-
 const toggleBespokeAICheckbox = async () => {
+
     playWithBespokeAI.value = !playWithBespokeAI.value;
 
     updateGameSettings();
@@ -557,6 +556,11 @@ const onTeamPlayerSettingChange = async () => {
 
     if (joinTeamWithPlayers.value && joinTeamWithAI.value) {
         joinTeamWithAI.value = false;
+    }
+
+    if (!playWithAISection.value) {
+        playWithAISection.value = true;
+        playWithBespokeAI.value = true;
     }
     
     // Update team mode status
@@ -569,10 +573,17 @@ const onTeamPlayerSettingChange = async () => {
 const onTeamAISettingChange = async () => {
     if (!isInGame.value || playerCount.value === 1) return;
 
-    if (joinTeamWithPlayers.value && joinTeamWithAI.value) {
-        joinTeamWithPlayers.value = false;
+    if (joinTeamWithPlayers.value) {
+        if (joinTeamWithAI.value) {
+            joinTeamWithPlayers.value = false;
+        }
     }
-    
+
+    if (!playWithAISection.value) {
+        playWithAISection.value = true;
+        playWithBespokeAI.value = true;
+    }
+
     
     // Update team mode status
     isTeamMode.value = joinTeamWithPlayers.value || joinTeamWithAI.value;
@@ -584,7 +595,6 @@ const onTeamAISettingChange = async () => {
 const updateGameSettings = async () => {
         // Broadcast team setting change WITH FULL GAME SETTINGS
     try {
-        console.log('DIFFICULTY GAME SETTINGS: ' + selectedDifficulty.value);
         await axios.post(`/api/games/${props.gameId}/broadcast`, {
             event: 'team.settings.changed',
             data: {
@@ -636,71 +646,6 @@ const sendSuggestion = async () => {
     }
 };
 
-const getAISuggestion = async () => {
-    if (!joinTeamWithAI.value || !isTeamLeader.value || !currentGameQuestions.value[currentQuestionIndex.value]) return;
-    
-    try {
-        const questionText = currentGameQuestions.value[currentQuestionIndex.value].question;
-        const response = await getAIAnswerForQuestion(
-            questionText,
-            props.gameId,
-            currentQuestionIndex.value,
-            selectedDifficulty.value,
-            selectedCategory.value
-        );
-        
-        if (response) {
-            // Broadcast AI suggestion to all team members
-            await axios.post(`/api/games/${props.gameId}/broadcast`, {
-                event: 'team.ai.suggestion',
-                data: {
-                    suggestion: response,
-                    aiType: 'ChatGPT',
-                    questionIndex: currentQuestionIndex.value,
-                    timestamp: new Date().toISOString()
-                }
-            });
-            
-            addFlashMessage(`ChatGPT suggests: "${response}"`, 'info');
-        }
-    } catch (error) {
-        console.error('Failed to get AI suggestion:', error);
-        addFlashMessage('Failed to get AI suggestion', 'error');
-    }
-};
-
-const getBespokeAISuggestion = async () => {
-    if (!joinTeamWithAI.value || !isTeamLeader.value || !currentGameQuestions.value[currentQuestionIndex.value]) return;
-    
-    try {
-        const questionText = currentGameQuestions.value[currentQuestionIndex.value].question;
-        const response = await getBespokeAIAnswerForQuestion(
-            questionText,
-            props.gameId,
-            currentQuestionIndex.value,
-            selectedDifficulty.value,
-            selectedCategory.value
-        );
-        
-        if (response) {
-            // Broadcast Bespoke AI suggestion to all team members
-            await axios.post(`/api/games/${props.gameId}/broadcast`, {
-                event: 'team.ai.suggestion',
-                data: {
-                    suggestion: response,
-                    aiType: 'Learning Model',
-                    questionIndex: currentQuestionIndex.value,
-                    timestamp: new Date().toISOString()
-                }
-            });
-            
-            addFlashMessage(`Learning Model suggests: "${response}"`, 'info');
-        }
-    } catch (error) {
-        console.error('Failed to get Bespoke AI suggestion:', error);
-        addFlashMessage('Failed to get Bespoke AI suggestion', 'error');
-    }
-};
 
 // Handle player count changes - FIXED to ensure numeric value
 const onPlayerCountChange = async (newCount) => {
@@ -719,6 +664,7 @@ const onPlayerCountChange = async (newCount) => {
 
 const nextOrSubmit = async () => {
     // Check if player can submit answers (team mode restriction)
+
     if (!canSubmitAnswers.value) {
         addFlashMessage(`Only the team leader (${teamLeaderName.value}) can submit answers in team mode.`, 'warning');
         return;
@@ -727,8 +673,9 @@ const nextOrSubmit = async () => {
     if (!isLastQuestion.value) {
         // ENHANCED: Use the new answerQuestion function with auto-progression
         const result = await answerQuestion(currentQuestionIndex.value, answers.value[currentQuestionIndex.value], playerCount.value);
-
+        
         if (result.submitted) {
+
             // Answer was submitted successfully (single player or all players answered)
             // Check if we're playing with AI and need to wait for AI answer
             if ((playWithAI.value || playWithBespokeAI.value) && currentGameQuestions.value[currentQuestionIndex.value]) {
@@ -874,7 +821,7 @@ const nextOrSubmit = async () => {
             }
             
             // For multiplayer: Check if AI needs to answer (only team leader can trigger this)
-            if (playerCount.value > 1 && isTeamLeader.value) {
+            if (playerCount.value > 1 && (isTeamLeader.value || joinTeamWithAI)) {
                 if (playWithAI.value && !hasAIAnswered(currentQuestionIndex.value)) {
                     addFlashMessage('Waiting for ChatGPT AI to answer the final question...', 'info');
                     console.log('Multiplayer: Triggering ChatGPT AI answer for final question:', currentQuestionIndex.value);
@@ -906,7 +853,8 @@ const nextOrSubmit = async () => {
                 submissionAnswers, 
                 playerCount.value, 
                 selectedDifficulty.value, 
-                selectedCategory.value
+                selectedCategory.value,
+                isTeamLeader.value
             );
 
             if (result.submitted) {
@@ -1325,7 +1273,8 @@ onMounted( () => {
                 }
             } else {
                 if (questionIndex === currentQuestionIndex.value) {
-                    if ((playWithAI.value && !hasAIAnswered(questionIndex)) || (playWithBespokeAI.value && !hasBespokeAIAnswered(questionIndex))) {
+
+                    if (((playWithAI.value && !hasAIAnswered(questionIndex)) || (playWithBespokeAI.value && !hasBespokeAIAnswered(questionIndex))) && !joinTeamWithPlayers.value) {
                         console.log('All players answered, waiting for AI...');
                         addFlashMessage('All players answered! Waiting for AI...', 'info');
                     } else {
@@ -1443,14 +1392,16 @@ onUnmounted(() => {
                             
                             <!-- Team Mode Indicator -->
                             <div v-if="isTeamMode && playerCount > 1" class="text-center mb-4">
-                                <div class="inline-block px-4 py-2 bg-blue-900 text-blue-200 rounded-lg border border-blue-700">
-                                    <div v-if="isTeamLeader" class="text-sm font-semibold">
-                                        You are the team leader - you submit answers for the team
-                                    </div>
-                                    <div v-else class="text-sm font-semibold">
-                                        {{ teamLeaderName }} is submitting answers for the team
-                                    </div>
+                            <div class="inline-block px-4 py-2 bg-blue-900 text-blue-200 rounded-lg border border-blue-700">
+                                <div v-if="isTeamLeader" class="text-sm font-semibold">
+                                You are the team leader - you submit answers for your team
                                 </div>
+                                <div v-else class="text-sm font-semibold">
+                                {{ teamLeaderName }} is submitting answers for 
+                                <span v-if="joinTeamWithAI">the opposing AI team</span>
+                                <span v-else>the team</span>
+                                </div>
+                            </div>
                             </div>
 
                             <!-- Answer Input (only for team leader or non-team mode) -->
@@ -1483,22 +1434,6 @@ onUnmounted(() => {
                                 </button>
                             </div>
 
-                            <!-- AI Suggestion Buttons (only for team leader with AI team mode) -->
-                            <div v-if="shouldShowAISuggestionButtons" class="flex justify-center gap-4 mb-4">
-                                <button 
-                                    @click="getAISuggestion"
-                                    :disabled="aiLoading"
-                                    class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 disabled:opacity-50 transition-colors">
-                                    Get ChatGPT Suggestion
-                                </button>
-                                <button 
-                                    @click="getBespokeAISuggestion"
-                                    :disabled="bespokeAILoading"
-                                    class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-                                    Get Learning Model Suggestion
-                                </button>
-                            </div>
-
                             <!-- Team Suggestion Input (for all players in team mode) -->
                             <div v-if="shouldShowSuggestionInput" class="flex justify-center gap-4">
                                 <div class="relative w-full sm:w-2/3">
@@ -1508,12 +1443,14 @@ onUnmounted(() => {
                                         :placeholder="isTeamLeader ? 'Send suggestion to team members...' : 'Send suggestion to team leader...'"
                                     />
                                 </div>
-                                <button 
+                                    <button 
                                     @click="sendSuggestion"
                                     :disabled="!suggestionInput.trim()"
                                     class="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 disabled:opacity-50 transition-colors">
                                     Send Suggestion
-                                </button>
+                                    <span v-if="joinTeamWithPlayers"> To Teammates</span>
+                                    <span v-else-if="joinTeamWithAI"> To Opponents</span>
+                                    </button>
                             </div>
                         </div>
 
@@ -1602,18 +1539,18 @@ onUnmounted(() => {
                                                 </div>
                                                 <div>
                                                     <span class="font-semibold">Play With Bespoke AI:</span> 
-                                                    {{ gameState.gameSettings?.play_with_ai ? 'Yes' : 'No' }}
+                                                    {{ gameState.gameSettings?.play_with_bespoke_ai ? 'Yes' : 'No' }}
                                                 </div>
                                                 <div>
                                                     <span class="font-semibold">Play With ChatGPT:</span> 
                                                     {{ gameState.gameSettings?.play_with_ai ? 'Yes' : 'No' }}
                                                 </div>
                                                 <div>
-                                                    <span class="font-semibold">Team with Lobby Players:</span> 
+                                                    <span class="font-semibold">Host & Lobby X AI:</span> 
                                                     {{ gameState.gameSettings?.join_team_with_players ? 'Yes' : 'No' }}
                                                 </div>
                                                 <div>
-                                                    <span class="font-semibold">Team with AI:</span> 
+                                                    <span class="font-semibold">Host & AI X Lobby:</span> 
                                                     {{ gameState.gameSettings?.join_team_with_ai ? 'Yes' : 'No' }}
                                                 </div>
                                             </div>
@@ -1657,17 +1594,20 @@ onUnmounted(() => {
 
                                 <!-- Team Options (only show for multiplayer) -->
                                 <div v-if="playerCount > 1" class="flex items-center gap-4">
-                                    <div class="flex items-center gap-2">
+                                    <label>Team Games:</label>
+                                    <div class="flex items-center bg-gray-200/10 p-2 rounded-lg gap-2">
                                         <input type="checkbox" v-model="joinTeamWithPlayers" 
                                             :disabled="isGameInProgress || isWaitingForOthers || gameIsOver" 
                                             @change="onTeamPlayerSettingChange" />
-                                        <label>Join Team with Lobby Players</label>
+                                        <label style="color: white !important">Host & Lobby</label>
+                                        <label style="color: #fa887f !important">Vs AI</label>
                                     </div>
-                                    <div class="flex items-center gap-2">
+                                    <div class="flex items-center bg-gray-200/10 p-2 rounded-lg gap-2">
                                         <input type="checkbox" v-model="joinTeamWithAI" 
                                             :disabled="isGameInProgress || isWaitingForOthers || gameIsOver"
                                             @change="onTeamAISettingChange" />
-                                        <label>Join Team With AI</label>
+                                        <label style="color: white !important">Host & AI</label>
+                                        <label style="color: #fa887f !important">Vs Lobby</label>
                                     </div>
                                 </div>
 

@@ -57,11 +57,11 @@ export function usePlayerInteractions(gameId, auth) {
   );
 
 
-  const teamPlayerLeader = computed(() => {
+  const teamPlayerGame = computed(() => {
     return gameState.value.gameSettings?.join_team_with_players ?? false;
   });
 
-  const teamAILeader = computed(() => {
+  const teamAIGame = computed(() => {
     return gameState.value.gameSettings?.join_team_with_ai ?? false;
   });
 
@@ -356,7 +356,7 @@ export function usePlayerInteractions(gameId, auth) {
   };
 
   // Updated submitAnswers function with difficulty and category support
-const submitAnswers = async (answers, playerCount, difficultyId = null, categoryId = null) => {
+  const submitAnswers = async (answers, playerCount, difficultyId = null, categoryId = null, isTeamLeader = false) => {
     if (!isInGame.value) return { submitted: false, waitingForOthers: false };
 
     try {
@@ -398,15 +398,17 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
             // Broadcast game completion to other players
             try {
                 await axios.post(`/api/games/${gameId}/broadcast`, {
-                    event: 'game.completed.single',
+                    event: 'player.submitted',
                     data: {
                         userId: currentUserId.value,
                         userName: currentUserName.value,
-                        timestamp: new Date().toISOString(),
+                        submittedCount: gameState.value.playersSubmitted.size,
+                        requiredCount: playerCount,
                         difficultyId: difficultyId,
                         categoryId: categoryId,
-                        playedWithAI: aiModule?.playWithAI.value || false,
-                        playedWithBespokeAI: bespokeAIModule?.playWithBespokeAI.value || false
+                        // NEW: Include team leader answers if this user is team leader
+                        teamLeaderAnswers: (isTeamLeader || teamPlayerGame.value || teamAIGame.value) ? cleanAnswers : null,
+                        timestamp: new Date().toISOString()
                     }
                 });
                 console.log('✅ Single-player completion broadcasted to other players');
@@ -448,15 +450,18 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
                 requestData.selectedAIModel = bespokeAIModule.selectedAIModel.value;
             }
 
-            if (teamPlayerLeader.value) {
-                requestData.teamPlayerLeader = true;
+            if (teamPlayerGame.value) {
+                requestData.teamPlayerGame = true;
             }
-            if (teamAILeader.value) {
-                requestData.teamAILeader = true;
+            if (teamAIGame.value) {
+                requestData.teamAIGame = true;
             }
+
+            requestData.isTeamLeader = isTeamLeader;
 
             // SUBMIT TO SERVER IMMEDIATELY FOR ALL PLAYERS
             console.log('🚀 Multiplayer player submitting to server:', requestData);
+
             await axios.post(`/games/${gameId}/submit-answer`, requestData);
 
             // Check if this is the last player to submit
@@ -480,7 +485,7 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
                 }
             });
 
-            if (isLastPlayer || (teamPlayerLeader.value || teamAILeader.value)) {
+            if (isLastPlayer || (teamPlayerGame.value || teamAIGame.value)) {
                 console.log('✅ Last player - broadcasting game completion');
                 
                 // Broadcast final completion
@@ -741,11 +746,12 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
           iAlreadyReallyAnswered,
           answeredCount: data.answeredCount,
           requiredCount: data.requiredCount,
-          questionIndex: data.questionIndex
+          questionIndex: data.questionIndex,
+          teamPlayerGame: teamPlayerGame.value
         });
         
         if ((allPlayersAnswered && iHavePreAnswered && !iAlreadyReallyAnswered)
-            || (teamPlayerLeader.value || teamAILeader.value))
+            || (teamPlayerGame.value))
         {
           console.log('🚀 Auto-progressing pre-saved answer for question', data.questionIndex);
           try {
@@ -782,7 +788,7 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
       
       // Trigger question progression for all players who haven't progressed yet
       if (preAnsweredQuestions.value.has(data.questionIndex)
-        || (teamPlayerLeader.value || teamAILeader.value)) {
+        || (teamPlayerGame.value)) {
         console.log('🔄 Triggering auto-progression for question:', data.questionIndex);
         
         // Get all current answers to pass to the callback
