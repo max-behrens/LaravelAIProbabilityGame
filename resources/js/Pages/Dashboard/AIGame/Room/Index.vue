@@ -672,9 +672,9 @@ const nextOrSubmit = async () => {
 
     if (!isLastQuestion.value) {
         // ENHANCED: Use the new answerQuestion function with auto-progression
-        const result = await answerQuestion(currentQuestionIndex.value, answers.value[currentQuestionIndex.value], playerCount.value);
+        const result = await answerQuestion(currentQuestionIndex.value, answers.value[currentQuestionIndex.value], playerCount.value, isTeamLeader.value);
         
-        if (result.submitted) {
+        if (result.submitted || joinTeamWithPlayers.value) {
 
             // Answer was submitted successfully (single player or all players answered)
             // Check if we're playing with AI and need to wait for AI answer
@@ -821,7 +821,7 @@ const nextOrSubmit = async () => {
             }
             
             // For multiplayer: Check if AI needs to answer (only team leader can trigger this)
-            if (playerCount.value > 1 && (isTeamLeader.value || joinTeamWithAI)) {
+            if (playerCount.value > 1 && (isTeamLeader.value || joinTeamWithAI.value)) {
                 if (playWithAI.value && !hasAIAnswered(currentQuestionIndex.value)) {
                     addFlashMessage('Waiting for ChatGPT AI to answer the final question...', 'info');
                     console.log('Multiplayer: Triggering ChatGPT AI answer for final question:', currentQuestionIndex.value);
@@ -1490,7 +1490,7 @@ onUnmounted(() => {
                         </div>
 
                         <!-- Game Setup Section -->
-                        <div class="basis-full flex flex-col gap-6 p-4 bg-gray-800 rounded shadow text-white">
+                        <div v-if="!showQuestionInput" class="basis-full flex flex-col gap-6 p-4 bg-gray-800 rounded shadow text-white">
 
                             <!-- Row 1: Game Name & Buttons -->
                             <div class="flex items-center justify-center flex-wrap gap-4 min-h-[32px]">

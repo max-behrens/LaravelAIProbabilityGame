@@ -321,73 +321,358 @@ class GamesController extends Controller
         $finalAIAnswers = $request->aiAnswers ?? [];
         $finalBespokeAIAnswers = $request->bespokeAIAnswers ?? [];
 
-        if ($teamPlayerGame) {
-            // Team Player Game: All non-AI players use team leader's answers
-            if ($isTeamLeader) {
-                // Store team leader's answers in cache for other team members
-                $teamAnswersKey = "game:{$gameId}:team_player_answers";
-                Cache::put($teamAnswersKey, $request->answers, now()->addHours(1));
-                Log::info('Stored team leader answers for team player game', ['answers' => $request->answers]);
-            } else {
-                // Non-leader: Use team leader's answers
-                $teamAnswersKey = "game:{$gameId}:team_player_answers";
-                $teamLeaderAnswers = Cache::get($teamAnswersKey);
-                
-                if ($teamLeaderAnswers) {
-                    $finalPlayerAnswers = $teamLeaderAnswers;
-                    Log::info('Using team leader answers for non-leader player', ['answers' => $teamLeaderAnswers]);
-                } else {
-                    Log::warning('Team leader answers not found in cache for non-leader player');
-                }
-            }
-        } elseif ($teamAIGame) {
-            // Team AI Game: Compare human + AI answers and use highest scoring ones
-            if ($isTeamLeader) {
-                // Store all answers for comparison and consolidation
-                $teamAIAnswersKey = "game:{$gameId}:team_ai_answers";
-                
-                $answerSets = [
-                    'human' => $request->answers
-                ];
-                
-                if ($request->boolean('playWithAI', false) && !empty($request->aiAnswers)) {
-                    $answerSets['ai'] = $request->aiAnswers;
-                }
-                
-                if ($request->boolean('playWithBespokeAI', false) && !empty($request->bespokeAIAnswers)) {
-                    $answerSets['bespokeAI'] = $request->bespokeAIAnswers;
-                }
+       if ($teamPlayerGame) {
+    Log::info('Processing team player game logic', [
+        'gameId' => $gameId,
+        'userId' => $user->id,
+        'isTeamLeader' => $isTeamLeader,
+        'originalAnswersCount' => count($request->answers)
+    ]);
 
-                // Get consolidated answers based on highest scores
-                $consolidatedAnswers = $this->consolidateTeamAIAnswers($answerSets, $difficultyId, $categoryId);
+    // Team Player Game: All non-AI players use team leader's answers
+    if ($isTeamLeader) {
+        Log::info('Processing as team leader for team player game', [
+            'gameId' => $gameId,
+            'userId' => $user->id,
+            'answersToStore' => $request->answers
+        ]);
+
+        // Store team leader's answers in cache for other team members
+        $teamAnswersKey = "game:{$gameId}:team_player_answers";
+        
+        Log::info('Attempting to store team leader answers in cache', [
+            'cacheKey' => $teamAnswersKey,
+            'answersCount' => count($request->answers),
+            'ttlHours' => 1
+        ]);
+
+        try {
+            Cache::put($teamAnswersKey, $request->answers, now()->addHours(1));
+            
+            // Verify cache storage
+            $verifyStored = Cache::get($teamAnswersKey);
+            $storageSuccess = !empty($verifyStored) && count($verifyStored) === count($request->answers);
+            
+            Log::info('Team leader answers cache storage result', [
+                'cacheKey' => $teamAnswersKey,
+                'storageSuccess' => $storageSuccess,
+                'storedCount' => $verifyStored ? count($verifyStored) : 0,
+                'originalCount' => count($request->answers),
+                'storedAnswers' => $verifyStored
+            ]);
+
+            if (!$storageSuccess) {
+                Log::error('Cache storage verification failed for team leader answers', [
+                    'cacheKey' => $teamAnswersKey,
+                    'expected' => $request->answers,
+                    'actual' => $verifyStored
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to store team leader answers in cache', [
+                'cacheKey' => $teamAnswersKey,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
+        }
+
+        Log::info('Team leader processing completed for team player game', [
+            'gameId' => $gameId,
+            'userId' => $user->id,
+            'finalAnswersCount' => count($finalPlayerAnswers)
+        ]);
+    } else {
+        Log::info('Processing as non-leader for team player game', [
+            'gameId' => $gameId,
+            'userId' => $user->id,
+            'originalAnswersCount' => count($request->answers)
+        ]);
+
+        // Non-leader: Use team leader's answers
+        $teamAnswersKey = "game:{$gameId}:team_player_answers";
+        
+        Log::info('Attempting to retrieve team leader answers from cache', [
+            'cacheKey' => $teamAnswersKey,
+            'userId' => $user->id
+        ]);
+
+        try {
+            $teamLeaderAnswers = Cache::get($teamAnswersKey);
+            
+            Log::info('Cache retrieval result for team leader answers', [
+                'cacheKey' => $teamAnswersKey,
+                'found' => !is_null($teamLeaderAnswers),
+                'answersCount' => $teamLeaderAnswers ? count($teamLeaderAnswers) : 0,
+                'retrievedAnswers' => $teamLeaderAnswers
+            ]);
+            
+            if ($teamLeaderAnswers) {
+                $originalAnswersCount = count($finalPlayerAnswers);
+                $finalPlayerAnswers = $teamLeaderAnswers;
                 
-                // Store consolidated answers for other team members
-                Cache::put($teamAIAnswersKey, $consolidatedAnswers, now()->addHours(1));
-                
-                // Use consolidated answers
+                Log::info('Successfully applied team leader answers for non-leader player', [
+                    'gameId' => $gameId,
+                    'userId' => $user->id,
+                    'originalAnswersCount' => $originalAnswersCount,
+                    'teamLeaderAnswersCount' => count($teamLeaderAnswers),
+                    'finalAnswersCount' => count($finalPlayerAnswers),
+                    'appliedAnswers' => $teamLeaderAnswers
+                ]);
+            } else {
+                Log::warning('Team leader answers not found in cache for non-leader player', [
+                    'gameId' => $gameId,
+                    'userId' => $user->id,
+                    'cacheKey' => $teamAnswersKey,
+                    'willUseOriginalAnswers' => true,
+                    'originalAnswersCount' => count($request->answers)
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to retrieve team leader answers from cache', [
+                'cacheKey' => $teamAnswersKey,
+                'userId' => $user->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
+        }
+
+        Log::info('Non-leader processing completed for team player game', [
+            'gameId' => $gameId,
+            'userId' => $user->id,
+            'finalAnswersCount' => count($finalPlayerAnswers),
+            'usedTeamLeaderAnswers' => !is_null($teamLeaderAnswers)
+        ]);
+    }
+} elseif ($teamAIGame) {
+    Log::info('Processing team AI game logic', [
+        'gameId' => $gameId,
+        'userId' => $user->id,
+        'isTeamLeader' => $isTeamLeader,
+        'playWithAI' => $request->boolean('playWithAI', false),
+        'playWithBespokeAI' => $request->boolean('playWithBespokeAI', false),
+        'hasAIAnswers' => !empty($request->aiAnswers),
+        'hasBespokeAIAnswers' => !empty($request->bespokeAIAnswers)
+    ]);
+
+    // Team AI Game: Compare human + AI answers and use highest scoring ones
+    if ($isTeamLeader) {
+        Log::info('Processing as team leader for team AI game', [
+            'gameId' => $gameId,
+            'userId' => $user->id,
+            'difficultyId' => $difficultyId,
+            'categoryId' => $categoryId
+        ]);
+
+        // Store all answers for comparison and consolidation
+        $teamAIAnswersKey = "game:{$gameId}:team_ai_answers";
+        
+        Log::info('Building answer sets for team AI consolidation', [
+            'gameId' => $gameId,
+            'humanAnswersCount' => count($request->answers)
+        ]);
+
+        $answerSets = [
+            'human' => $request->answers
+        ];
+        
+        if ($request->boolean('playWithAI', false) && !empty($request->aiAnswers)) {
+            $answerSets['ai'] = $request->aiAnswers;
+            Log::info('Added regular AI answers to consolidation set', [
+                'aiAnswersCount' => count($request->aiAnswers)
+            ]);
+        }
+        
+        if ($request->boolean('playWithBespokeAI', false) && !empty($request->bespokeAIAnswers)) {
+            $answerSets['bespokeAI'] = $request->bespokeAIAnswers;
+            Log::info('Added bespoke AI answers to consolidation set', [
+                'bespokeAIAnswersCount' => count($request->bespokeAIAnswers),
+                'bespokeAIModelId' => $request->get('bespokeAIModelId')
+            ]);
+        }
+
+        Log::info('Final answer sets prepared for consolidation', [
+            'gameId' => $gameId,
+            'answerSetTypes' => array_keys($answerSets),
+            'answerSetCounts' => array_map('count', $answerSets),
+            'totalSets' => count($answerSets)
+        ]);
+
+        // Get consolidated answers based on highest scores
+        Log::info('Starting answer consolidation process', [
+            'gameId' => $gameId,
+            'difficultyId' => $difficultyId,
+            'categoryId' => $categoryId,
+            'inputSets' => $answerSets
+        ]);
+
+        try {
+            $consolidatedAnswers = $this->consolidateTeamAIAnswers($answerSets, $difficultyId, $categoryId);
+            
+            Log::info('Answer consolidation completed successfully', [
+                'gameId' => $gameId,
+                'consolidatedCount' => count($consolidatedAnswers),
+                'consolidatedAnswers' => $consolidatedAnswers
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to consolidate team AI answers', [
+                'gameId' => $gameId,
+                'inputSets' => $answerSets,
+                'difficultyId' => $difficultyId,
+                'categoryId' => $categoryId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
+        }
+        
+        // Store consolidated answers for other team members
+        Log::info('Attempting to store consolidated answers in cache', [
+            'cacheKey' => $teamAIAnswersKey,
+            'consolidatedCount' => count($consolidatedAnswers),
+            'ttlHours' => 1
+        ]);
+
+        try {
+            Cache::put($teamAIAnswersKey, $consolidatedAnswers, now()->addHours(1));
+            
+            // Verify cache storage
+            $verifyStored = Cache::get($teamAIAnswersKey);
+            $storageSuccess = !empty($verifyStored) && count($verifyStored) === count($consolidatedAnswers);
+            
+            Log::info('Consolidated answers cache storage result', [
+                'cacheKey' => $teamAIAnswersKey,
+                'storageSuccess' => $storageSuccess,
+                'storedCount' => $verifyStored ? count($verifyStored) : 0,
+                'originalCount' => count($consolidatedAnswers),
+                'storedAnswers' => $verifyStored
+            ]);
+
+            if (!$storageSuccess) {
+                Log::error('Cache storage verification failed for consolidated answers', [
+                    'cacheKey' => $teamAIAnswersKey,
+                    'expected' => $consolidatedAnswers,
+                    'actual' => $verifyStored
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to store consolidated answers in cache', [
+                'cacheKey' => $teamAIAnswersKey,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
+        }
+        
+        // Use consolidated answers
+        $originalPlayerCount = count($finalPlayerAnswers);
+        $originalAICount = count($finalAIAnswers);
+        $originalBespokeCount = count($finalBespokeAIAnswers);
+
+        $finalPlayerAnswers = $consolidatedAnswers;
+        $finalAIAnswers = $consolidatedAnswers;
+        $finalBespokeAIAnswers = $consolidatedAnswers;
+        
+        Log::info('Applied consolidated answers to final answer sets', [
+            'gameId' => $gameId,
+            'userId' => $user->id,
+            'originalPlayerCount' => $originalPlayerCount,
+            'originalAICount' => $originalAICount,
+            'originalBespokeCount' => $originalBespokeCount,
+            'finalCount' => count($consolidatedAnswers),
+            'consolidationSummary' => [
+                'originalSets' => array_map('count', $answerSets),
+                'consolidated' => count($consolidatedAnswers)
+            ]
+        ]);
+
+        Log::info('Team leader processing completed for team AI game', [
+            'gameId' => $gameId,
+            'userId' => $user->id,
+            'finalPlayerAnswersCount' => count($finalPlayerAnswers),
+            'finalAIAnswersCount' => count($finalAIAnswers),
+            'finalBespokeAIAnswersCount' => count($finalBespokeAIAnswers)
+        ]);
+    } else {
+        Log::info('Processing as non-leader for team AI game', [
+            'gameId' => $gameId,
+            'userId' => $user->id,
+            'originalPlayerAnswersCount' => count($finalPlayerAnswers),
+            'originalAIAnswersCount' => count($finalAIAnswers),
+            'originalBespokeAnswersCount' => count($finalBespokeAIAnswers)
+        ]);
+
+        // Non-leader: Use consolidated answers from cache
+        $teamAIAnswersKey = "game:{$gameId}:team_ai_answers";
+        
+        Log::info('Attempting to retrieve consolidated answers from cache', [
+            'cacheKey' => $teamAIAnswersKey,
+            'userId' => $user->id
+        ]);
+
+        try {
+            $consolidatedAnswers = Cache::get($teamAIAnswersKey);
+            
+            Log::info('Cache retrieval result for consolidated answers', [
+                'cacheKey' => $teamAIAnswersKey,
+                'found' => !is_null($consolidatedAnswers),
+                'answersCount' => $consolidatedAnswers ? count($consolidatedAnswers) : 0,
+                'retrievedAnswers' => $consolidatedAnswers
+            ]);
+            
+            if ($consolidatedAnswers) {
+                $originalPlayerCount = count($finalPlayerAnswers);
+                $originalAICount = count($finalAIAnswers);
+                $originalBespokeCount = count($finalBespokeAIAnswers);
+
                 $finalPlayerAnswers = $consolidatedAnswers;
                 $finalAIAnswers = $consolidatedAnswers;
                 $finalBespokeAIAnswers = $consolidatedAnswers;
                 
-                Log::info('Consolidated team AI answers', [
-                    'originalSets' => $answerSets,
-                    'consolidated' => $consolidatedAnswers
+                Log::info('Successfully applied consolidated answers for non-leader player', [
+                    'gameId' => $gameId,
+                    'userId' => $user->id,
+                    'originalPlayerCount' => $originalPlayerCount,
+                    'originalAICount' => $originalAICount,
+                    'originalBespokeCount' => $originalBespokeCount,
+                    'consolidatedCount' => count($consolidatedAnswers),
+                    'finalPlayerCount' => count($finalPlayerAnswers),
+                    'finalAICount' => count($finalAIAnswers),
+                    'finalBespokeCount' => count($finalBespokeAIAnswers),
+                    'appliedAnswers' => $consolidatedAnswers
                 ]);
             } else {
-                // Non-leader: Use consolidated answers from cache
-                $teamAIAnswersKey = "game:{$gameId}:team_ai_answers";
-                $consolidatedAnswers = Cache::get($teamAIAnswersKey);
-                
-                if ($consolidatedAnswers) {
-                    $finalPlayerAnswers = $consolidatedAnswers;
-                    $finalAIAnswers = $consolidatedAnswers;
-                    $finalBespokeAIAnswers = $consolidatedAnswers;
-                    Log::info('Using consolidated team AI answers for non-leader', ['answers' => $consolidatedAnswers]);
-                } else {
-                    Log::warning('Consolidated team AI answers not found in cache for non-leader');
-                }
+                Log::warning('Consolidated team AI answers not found in cache for non-leader player', [
+                    'gameId' => $gameId,
+                    'userId' => $user->id,
+                    'cacheKey' => $teamAIAnswersKey,
+                    'willUseOriginalAnswers' => true,
+                    'originalPlayerAnswersCount' => count($finalPlayerAnswers),
+                    'originalAIAnswersCount' => count($finalAIAnswers),
+                    'originalBespokeAnswersCount' => count($finalBespokeAIAnswers)
+                ]);
             }
+        } catch (\Exception $e) {
+            Log::error('Failed to retrieve consolidated answers from cache', [
+                'cacheKey' => $teamAIAnswersKey,
+                'userId' => $user->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
         }
+
+        Log::info('Non-leader processing completed for team AI game', [
+            'gameId' => $gameId,
+            'userId' => $user->id,
+            'finalPlayerAnswersCount' => count($finalPlayerAnswers),
+            'finalAIAnswersCount' => count($finalAIAnswers),
+            'finalBespokeAIAnswersCount' => count($finalBespokeAIAnswers),
+            'usedConsolidatedAnswers' => !is_null($consolidatedAnswers)
+        ]);
+    }
+}
 
         // Submit player answers (using final consolidated answers)
         $this->gamesService->submitAnswers($gameId, $user->id, $finalPlayerAnswers, $sessionId, $difficultyId, $categoryId, $teamPlayerLeader, $teamAILeader);

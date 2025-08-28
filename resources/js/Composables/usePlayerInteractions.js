@@ -260,7 +260,7 @@ export function usePlayerInteractions(gameId, auth) {
   };
 
   // Updated answerQuestion function with difficulty and category support
-  const answerQuestion = async (questionIndex, answer, playerCount = 1) => {
+  const answerQuestion = async (questionIndex, answer, playerCount = 1, isTeamLeader = false) => {
     if (!isInGame.value) return { submitted: false, waitingForOthers: false };
     
     try {
@@ -316,7 +316,7 @@ export function usePlayerInteractions(gameId, auth) {
         // Check if all players have pre-answered this question
         const preAnsweredCount = gameState.value.playersPreAnswered.get(questionIndex).size;
         if ((preAnsweredCount >= playerCount))
-           {
+        {
           console.log('✅ All players pre-answered question', questionIndex, '- triggering progression');
           
           // All players pre-answered - mark as officially answered for everyone
@@ -492,7 +492,7 @@ export function usePlayerInteractions(gameId, auth) {
                 await axios.post(`/api/games/${gameId}/broadcast`, {
                     event: 'game.completed.multiplayer',
                     data: {
-                        playerCount: playerCount,
+                        playerCount: 1,
                         timestamp: new Date().toISOString()
                     }
                 });
@@ -525,7 +525,7 @@ export function usePlayerInteractions(gameId, auth) {
       gameState.value.playersPreAnswered.clear();
       gameState.value.gameInProgress = false;
       gameState.value.waitingForOthers = false;
-      
+
       // Clear pre-submitted answers and pre-answered questions
       preSubmittedAnswers.value = null;
       preSubmittedAIAnswers.value = null;
@@ -753,7 +753,7 @@ export function usePlayerInteractions(gameId, auth) {
         if ((allPlayersAnswered && iHavePreAnswered && !iAlreadyReallyAnswered)
             || (teamPlayerGame.value))
         {
-          console.log('🚀 Auto-progressing pre-saved answer for question', data.questionIndex);
+          console.log('Auto-progressing pre-saved answer for question', data.questionIndex);
           try {
             // Mark as officially answered
             gameState.value.playersAnswered.add(`${currentUserId.value}-${data.questionIndex}`);
@@ -886,7 +886,7 @@ export function usePlayerInteractions(gameId, auth) {
         }
         
         // Trigger external callback to progress to next question
-        if (callbacks.value.onQuestionProgress) {
+        if (callbacks.value.onQuestionProgress && !teamPlayerGame.value) {
             callbacks.value.onQuestionProgress(data.questionIndex);
         }
         

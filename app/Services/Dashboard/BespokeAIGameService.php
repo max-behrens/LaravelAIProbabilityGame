@@ -359,6 +359,11 @@ class BespokeAIGameService
 
         foreach ($gameQuestions as $index => $question) {
             $submittedAnswer = $answers[$index] ?? null;
+
+            Log::info('SUBMITTED B AI ANSWER', [
+                'submittedAnswer' => $submittedAnswer,
+
+            ]);
             $isCorrect = false;
 
             if ($submittedAnswer !== null) {
