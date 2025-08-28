@@ -356,7 +356,7 @@ export function usePlayerInteractions(gameId, auth) {
   };
 
   // Updated submitAnswers function with difficulty and category support
-  const submitAnswers = async (answers, playerCount, difficultyId = null, categoryId = null, isTeamLeader = false) => {
+const submitAnswers = async (answers, playerCount, difficultyId = null, categoryId = null, isTeamLeader = false) => {
     if (!isInGame.value) return { submitted: false, waitingForOthers: false };
 
     try {
@@ -364,7 +364,7 @@ export function usePlayerInteractions(gameId, auth) {
         const bespokeAIAnswers = prepareBespokeAIAnswersForSubmission();
 
         if (playerCount === 1) {
-            // SINGLE PLAYER LOGIC - FIXED TO ENSURE SUBMISSION
+            // Single player logic remains unchanged
             console.log('🚀 Single player submitting answers...');
             
             const requestData = {
@@ -373,62 +373,42 @@ export function usePlayerInteractions(gameId, auth) {
                 category_id: categoryId
             };
 
-            // Add AI answers if playing with AI
             if (aiModule?.playWithAI.value) {
                 requestData.aiAnswers = aiAnswers;
                 requestData.playWithAI = true;
-                console.log('Including AI answers in single-player submission:', aiAnswers);
             }
 
-            // Add Bespoke AI answers if playing with Bespoke AI
             if (bespokeAIModule?.playWithBespokeAI.value) {
                 requestData.bespokeAIAnswers = bespokeAIAnswers;
                 requestData.playWithBespokeAI = true;
-                // requestData.selectedAIModel = bespokeAIModule.selectedAIModel.value;
-                console.log('Including Bespoke AI answers in single-player submission:', bespokeAIAnswers);
             }
 
-            console.log('🚀 Single player submission data:', requestData);
-            
-            // CRITICAL: Actually submit to the server
             const response = await axios.post(`/games/${gameId}/submit-answer`, requestData);
             
-            console.log('✅ Single player submission response:', response.data);
-
-            // Broadcast game completion to other players
-            try {
-                await axios.post(`/api/games/${gameId}/broadcast`, {
-                    event: 'player.submitted',
-                    data: {
-                        userId: currentUserId.value,
-                        userName: currentUserName.value,
-                        submittedCount: gameState.value.playersSubmitted.size,
-                        requiredCount: playerCount,
-                        difficultyId: difficultyId,
-                        categoryId: categoryId,
-                        // NEW: Include team leader answers if this user is team leader
-                        teamLeaderAnswers: (isTeamLeader || teamPlayerGame.value || teamAIGame.value) ? cleanAnswers : null,
-                        timestamp: new Date().toISOString()
-                    }
-                });
-                console.log('✅ Single-player completion broadcasted to other players');
-            } catch (broadcastError) {
-                console.error('Failed to broadcast single-player completion:', broadcastError);
-                // Don't fail the submission if broadcast fails
-            }
+            // Broadcast completion
+            await axios.post(`/api/games/${gameId}/broadcast`, {
+                event: 'player.submitted',
+                data: {
+                    userId: currentUserId.value,
+                    userName: currentUserName.value,
+                    submittedCount: gameState.value.playersSubmitted.size,
+                    requiredCount: playerCount,
+                    difficultyId: difficultyId,
+                    categoryId: categoryId,
+                    timestamp: new Date().toISOString()
+                }
+            });
 
             addFlashMessage('Game completed successfully!', 'success');
             
-            // Reset game state after successful submission
             setTimeout(() => {
                 resetGameState();
-                console.log('Single player game state reset after completion');
             }, 1000);
             
             return { submitted: true, waitingForOthers: false };
 
         } else {
-            // MULTIPLAYER LOGIC - Keep existing logic
+            // MULTIPLAYER LOGIC - Enhanced for team games
             console.log('💾 Multiplayer: Submitting answers immediately');
 
             const cleanAnswers = answers.map(answer => (answer === undefined ? '' : answer));
@@ -459,7 +439,7 @@ export function usePlayerInteractions(gameId, auth) {
 
             requestData.isTeamLeader = isTeamLeader;
 
-            // SUBMIT TO SERVER IMMEDIATELY FOR ALL PLAYERS
+            // SUBMIT TO SERVER IMMEDIATELY FOR ALL PLAYERS (including non-leaders in team games)
             console.log('🚀 Multiplayer player submitting to server:', requestData);
 
             await axios.post(`/games/${gameId}/submit-answer`, requestData);
@@ -492,7 +472,7 @@ export function usePlayerInteractions(gameId, auth) {
                 await axios.post(`/api/games/${gameId}/broadcast`, {
                     event: 'game.completed.multiplayer',
                     data: {
-                        playerCount: 1,
+                        playerCount: playerCount,
                         timestamp: new Date().toISOString()
                     }
                 });
@@ -727,81 +707,83 @@ export function usePlayerInteractions(gameId, auth) {
       console.log('🔔 Received player.pre.answered event:', data);
       
       if (data.userId !== currentUserId.value) {
-        // Another player pre-answered
-        if (!gameState.value.playersPreAnswered.has(data.questionIndex)) {
-          gameState.value.playersPreAnswered.set(data.questionIndex, new Set());
-        }
-        gameState.value.playersPreAnswered.get(data.questionIndex).add(data.userId);
-        
-        addFlashMessage(`${data.userName} answered question ${data.questionIndex + 1}! (${data.answeredCount}/${data.requiredCount} answered)`, 'info');
-        
-        // Check if all required players have now answered
-        const allPlayersAnswered = data.answeredCount >= data.requiredCount;
-        const iHavePreAnswered = preAnsweredQuestions.value.has(data.questionIndex);
-        const iAlreadyReallyAnswered = gameState.value.playersAnswered.has(`${currentUserId.value}-${data.questionIndex}`);
-        
-        console.log('Auto-progression check:', {
-          allPlayersAnswered,
-          iHavePreAnswered,
-          iAlreadyReallyAnswered,
-          answeredCount: data.answeredCount,
-          requiredCount: data.requiredCount,
-          questionIndex: data.questionIndex,
-          teamPlayerGame: teamPlayerGame.value
-        });
-        
-        if ((allPlayersAnswered && iHavePreAnswered && !iAlreadyReallyAnswered)
-            || (teamPlayerGame.value))
-        {
-          console.log('Auto-progressing pre-saved answer for question', data.questionIndex);
-          try {
-            // Mark as officially answered
-            gameState.value.playersAnswered.add(`${currentUserId.value}-${data.questionIndex}`);
-            
-            // Broadcast that all players can progress
-            await axios.post(`/api/games/${gameId}/broadcast`, {
-              event: 'question.all.answered',
-              data: {
-                questionIndex: data.questionIndex,
-                playerCount: data.requiredCount,
-                timestamp: new Date().toISOString()
-              }
-            });
-    
-            addFlashMessage('Your answer has been auto-submitted! Moving forward...', 'success');
-            
-            // Clean up pre-answered data
-            preAnsweredQuestions.value.delete(data.questionIndex);
-            gameState.value.playersPreAnswered.delete(data.questionIndex);
-    
-          } catch (err) {
-            console.error('Auto-progression failed:', err);
-            addFlashMessage('Failed to auto-progress your answer. Please try manually.', 'error');
+          // Another player pre-answered
+          if (!gameState.value.playersPreAnswered.has(data.questionIndex)) {
+              gameState.value.playersPreAnswered.set(data.questionIndex, new Set());
           }
-        }
-      }
-    });
+          gameState.value.playersPreAnswered.get(data.questionIndex).add(data.userId);
+          
+          addFlashMessage(`${data.userName} answered question ${data.questionIndex + 1}! (${data.answeredCount}/${data.requiredCount} answered)`, 'info');
+          
+          // Check if all required players have now answered
+          const allPlayersAnswered = data.answeredCount >= data.requiredCount;
+          const iHavePreAnswered = preAnsweredQuestions.value.has(data.questionIndex);
+          const iAlreadyReallyAnswered = gameState.value.playersAnswered.has(`${currentUserId.value}-${data.questionIndex}`);
+          
+          // FOR TEAM PLAYER GAME: Non-leaders should progress even without pre-answering
+          const shouldProgressTeamPlayer = teamPlayerGame.value && !isTeamLeader.value;
+          
+          console.log('Auto-progression check:', {
+              allPlayersAnswered,
+              iHavePreAnswered,
+              iAlreadyReallyAnswered,
+              answeredCount: data.answeredCount,
+              requiredCount: data.requiredCount,
+              questionIndex: data.questionIndex,
+              teamPlayerGame: teamPlayerGame.value,
+              shouldProgressTeamPlayer,
+              isTeamLeader: isTeamLeader.value
+          });
+          
+          if ((allPlayersAnswered && (iHavePreAnswered || shouldProgressTeamPlayer) && !iAlreadyReallyAnswered) || 
+              (teamPlayerGame.value && allPlayersAnswered)) {
+              console.log('Auto-progressing answer for question', data.questionIndex);
+              try {
+                  // Mark as officially answered
+                  gameState.value.playersAnswered.add(`${currentUserId.value}-${data.questionIndex}`);
+                  
+                  // Broadcast that all players can progress
+                  await axios.post(`/api/games/${gameId}/broadcast`, {
+                      event: 'question.all.answered',
+                      data: {
+                          questionIndex: data.questionIndex,
+                          playerCount: data.requiredCount,
+                          timestamp: new Date().toISOString()
+                      }
+                  });
 
-    //  All players answered a question
-    gameChannel.bind('question.all.answered', async (data) => {
+                  addFlashMessage('Your answer has been auto-submitted! Moving forward...', 'success');
+                  
+                  // Clean up pre-answered data
+                  preAnsweredQuestions.value.delete(data.questionIndex);
+                  gameState.value.playersPreAnswered.delete(data.questionIndex);
+
+              } catch (err) {
+                  console.error('Auto-progression failed:', err);
+                  addFlashMessage('Failed to auto-progress your answer. Please try manually.', 'error');
+              }
+          }
+      }
+  });
+
+  gameChannel.bind('question.all.answered', async (data) => {
       console.log('🔔 Received question.all.answered event:', data);
       
-      // Trigger question progression for all players who haven't progressed yet
-      if (preAnsweredQuestions.value.has(data.questionIndex)
-        || (teamPlayerGame.value)) {
-        console.log('🔄 Triggering auto-progression for question:', data.questionIndex);
-        
-        // Get all current answers to pass to the callback
-        const allAnswers = Array.from(preAnsweredQuestions.value.entries());
-        
-        // Clean up this question's pre-answered data
-        preAnsweredQuestions.value.delete(data.questionIndex);
-        gameState.value.playersPreAnswered.delete(data.questionIndex);
-        
-        // Trigger external callback to progress to next question
-        await triggerQuestionProgress(data.questionIndex, allAnswers);
+      // FOR TEAM PLAYER GAME: All players should progress, regardless of pre-answered status
+      if (preAnsweredQuestions.value.has(data.questionIndex) || teamPlayerGame.value) {
+          console.log('🔄 Triggering auto-progression for question:', data.questionIndex);
+          
+          // Get all current answers to pass to the callback
+          const allAnswers = Array.from(preAnsweredQuestions.value.entries());
+          
+          // Clean up this question's pre-answered data
+          preAnsweredQuestions.value.delete(data.questionIndex);
+          gameState.value.playersPreAnswered.delete(data.questionIndex);
+          
+          // Trigger external callback to progress to next question
+          await triggerQuestionProgress(data.questionIndex, allAnswers);
       }
-    });
+  });
 
     // AI answered event
     gameChannel.bind('ai.answered', (data) => {
@@ -987,9 +969,27 @@ export function usePlayerInteractions(gameId, auth) {
     // Team suggestion received
     gameChannel.bind('team.suggestion', (data) => {
         console.log('🔔 Received team.suggestion event:', data);
+        
         if (data.userId !== currentUserId.value) {
-            const direction = data.isToLeader ? 'to team leader' : 'from team leader';
-            addFlashMessage(`${data.userName} suggests ${direction}: "${data.suggestion}"`, 'info');
+            // Filter suggestions based on game mode
+            let shouldShowSuggestion = false;
+            
+            if (data.gameMode === 'teamPlayer') {
+                // Team Player Game: show suggestions to/from team leader
+                shouldShowSuggestion = data.isToLeader ? isTeamLeader.value : !isTeamLeader.value;
+            } else if (data.gameMode === 'teamAI') {
+                // Team AI Game: non-leaders only see suggestions from other non-leaders
+                if (isTeamLeader.value) {
+                    shouldShowSuggestion = false; // Team leader doesn't see suggestions in AI team mode
+                } else {
+                    shouldShowSuggestion = data.isToOtherPlayers; // Non-leaders see suggestions from other non-leaders
+                }
+            }
+            
+            if (shouldShowSuggestion) {
+                const direction = data.isToLeader ? 'to team leader' : (data.isToOtherPlayers ? 'to other players' : 'from team leader');
+                addFlashMessage(`${data.userName} suggests ${direction}: "${data.suggestion}"`, 'info');
+            }
         }
     });
 

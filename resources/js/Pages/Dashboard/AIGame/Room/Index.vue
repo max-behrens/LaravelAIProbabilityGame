@@ -177,7 +177,18 @@ const isGameInProgress = computed(() => gameState.value.gameInProgress);
 
 // New computed property for controlling question input visibility
 const showQuestionInput = computed(() => {
-    return isGameStarted.value && !isWaitingForOthers.value && !gameIsOver.value && currentGameQuestions.value.length > 0;
+    // Base condition: game started, not waiting, not over, and has questions
+    const baseCondition = isGameStarted.value && !isWaitingForOthers.value && !gameIsOver.value && currentGameQuestions.value.length > 0;
+    
+    if (!baseCondition) return false;
+    
+    // For team player game: only show for team leader
+    if (joinTeamWithPlayers.value && playerCount.value > 1) {
+        return isTeamLeader.value;
+    }
+    
+    // For team AI game and normal games: show for everyone
+    return true;
 });
 
 // Format date helper
@@ -536,13 +547,47 @@ const leaveGame = async () => {
 const canSubmitAnswers = computed(() => {
     if (playerCount.value === 1) return true; // Single player can always submit
     if (!isTeamMode.value) return true; // Not in team mode, everyone can submit
-    if (joinTeamWithAI.value) return true; // All players can submit in AI Team setting.
-    return isTeamLeader.value; // In team mode, only team leader can submit
+    if (joinTeamWithAI.value) return true; // All players can submit in AI Team setting
+    if (joinTeamWithPlayers.value) {
+        // In team player mode, only team leader can submit answers (except on final question where everyone submits)
+        return isTeamLeader.value;
+    }
+    return true;
 });
 
 const shouldShowSuggestionInput = computed(() => {
-    return isGameStarted.value && isTeamMode.value && playerCount.value > 1;
+    // Show suggestion input during game for team modes with multiple players
+    const duringGame = isGameStarted.value && isTeamMode.value && playerCount.value > 1;
+    
+    // Also show after game completion for team player game (so non-leaders can still suggest)
+    const afterTeamPlayerGame = gameIsOver.value && joinTeamWithPlayers.value && playerCount.value > 1;
+    
+    return duringGame || afterTeamPlayerGame;
 });
+
+const getSuggestionPlaceholder = () => {
+    if (joinTeamWithPlayers.value) {
+        return isTeamLeader.value ? 
+            'Send suggestion to team members...' : 
+            'Send suggestion to team leader...';
+    } else if (joinTeamWithAI.value) {
+        return isTeamLeader.value ? 
+            'Send suggestion to other players...' : 
+            'Send suggestion to other players...';
+    }
+    return 'Send suggestion...';
+};
+
+const getSuggestionButtonText = () => {
+    if (joinTeamWithPlayers.value) {
+        return isTeamLeader.value ? 
+            'Send To Team' : 
+            'Send To Leader';
+    } else if (joinTeamWithAI.value) {
+        return 'Send To Others';
+    }
+    return 'Send Suggestion';
+};
 
 const toggleBespokeAICheckbox = async () => {
 
@@ -626,18 +671,31 @@ const sendSuggestion = async () => {
     if (!suggestionInput.value.trim() || !isTeamMode.value) return;
     
     try {
+        // For Team AI Game: non-leaders send suggestions to other non-leaders only
+        // For Team Player Game: suggestions go to/from team leader as before
+        const isToTeamLeader = joinTeamWithPlayers.value && !isTeamLeader.value;
+        const isToOtherPlayers = joinTeamWithAI.value && !isTeamLeader.value;
+        
         await axios.post(`/api/games/${props.gameId}/broadcast`, {
             event: 'team.suggestion',
             data: {
                 userId: props.auth.user.id,
                 userName: props.auth.user.name,
                 suggestion: suggestionInput.value.trim(),
-                isToLeader: !isTeamLeader.value,
+                isToLeader: isToTeamLeader,
+                isToOtherPlayers: isToOtherPlayers,
+                gameMode: joinTeamWithPlayers.value ? 'teamPlayer' : 'teamAI',
                 timestamp: new Date().toISOString()
             }
         });
         
-        const messageType = isTeamLeader.value ? 'to team members' : 'to team leader';
+        let messageType = 'to team members';
+        if (joinTeamWithPlayers.value) {
+            messageType = isTeamLeader.value ? 'to team members' : 'to team leader';
+        } else if (joinTeamWithAI.value) {
+            messageType = isTeamLeader.value ? 'to team members' : 'to other players';
+        }
+        
         addFlashMessage(`Suggestion sent ${messageType}: "${suggestionInput.value.trim()}"`, 'info');
         suggestionInput.value = '';
     } catch (error) {
@@ -645,6 +703,7 @@ const sendSuggestion = async () => {
         addFlashMessage('Failed to send suggestion', 'error');
     }
 };
+
 
 
 // Handle player count changes - FIXED to ensure numeric value
@@ -664,7 +723,6 @@ const onPlayerCountChange = async (newCount) => {
 
 const nextOrSubmit = async () => {
     // Check if player can submit answers (team mode restriction)
-
     if (!canSubmitAnswers.value) {
         addFlashMessage(`Only the team leader (${teamLeaderName.value}) can submit answers in team mode.`, 'warning');
         return;
@@ -847,7 +905,16 @@ const nextOrSubmit = async () => {
                 }
             }
 
-            const submissionAnswers = answers.value.map(answer => answer);
+            // TEAM PLAYER GAME FIX: Non-leaders need to submit at the last question
+            // but with empty answers since they'll get team leader's answers in the controller
+            let submissionAnswers = answers.value.map(answer => answer);
+            
+            // For team player game non-leaders, send empty answers array
+            // The controller will replace with team leader's cached answers
+            if (joinTeamWithPlayers.value && !isTeamLeader.value) {
+                console.log('Team player game non-leader: Submitting with empty answers for controller replacement');
+                submissionAnswers = new Array(currentGameQuestions.value.length).fill('');
+            }
 
             const result = await submitAnswers(
                 submissionAnswers, 
@@ -942,7 +1009,6 @@ const startNewGame = () => {
 };
 
 
-// Replace your existing resetGameState function with this updated version
 const resetGameState = () => {
     console.log('Resetting game state - before reset:', {
         currentQuestionIndex: currentQuestionIndex.value,
@@ -953,7 +1019,7 @@ const resetGameState = () => {
         isTeamLeader: isTeamLeader.value
     });
     
-    // CRITICAL: Reset question index to 0
+    // Reset question index to 0
     currentQuestionIndex.value = 0;
     
     // Clear all answers
@@ -973,9 +1039,6 @@ const resetGameState = () => {
     teamLeaderName.value = '';
     suggestionInput.value = '';
     
-    // Note: Don't reset joinTeamWithPlayers and joinTeamWithAI here
-    // so users don't have to re-select their team preferences for next game
-    
     console.log('Game state fully reset - after reset:', {
         currentQuestionIndex: currentQuestionIndex.value,
         answersLength: answers.value.length,
@@ -985,6 +1048,7 @@ const resetGameState = () => {
         isTeamLeader: isTeamLeader.value
     });
 };
+
 // Vertical Nav Section:
 const navSections = [
     { id: 'main', name: 'Main' },
@@ -1392,20 +1456,28 @@ onUnmounted(() => {
                             
                             <!-- Team Mode Indicator -->
                             <div v-if="isTeamMode && playerCount > 1" class="text-center mb-4">
-                            <div class="inline-block px-4 py-2 bg-blue-900 text-blue-200 rounded-lg border border-blue-700">
-                                <div v-if="isTeamLeader" class="text-sm font-semibold">
-                                You are the team leader - you submit answers for your team
+                                <div class="inline-block px-4 py-2 bg-blue-900 text-blue-200 rounded-lg border border-blue-700">
+                                    <div v-if="joinTeamWithPlayers">
+                                        <div v-if="isTeamLeader" class="text-sm font-semibold">
+                                            You are the team leader - you submit answers for your team vs AI
+                                        </div>
+                                        <div v-else class="text-sm font-semibold">
+                                            {{ teamLeaderName }} is your team leader vs AI - send suggestions to help
+                                        </div>
+                                    </div>
+                                    <div v-else-if="joinTeamWithAI">
+                                        <div v-if="isTeamLeader" class="text-sm font-semibold">
+                                            You + AI are teamed up vs other players
+                                        </div>
+                                        <div v-else class="text-sm font-semibold">
+                                            {{ teamLeaderName }} + AI are teamed up vs you and others
+                                        </div>
+                                    </div>
                                 </div>
-                                <div v-else class="text-sm font-semibold">
-                                {{ teamLeaderName }} is submitting answers for 
-                                <span v-if="joinTeamWithAI">the opposing AI team</span>
-                                <span v-else>the team</span>
-                                </div>
-                            </div>
                             </div>
 
-                            <!-- Answer Input (only for team leader or non-team mode) -->
-                            <div v-if="canSubmitAnswers" class="flex flex-col sm:flex-row gap-4 justify-center mb-4">
+                            <!-- Answer Input (only for team leader in team player game, or everyone else) -->
+                            <div v-if="canSubmitAnswers || (joinTeamWithPlayers && isLastQuestion)" class="flex flex-col sm:flex-row gap-4 justify-center mb-4">
                                 <button 
                                     :disabled="submitting || isStealAnimating" 
                                     @click="stealAnimation"
@@ -1418,11 +1490,16 @@ onUnmounted(() => {
                                         v-model="answers[currentQuestionIndex]"
                                         :class="{
                                             'animate-pulse bg-white !text-white': isStealAnimating,
-                                            'bg-gray-100 !text-white': !isStealAnimating
+                                            'bg-gray-100 !text-white': !isStealAnimating,
+                                            'opacity-50 cursor-not-allowed': !canSubmitAnswers && joinTeamWithPlayers && !isLastQuestion
                                         }"
-                                        :disabled="isStealAnimating"
+                                        :disabled="isStealAnimating || (!canSubmitAnswers && joinTeamWithPlayers && !isLastQuestion)"
                                         class="px-4 py-2 rounded w-full !placeholder-white transition-all duration-500"
-                                        :placeholder="isStealAnimating ? '' : 'Your answer'" 
+                                        :placeholder="
+                                            isStealAnimating ? '' : 
+                                            (!canSubmitAnswers && joinTeamWithPlayers && !isLastQuestion) ? 'Only team leader can answer' :
+                                            'Your answer'
+                                        " 
                                     />
                                 </div>
 
@@ -1430,27 +1507,29 @@ onUnmounted(() => {
                                     :disabled="submitting || isStealAnimating" 
                                     @click="nextOrSubmit"
                                     class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50 transition-colors">
-                                    {{ isLastQuestion ? (submitting ? 'Submitting...' : 'Submit') : 'Next' }}
+                                    {{ 
+                                        isLastQuestion ? 
+                                            (submitting ? 'Submitting...' : 'Submit') : 
+                                            'Next' 
+                                    }}
                                 </button>
                             </div>
 
-                            <!-- Team Suggestion Input (for all players in team mode) -->
+                            <!-- Team Suggestion Input (updated logic for different team modes) -->
                             <div v-if="shouldShowSuggestionInput" class="flex justify-center gap-4">
                                 <div class="relative w-full sm:w-2/3">
                                     <input 
                                         v-model="suggestionInput"
                                         class="px-4 py-2 rounded w-full bg-gray-600 text-white placeholder-gray-300"
-                                        :placeholder="isTeamLeader ? 'Send suggestion to team members...' : 'Send suggestion to team leader...'"
+                                        :placeholder="getSuggestionPlaceholder()"
                                     />
                                 </div>
-                                    <button 
+                                <button 
                                     @click="sendSuggestion"
                                     :disabled="!suggestionInput.trim()"
                                     class="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 disabled:opacity-50 transition-colors">
-                                    Send Suggestion
-                                    <span v-if="joinTeamWithPlayers"> To Teammates</span>
-                                    <span v-else-if="joinTeamWithAI"> To Opponents</span>
-                                    </button>
+                                    {{ getSuggestionButtonText() }}
+                                </button>
                             </div>
                         </div>
 
@@ -1657,7 +1736,7 @@ onUnmounted(() => {
 
                         <div v-if="playWithAISection" class="flex flex-wrap gap-6 w-full">
 
-                            <div class="flex flex-col gap-4">
+                            <div class="flex min-w-[300px] basis-1/4 flex-col gap-4">
                                 <div class="bg-gray-800 min-w-[300px] basis-1/4 p-4 rounded border border-gray-700">
                                     <h4 class="text-white font-semibold mb-4">AI Players</h4>
                                     <div class="flex flex-col gap-4 items-center">
