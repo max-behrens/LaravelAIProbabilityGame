@@ -866,7 +866,7 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
         }
         
         // Trigger external callback to progress to next question
-        if (callbacks.value.onQuestionProgress && !teamPlayerGame.value) {
+        if (callbacks.value.onQuestionProgress) {
             callbacks.value.onQuestionProgress(data.questionIndex);
         }
         
