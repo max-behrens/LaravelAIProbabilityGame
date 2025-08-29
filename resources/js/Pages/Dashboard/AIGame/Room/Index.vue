@@ -178,16 +178,54 @@ const isGameInProgress = computed(() => gameState.value.gameInProgress);
 // New computed property for controlling question input visibility
 const showQuestionInput = computed(() => {
     // Base condition: game started, not waiting, not over, and has questions
-    const baseCondition = isGameStarted.value && !isWaitingForOthers.value && !gameIsOver.value && currentGameQuestions.value.length > 0;
+    const baseCondition = isGameStarted.value && 
+                          !isWaitingForOthers.value && 
+                          !gameIsOver.value && 
+                          currentGameQuestions.value.length > 0;
     
-    if (!baseCondition) return false;
-    
-    // For team player game: only show for team leader
-    if (joinTeamWithPlayers.value && playerCount.value > 1) {
-        return isTeamLeader.value;
+    if (!baseCondition) {
+        console.log('Base condition not met for showQuestionInput:', {
+            isGameStarted: isGameStarted.value,
+            isWaitingForOthers: isWaitingForOthers.value,
+            gameIsOver: gameIsOver.value,
+            hasQuestions: currentGameQuestions.value.length > 0
+        });
+        return false;
     }
     
-    // For team AI game and normal games: show for everyone
+    // Single player: always show
+    if (playerCount.value === 1) {
+        return true;
+    }
+    
+    // Multiplayer without team mode: show for everyone
+    if (!isTeamMode.value) {
+        return true;
+    }
+    
+    // Team AI mode: show for everyone (all can submit)
+    if (joinTeamWithAI.value) {
+        return true;
+    }
+    
+    // Team Player mode: show for team leader only, OR for everyone on final question
+    if (joinTeamWithPlayers.value) {
+        const showForTeamLeader = isTeamLeader.value;
+        const showForFinalQuestion = currentQuestionIndex.value === currentGameQuestions.value.length - 1;
+        
+        console.log('Team player mode visibility check:', {
+            isTeamLeader: isTeamLeader.value,
+            currentQuestionIndex: currentQuestionIndex.value,
+            totalQuestions: currentGameQuestions.value.length,
+            showForTeamLeader,
+            showForFinalQuestion,
+            result: showForTeamLeader || showForFinalQuestion
+        });
+        
+        return showForTeamLeader || showForFinalQuestion;
+    }
+    
+    // Default: show for everyone
     return true;
 });
 
@@ -363,7 +401,6 @@ const startGame = async () => {
         console.log('Starting game with player count:', playerCount.value);
         
         // Set team mode and leader status
-        isTeamMode.value = joinTeamWithPlayers.value || joinTeamWithAI.value;
         if (playerCount.value > 1 && isTeamMode.value) {
             isTeamLeader.value = true; // First player to start is team leader
             teamLeaderName.value = props.auth.user.name;
@@ -401,6 +438,7 @@ const startGame = async () => {
             // Add team settings
             join_team_with_players: joinTeamWithPlayers.value,
             join_team_with_ai: joinTeamWithAI.value,
+            isTeamLeader: isTeamLeader.value
         });
 
         if (response.data.status === 'waiting') {
@@ -461,6 +499,9 @@ const startGame = async () => {
     }
 };
 
+const originalTeamLeader = ref(null);
+
+// Modified applyGameSettings function
 const applyGameSettings = async (settings) => {
     console.log('Applying game settings from ready player:', settings);
     
@@ -474,7 +515,7 @@ const applyGameSettings = async (settings) => {
         playWithAISection.value = true;
     }
     
-    // Apply team settings
+    // Apply team settings for ALL players
     if (settings.join_team_with_players !== undefined) {
         joinTeamWithPlayers.value = settings.join_team_with_players;
     }
@@ -482,17 +523,55 @@ const applyGameSettings = async (settings) => {
         joinTeamWithAI.value = settings.join_team_with_ai;
     }
     
-    // Set team mode and leader status
+    // Set team mode for ALL players
     isTeamMode.value = joinTeamWithPlayers.value || joinTeamWithAI.value;
-    if (isTeamMode.value && playerCount.value > 1) {
-        // Check if current user is the starter/leader
-        if (props.auth.user.name === settings.starter_name) {
-            isTeamLeader.value = false; // Others are not team leaders
-            teamLeaderName.value = settings.starter_name;
-        } else {
+    
+    // CRITICAL FIX: Only set team leadership ONCE - on first game settings application
+    if (joinTeamWithPlayers.value && playerCount.value > 1) {
+        // If we haven't established the original team leader yet, do it now
+        if (!originalTeamLeader.value) {
+            originalTeamLeader.value = settings.starter_name;
+            console.log('Original team leader established:', originalTeamLeader.value);
+        }
+        
+        // Always use the ORIGINAL team leader, not the current settings starter
+        const trueTeamLeaderName = originalTeamLeader.value;
+        
+        if (props.auth.user.name === trueTeamLeaderName) {
+            // Current user IS the original starter, so they ARE the team leader
             isTeamLeader.value = true;
             teamLeaderName.value = props.auth.user.name;
+        } else {
+            // Current user is NOT the original starter, so they are NOT the team leader
+            isTeamLeader.value = false;
+            teamLeaderName.value = trueTeamLeaderName;
         }
+        
+        console.log('Player Team leadership determined:', {
+            currentUser: props.auth.user.name,
+            originalTeamLeader: originalTeamLeader.value,
+            settingsStarter: settings.starter_name,
+            isTeamLeader: isTeamLeader.value,
+            teamLeaderName: teamLeaderName.value
+        });
+    }
+    
+    // Keep the existing joinTeamWithAI logic unchanged since it works fine
+    if (joinTeamWithAI.value && playerCount.value > 1) {
+        if (props.auth.user.name === settings.starter_name) {
+            isTeamLeader.value = true;
+            teamLeaderName.value = props.auth.user.name;
+        } else {
+            isTeamLeader.value = false;
+            teamLeaderName.value = settings.starter_name;
+        }
+        
+        console.log('AI Team leadership determined:', {
+            currentUser: props.auth.user.name,
+            starter: settings.starter_name,
+            isTeamLeader: isTeamLeader.value,
+            teamLeaderName: teamLeaderName.value
+        });
     }
     
     if (settings.selected_ai_model) {
@@ -506,9 +585,13 @@ const applyGameSettings = async (settings) => {
         await fetchGameQuestions(settings.difficulty_id, settings.category_id);
     }
 
-    let message = `Game settings updated to match ${settings.starter_name}'s preferences!`;
+    let message = `Game settings updated to match ${originalTeamLeader.value || settings.starter_name}'s preferences!`;
     if (isTeamMode.value) {
-        message += ` Team mode activated with ${settings.starter_name} as team leader.`;
+        if (joinTeamWithPlayers.value) {
+            message += ` Team Player mode activated with ${originalTeamLeader.value || settings.starter_name} as team leader.`;
+        } else if (joinTeamWithAI.value) {
+            message += ` Team AI mode activated with ${settings.starter_name} coordinating.`;
+        }
     }
     addFlashMessage(message, 'info');
 };
@@ -556,11 +639,27 @@ const canSubmitAnswers = computed(() => {
 });
 
 const shouldShowSuggestionInput = computed(() => {
-    // Show suggestion input during game for team modes with multiple players
-    const duringGame = isGameStarted.value && isTeamMode.value && playerCount.value > 1;
+    // Only show in team modes with multiple players
+    if (!isTeamMode.value || playerCount.value === 1) {
+        return false;
+    }
     
-    // Also show after game completion for team player game (so non-leaders can still suggest)
-    const afterTeamPlayerGame = gameIsOver.value && joinTeamWithPlayers.value && playerCount.value > 1;
+    // Show during game for all team modes
+    const duringGame = isGameStarted.value && !gameIsOver.value;
+    
+    // Show after game completion for team player game (so non-leaders can still suggest)
+    const afterTeamPlayerGame = gameIsOver.value && joinTeamWithPlayers.value;
+    
+    console.log('Suggestion input visibility check:', {
+        isTeamMode: isTeamMode.value,
+        playerCount: playerCount.value,
+        isGameStarted: isGameStarted.value,
+        gameIsOver: gameIsOver.value,
+        joinTeamWithPlayers: joinTeamWithPlayers.value,
+        duringGame,
+        afterTeamPlayerGame,
+        result: duringGame || afterTeamPlayerGame
+    });
     
     return duringGame || afterTeamPlayerGame;
 });
@@ -684,6 +783,7 @@ const sendSuggestion = async () => {
                 suggestion: suggestionInput.value.trim(),
                 isToLeader: isToTeamLeader,
                 isToOtherPlayers: isToOtherPlayers,
+                isTeamLeader: isTeamLeader.value,
                 gameMode: joinTeamWithPlayers.value ? 'teamPlayer' : 'teamAI',
                 timestamp: new Date().toISOString()
             }
@@ -1446,6 +1546,8 @@ onUnmounted(() => {
                     </div>
 
                     <div class="flex flex-wrap gap-6 justify-center items-start">
+
+
                         <div v-if="showQuestionInput" class="basis-full mb-6">
                             <div class="text-center mb-2 text-gray-400 text-sm font-medium">
                                 Question {{ currentQuestionIndex + 1 }} / {{ currentGameQuestions.length }}
@@ -1514,23 +1616,53 @@ onUnmounted(() => {
                                     }}
                                 </button>
                             </div>
+                        </div>
 
-                            <!-- Team Suggestion Input (updated logic for different team modes) -->
-                            <div v-if="shouldShowSuggestionInput" class="flex justify-center gap-4">
+                        <!-- TEAM PLAYER NON-LEADER GAME VIEW -->
+                        <div v-else-if="isGameStarted && !gameIsOver && joinTeamWithPlayers && !isTeamLeader" class="basis-full mb-6">
+                            <div class="text-center mb-2 text-gray-400 text-sm font-medium">
+                                Question {{ currentQuestionIndex + 1 }} / {{ currentGameQuestions.length }}
+                            </div>
+                            <div class="text-center mb-4 text-white text-xl font-semibold">
+                                {{ currentGameQuestions[currentQuestionIndex]?.question }}
+                            </div>
+                            
+                            <!-- Team Mode Indicator for Non-Leaders -->
+                            <div class="text-center mb-4">
+                                <div class="inline-block px-4 py-2 bg-blue-900 text-blue-200 rounded-lg border border-blue-700">
+                                    <div class="text-sm font-semibold">
+                                        {{ teamLeaderName }} is your team leader vs AI - send suggestions to help
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- View-only answer field for non-leaders -->
+                            <div class="flex flex-col sm:flex-row gap-4 justify-center mb-4">
                                 <div class="relative w-full sm:w-2/3">
                                     <input 
-                                        v-model="suggestionInput"
-                                        class="px-4 py-2 rounded w-full bg-gray-600 text-white placeholder-gray-300"
-                                        :placeholder="getSuggestionPlaceholder()"
+                                        :value="'Waiting for team leader to answer...'"
+                                        disabled
+                                        class="px-4 py-2 rounded w-full bg-gray-600 text-gray-300 cursor-not-allowed"
                                     />
                                 </div>
-                                <button 
-                                    @click="sendSuggestion"
-                                    :disabled="!suggestionInput.trim()"
-                                    class="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 disabled:opacity-50 transition-colors">
-                                    {{ getSuggestionButtonText() }}
-                                </button>
                             </div>
+                        </div>
+
+                        <!-- Team Suggestion Input (updated logic for different team modes) -->
+                        <div v-if="shouldShowSuggestionInput" class="flex basis-full justify-center gap-4">
+                            <div class="relative w-full sm:w-2/3">
+                                <input 
+                                    v-model="suggestionInput"
+                                    class="px-4 py-2 rounded w-full bg-gray-600 text-white placeholder-gray-300"
+                                    :placeholder="getSuggestionPlaceholder()"
+                                />
+                            </div>
+                            <button 
+                                @click="sendSuggestion"
+                                :disabled="!suggestionInput.trim()"
+                                class="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 disabled:opacity-50 transition-colors">
+                                {{ getSuggestionButtonText() }}
+                            </button>
                         </div>
 
 
@@ -1569,7 +1701,7 @@ onUnmounted(() => {
                         </div>
 
                         <!-- Game Setup Section -->
-                        <div v-if="!showQuestionInput" class="basis-full flex flex-col gap-6 p-4 bg-gray-800 rounded shadow text-white">
+                        <div v-if="!showQuestionInput && !isGameStarted" class="basis-full flex flex-col gap-6 p-4 bg-gray-800 rounded shadow text-white">
 
                             <!-- Row 1: Game Name & Buttons -->
                             <div class="flex items-center justify-center flex-wrap gap-4 min-h-[32px]">

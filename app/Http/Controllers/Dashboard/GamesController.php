@@ -1022,173 +1022,189 @@ class GamesController extends Controller
         }
     }
 
-    public function playerReady(Request $request, Games $game)
-    {
-        $user = $request->user();
-        if (!$user) {
-            Log::warning('Unauthorized ready status');
-            return response()->json(['error' => 'Unauthorized'], 401);
-        }
+public function playerReady(Request $request, Games $game)
+{
+    $user = $request->user();
+    if (!$user) {
+        Log::warning('Unauthorized ready status');
+        return response()->json(['error' => 'Unauthorized'], 401);
+    }
 
-        $userId = $user->id;
-        $userName = $user->name;
-        $requiredCount = (int) $request->requiredCount;
-        
-        // Get game settings from the request
-        $difficultyId = $request->get('difficulty_id');
-        $categoryId = $request->get('category_id');
-        $playWithAI = $request->boolean('play_with_ai', false);
-        $playWithBespokeAI = $request->boolean('play_with_bespoke_ai', false);
+    $userId = $user->id;
+    $userName = $user->name;
+    $requiredCount = (int) $request->requiredCount;
+    
+    // Get game settings from the request
+    $difficultyId = $request->get('difficulty_id');
+    $categoryId = $request->get('category_id');
+    $playWithAI = $request->boolean('play_with_ai', false);
+    $playWithBespokeAI = $request->boolean('play_with_bespoke_ai', false);
 
-        
-        // Get team settings
-        $joinTeamWithPlayers = $request->boolean('join_team_with_players', false);
-        $joinTeamWithAI = $request->boolean('join_team_with_ai', false);
+    
+    // Get team settings
+    $joinTeamWithPlayers = $request->boolean('join_team_with_players', false);
+    $joinTeamWithAI = $request->boolean('join_team_with_ai', false);
+    $isTeamLeader = $request->boolean('isTeamLeader', false);
 
-        // CHECK IF THIS IS A SINGLE-PLAYER GAME
-        if ($requiredCount === 1) {
-            Log::info('Single-player game detected - bypassing ready system', [
-                'gameId' => $game->id,
-                'userId' => $userId,
-                'userName' => $userName
-            ]);
-            
-            return response()->json([
-                'status' => 'waiting',
-                'gameSettings' => [
-                    'difficulty_id' => $difficultyId,
-                    'category_id' => $categoryId,
-                    'play_with_ai' => $playWithAI,
-                    'play_with_bespoke_ai' => $playWithBespokeAI,
-                    'join_team_with_players' => $joinTeamWithPlayers,
-                    'join_team_with_ai' => $joinTeamWithAI,
-                    'starter_name' => $userName
-                ]
-            ]);
-        }
 
-        // MULTIPLAYER LOGIC - CRITICAL FIX: Use atomic operations
-        Log::info('Multiplayer game detected - using ready system', [
+    // CHECK IF THIS IS A SINGLE-PLAYER GAME
+    if ($requiredCount === 1) {
+        Log::info('Single-player game detected - bypassing ready system', [
             'gameId' => $game->id,
             'userId' => $userId,
-            'requiredCount' => $requiredCount,
-            'teamSettings' => [
-                'joinTeamWithPlayers' => $joinTeamWithPlayers,
-                'joinTeamWithAI' => $joinTeamWithAI
-            ]
+            'userName' => $userName
         ]);
-
-        $cacheKey = "game:{$game->id}:readyPlayers";
-        $settingsKey = "game:{$game->id}:gameSettings";
         
-        // CRITICAL FIX: Use cache locks to prevent race conditions
-        $lockKey = "game:{$game->id}:ready_lock";
-        
-        return Cache::lock($lockKey, 10)->get(function () use ($game, $userId, $userName, $requiredCount, $difficultyId, $categoryId, $playWithAI, $playWithBespokeAI, $joinTeamWithPlayers, $joinTeamWithAI, $cacheKey, $settingsKey) {
-            
-            // Get current ready players with atomic read
-            $readyPlayers = Cache::get($cacheKey, []);
-            
-            // Ensure it's an array
-            if (!is_array($readyPlayers)) {
-                $readyPlayers = [];
-            }
-            
-            $currentSettings = Cache::get($settingsKey);
-            
-            $gameQuestions = $this->gamesService->getGameQuestionsByDifficultyAndCategory(
-                $game, 
-                $difficultyId, 
-                $categoryId
-            );
-            
-            $gameSettings = [
+        return response()->json([
+            'status' => 'waiting',
+            'gameSettings' => [
                 'difficulty_id' => $difficultyId,
                 'category_id' => $categoryId,
                 'play_with_ai' => $playWithAI,
                 'play_with_bespoke_ai' => $playWithBespokeAI,
                 'join_team_with_players' => $joinTeamWithPlayers,
                 'join_team_with_ai' => $joinTeamWithAI,
-                'questions' => $gameQuestions,
                 'starter_name' => $userName
-            ];
-            
+            ]
+        ]);
+    }
+
+    // MULTIPLAYER LOGIC - CRITICAL FIX: Use atomic operations
+    Log::info('Multiplayer game detected - using ready system', [
+        'gameId' => $game->id,
+        'userId' => $userId,
+        'requiredCount' => $requiredCount,
+        'teamSettings' => [
+            'joinTeamWithPlayers' => $joinTeamWithPlayers,
+            'joinTeamWithAI' => $joinTeamWithAI
+        ]
+    ]);
+
+    $cacheKey = "game:{$game->id}:readyPlayers";
+    $settingsKey = "game:{$game->id}:gameSettings";
+    
+    // CRITICAL FIX: Use cache locks to prevent race conditions
+    $lockKey = "game:{$game->id}:ready_lock";
+    
+    return Cache::lock($lockKey, 10)->get(function () use ($game, $userId, $userName, $requiredCount, $difficultyId, $categoryId, $playWithAI, $playWithBespokeAI, $joinTeamWithPlayers, $joinTeamWithAI, $isTeamLeader, $cacheKey, $settingsKey) {
+        
+        // Get current ready players with atomic read
+        $readyPlayers = Cache::get($cacheKey, []);
+        
+        // Ensure it's an array
+        if (!is_array($readyPlayers)) {
+            $readyPlayers = [];
+        }
+        
+        // CRITICAL FIX: Get existing settings to preserve original starter
+        $currentSettings = Cache::get($settingsKey);
+        
+        $gameQuestions = $this->gamesService->getGameQuestionsByDifficultyAndCategory(
+            $game, 
+            $difficultyId, 
+            $categoryId
+        );
+        
+        // CRITICAL FIX: Only set starter_name if it hasn't been set yet
+        $starterName = $currentSettings['starter_name'] ?? $userName;
+        
+        $gameSettings = [
+            'difficulty_id' => $difficultyId,
+            'category_id' => $categoryId,
+            'play_with_ai' => $playWithAI,
+            'play_with_bespoke_ai' => $playWithBespokeAI,
+            'join_team_with_players' => $joinTeamWithPlayers,
+            'join_team_with_ai' => $joinTeamWithAI,
+            'questions' => $gameQuestions,
+            'starter_name' => $starterName // Use preserved starter name
+        ];
+        
+        // Only update cache if this is the first player or settings have changed
+        if (!$currentSettings || count($readyPlayers) === 0) {
             Cache::put($settingsKey, $gameSettings, now()->addMinutes(30));
             $currentSettings = $gameSettings;
             
             Log::info('Game settings stored by first ready player', [
                 'gameId' => $game->id,
                 'userId' => $userId,
+                'originalStarter' => $starterName,
                 'settings' => $gameSettings
             ]);
+        } else {
+            // Use existing settings but update questions if needed
+            $currentSettings['questions'] = $gameQuestions;
+        }
 
-            // Add player to ready list if not already there
-            if (!in_array($userId, $readyPlayers)) {
-                $readyPlayers[] = $userId;
-                // CRITICAL FIX: Use put instead of increment operations
-                Cache::put($cacheKey, $readyPlayers, now()->addMinutes(30));
-            }
+        // Add player to ready list if not already there
+        if (!in_array($userId, $readyPlayers)) {
+            $readyPlayers[] = $userId;
+            // CRITICAL FIX: Use put instead of increment operations
+            Cache::put($cacheKey, $readyPlayers, now()->addMinutes(30));
+        }
 
-            $readyCount = count($readyPlayers);
-            
-            Log::info('Player marked ready for multiplayer', [
+        $readyCount = count($readyPlayers);
+        
+        Log::info('Player marked ready for multiplayer', [
+            'gameId' => $game->id,
+            'userId' => $userId,
+            'userName' => $userName,
+            'readyCount' => $readyCount,
+            'requiredCount' => $requiredCount,
+            'originalStarter' => $currentSettings['starter_name'],
+            'allReadyPlayers' => $readyPlayers,
+            'cacheKey' => $cacheKey
+        ]);
+
+        // CRITICAL FIX: Verify ready players array before broadcasting
+        if (empty($readyPlayers)) {
+            Log::error('Ready players array is empty after adding player', [
                 'gameId' => $game->id,
                 'userId' => $userId,
-                'userName' => $userName,
-                'readyCount' => $readyCount,
-                'requiredCount' => $requiredCount,
-                'allReadyPlayers' => $readyPlayers, // This should now be populated
-                'cacheKey' => $cacheKey
+                'cacheKey' => $cacheKey,
+                'attemptedReadyPlayers' => $readyPlayers
             ]);
+        }
 
-            // CRITICAL FIX: Verify ready players array before broadcasting
-            if (empty($readyPlayers)) {
-                Log::error('Ready players array is empty after adding player', [
-                    'gameId' => $game->id,
-                    'userId' => $userId,
-                    'cacheKey' => $cacheKey,
-                    'attemptedReadyPlayers' => $readyPlayers
-                ]);
-            }
+        broadcast(new PlayerReady(
+            $game->id, 
+            $userId, 
+            $userName, 
+            $readyCount, 
+            $requiredCount, 
+            $currentSettings // This now preserves the original starter
+        ))->toOthers();
 
-            broadcast(new PlayerReady(
-                $game->id, 
-                $userId, 
-                $userName, 
-                $readyCount, 
-                $requiredCount, 
-                $currentSettings
-            ))->toOthers();
+        if ($readyCount >= $requiredCount) {
+            $game->status = 'in_progress';
+            $game->save();
+            
+            // Clean up cache
+            Cache::forget($cacheKey);
+            Cache::forget($settingsKey);
+            
+            $this->triggerGameUpdate($game->id, 'game.started.all.ready', [
+                'gameId' => $game->id,
+                'playerCount' => $requiredCount,
+                'readyCount' => $readyCount,
+                'gameSettings' => $currentSettings, // Original starter preserved
+                'isTeamLeader' => $isTeamLeader,
+                'timestamp' => now()->toISOString()
+            ]);
+            
+            Log::info('All players ready - multiplayer game starting', [
+                'gameId' => $game->id,
+                'playerCount' => $requiredCount,
+                'finalReadyPlayers' => $readyPlayers,
+                'originalStarter' => $currentSettings['starter_name'],
+                'finalSettings' => $currentSettings
+            ]);
+            
+            return response()->json(['status' => 'started', 'gameSettings' => $currentSettings]);
+        }
 
-            if ($readyCount >= $requiredCount) {
-                $game->status = 'in_progress';
-                $game->save();
-                
-                // Clean up cache
-                Cache::forget($cacheKey);
-                Cache::forget($settingsKey);
-                
-                $this->triggerGameUpdate($game->id, 'game.started.all.ready', [
-                    'gameId' => $game->id,
-                    'playerCount' => $requiredCount,
-                    'readyCount' => $readyCount,
-                    'gameSettings' => $currentSettings,
-                    'timestamp' => now()->toISOString()
-                ]);
-                
-                Log::info('All players ready - multiplayer game starting', [
-                    'gameId' => $game->id,
-                    'playerCount' => $requiredCount,
-                    'finalReadyPlayers' => $readyPlayers,
-                    'finalSettings' => $currentSettings
-                ]);
-                
-                return response()->json(['status' => 'started', 'gameSettings' => $currentSettings]);
-            }
-
-            return response()->json(['status' => 'waiting', 'gameSettings' => $currentSettings]);
-        });
-    }
+        return response()->json(['status' => 'waiting', 'gameSettings' => $currentSettings]);
+    });
+}
 
 
     public function broadcast(Request $request, $gameId)

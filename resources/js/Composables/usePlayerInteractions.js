@@ -309,6 +309,7 @@ export function usePlayerInteractions(gameId, auth) {
             questionIndex: questionIndex,
             answeredCount: gameState.value.playersPreAnswered.get(questionIndex).size,
             requiredCount: playerCount,
+            isTeamLeader: isTeamLeader,
             timestamp: new Date().toISOString()
           }
         });
@@ -609,71 +610,68 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
         console.log('🔔 Received player.ready event:', data);
         
         if (data.userId !== currentUserId.value) {
-          
             // Another player clicked start
             gameState.value.playersReady.add(data.userId);
             
-          // NEW: Store game settings and starter info
+            // NEW: Store game settings and starter info IMMEDIATELY
             if (data.gameSettings) {
                 gameState.value.gameSettings = data.gameSettings;
                 gameState.value.starterName = data.gameSettings.starter_name;
                 console.log('Game settings received from ready player:', data.gameSettings);
 
-                                
-                      
-                // Apply game settings for all players
+                // CRITICAL: Apply game settings IMMEDIATELY for waiting players
                 if (callbacks.value.onApplyGameSettings) {
+                    console.log('Immediately applying game settings for non-starter player');
                     await callbacks.value.onApplyGameSettings(data.gameSettings);
                 }
-      
             }
             
             addFlashMessage(`${data.userName} is ready to start! (${data.readyCount}/${data.requiredCount} ready)`, 'info');
             
-              // Check if all required players are now ready for auto-start
-                const allPlayersReady = data.readyCount >= data.requiredCount;
-                const iAmReady = preReadyPlayers.value.has(currentUserId.value);
-                const gameNotStartedYet = !gameState.value.gameInProgress;
+            // Check if all required players are now ready for auto-start
+            const allPlayersReady = data.readyCount >= data.requiredCount;
+            const iAmReady = preReadyPlayers.value.has(currentUserId.value);
+            const gameNotStartedYet = !gameState.value.gameInProgress;
+            
+            console.log('Auto-start check:', {
+                allPlayersReady,
+                iAmReady,
+                gameNotStartedYet,
+                readyCount: data.readyCount,
+                requiredCount: data.requiredCount,
+                isWaitingToStart: isWaitingToStart.value
+            });
+            
+            if (allPlayersReady && iAmReady && gameNotStartedYet && isWaitingToStart.value) {
+                console.log('Auto-starting game for ready player via callback...');
                 
-                console.log('Auto-start check:', {
-                    allPlayersReady,
-                    iAmReady,
-                    gameNotStartedYet,
-                    readyCount: data.readyCount,
-                    requiredCount: data.requiredCount,
-                    isWaitingToStart: isWaitingToStart.value
-                });
-                
-                if (allPlayersReady && iAmReady && gameNotStartedYet && isWaitingToStart.value) {
-                    console.log('Auto-starting game for ready player via callback...');
-                    
-                    // Use callback to notify main component to start the game
-                    if (callbacks.value.onAutoStart) {
-                        callbacks.value.onAutoStart();
+                // Use callback to notify main component to start the game
+                if (callbacks.value.onAutoStart) {
+                    callbacks.value.onAutoStart();
                 }
             }
         }
     });
 
-  // Also update the game.started.all.ready handler
-  gameChannel.bind('game.started.all.ready', async (data) => {
-      console.log('🔔 Received game.started.all.ready event:', data);
-      
-      // Apply game settings for all players
-      if (data.gameSettings && callbacks.value.onApplyGameSettings) {
-          await callbacks.value.onApplyGameSettings(data.gameSettings);
-      }
-      
-      // If I'm waiting and this event is received, trigger auto-start
-      if (isWaitingToStart.value) {
-          console.log('🔄 Auto-starting game via all.ready callback...');
-          
-          // Use callback to notify main component to start the game
-          if (callbacks.value.onAutoStart) {
-              callbacks.value.onAutoStart();
-          }
-      }
-  });
+    gameChannel.bind('game.started.all.ready', async (data) => {
+        console.log('🔔 Received game.started.all.ready event:', data);
+        
+        // CRITICAL: Apply game settings for ALL players BEFORE starting
+        if (data.gameSettings && callbacks.value.onApplyGameSettings) {
+            console.log('Applying game settings before auto-start:', data.gameSettings);
+            await callbacks.value.onApplyGameSettings(data.gameSettings);
+        }
+        
+        // If I'm waiting and this event is received, trigger auto-start
+        if (isWaitingToStart.value) {
+            console.log('🔄 Auto-starting game via all.ready callback...');
+            
+            // Use callback to notify main component to start the game
+            if (callbacks.value.onAutoStart) {
+                callbacks.value.onAutoStart();
+            }
+        }
+    });
 
     // Single player game started
     gameChannel.bind('game.started.single', (data) => {
@@ -721,7 +719,7 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
           const iAlreadyReallyAnswered = gameState.value.playersAnswered.has(`${currentUserId.value}-${data.questionIndex}`);
           
           // FOR TEAM PLAYER GAME: Non-leaders should progress even without pre-answering
-          const shouldProgressTeamPlayer = teamPlayerGame.value && !isTeamLeader.value;
+          const shouldProgressTeamPlayer = teamPlayerGame.value && !data.isTeamLeader;
           
           console.log('Auto-progression check:', {
               allPlayersAnswered,
@@ -732,7 +730,7 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
               questionIndex: data.questionIndex,
               teamPlayerGame: teamPlayerGame.value,
               shouldProgressTeamPlayer,
-              isTeamLeader: isTeamLeader.value
+              isTeamLeader: data.isTeamLeader
           });
           
           if ((allPlayersAnswered && (iHavePreAnswered || shouldProgressTeamPlayer) && !iAlreadyReallyAnswered) || 
@@ -976,10 +974,10 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
             
             if (data.gameMode === 'teamPlayer') {
                 // Team Player Game: show suggestions to/from team leader
-                shouldShowSuggestion = data.isToLeader ? isTeamLeader.value : !isTeamLeader.value;
+                shouldShowSuggestion = data.isToLeader ? data.isTeamLeader : !data.isTeamLeader;
             } else if (data.gameMode === 'teamAI') {
                 // Team AI Game: non-leaders only see suggestions from other non-leaders
-                if (isTeamLeader.value) {
+                if (data.isTeamLeader) {
                     shouldShowSuggestion = false; // Team leader doesn't see suggestions in AI team mode
                 } else {
                     shouldShowSuggestion = data.isToOtherPlayers; // Non-leaders see suggestions from other non-leaders
