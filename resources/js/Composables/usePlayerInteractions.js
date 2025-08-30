@@ -988,13 +988,11 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
             
             if (data.gameMode === 'teamPlayer') {
                 // Team Player Game: show suggestions to/from team leader
-                shouldShowSuggestion = data.isToLeader ? data.isTeamLeader : !data.isTeamLeader;
+                shouldShowSuggestion = true;
             } else if (data.gameMode === 'teamAI') {
                 // Team AI Game: non-leaders only see suggestions from other non-leaders
-                if (data.isTeamLeader) {
+                if (!data.isTeamLeader) {
                     shouldShowSuggestion = false; // Team leader doesn't see suggestions in AI team mode
-                } else {
-                    shouldShowSuggestion = data.isToOtherPlayers; // Non-leaders see suggestions from other non-leaders
                 }
             }
             

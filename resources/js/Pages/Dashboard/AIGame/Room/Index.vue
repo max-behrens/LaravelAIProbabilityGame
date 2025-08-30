@@ -628,6 +628,11 @@ const shouldShowSuggestionInput = computed(() => {
     if (!isTeamMode.value || playerCount.value === 1) {
         return false;
     }
+
+    // Don't allow teamPlayerGame team leader to send suggestions.
+    if (joinTeamWithAI.value && isTeamLeader.value) {
+        return false;
+    }
     
     // Show during game for all team modes
     const duringGame = isGameStarted.value && !gameIsOver.value;
@@ -673,9 +678,16 @@ const getSuggestionButtonText = () => {
     return 'Send Suggestion';
 };
 
-const toggleBespokeAICheckbox = async () => {
+const toggleAICheckboxes = async () => {
 
-    playWithBespokeAI.value = !playWithBespokeAI.value;
+    if (playWithAISection.value) {
+        playWithBespokeAI.value = false;
+        playWithAI.value = false;
+        joinTeamWithPlayers.value = false;
+        joinTeamWithAI.value = false;
+    } else {
+        playWithBespokeAI.value = true;
+    }
 
     updateGameSettings();
 }
@@ -722,7 +734,12 @@ const onTeamAISettingChange = async () => {
 };
 
 const updateGameSettings = async () => {
-        // Broadcast team setting change WITH FULL GAME SETTINGS
+    // Broadcast team setting change WITH FULL GAME SETTINGS
+
+    if (!playWithAI.value && !playWithBespokeAI.value) {
+        playWithAISection.value = false;
+    }
+
     try {
         await axios.post(`/api/games/${props.gameId}/broadcast`, {
             event: 'team.settings.changed',
@@ -1876,7 +1893,7 @@ onUnmounted(() => {
 
                                 <!-- Play With AI Section Toggle -->
                                 <div class="flex items-center gap-2">
-                                    <input type="checkbox" v-model="playWithAISection" @click="toggleBespokeAICheckbox"
+                                    <input type="checkbox" v-model="playWithAISection" @click="toggleAICheckboxes"
                                         :disabled="isGameInProgress || isWaitingForOthers || gameIsOver" />
                                     <label>Play With AI</label>
                                 </div>
