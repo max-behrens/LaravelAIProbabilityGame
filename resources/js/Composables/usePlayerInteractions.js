@@ -921,17 +921,12 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
   gameChannel.bind('game.completed.multiplayer', async (data) => {
       console.log('🔔 Received game.completed.multiplayer event:', data);
       
-      // All players have already submitted their answers individually
-      // This event just triggers UI updates and cleanup
-      
       addFlashMessage('Game completed! All players have submitted their answers.', 'success');
 
-      // UPDATED: Call the main component's reset for ALL players in team modes
-      if (data.teamPlayerGame) {
-          console.log('Team player game completed - triggering main component reset for all players');
-          if (callbacks.value.onGameComplete) {
-              await callbacks.value.onGameComplete(data);
-          }
+      // For team player games, trigger the main component callback to handle non-leader submission
+      if (data.teamPlayerGame && callbacks.value.onGameComplete) {
+          console.log('Team player game completed - triggering main component callback');
+          await callbacks.value.onGameComplete(data);
       } else {
           // Non-team games: reset normally
           resetGameState();

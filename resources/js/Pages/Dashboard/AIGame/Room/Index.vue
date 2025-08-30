@@ -70,6 +70,7 @@ const aiSortDirection = ref('desc');
 const playWithAISection = ref(false);
 
 const isStealAnimating = ref(false);
+const hasNonLeaderSubmitted = ref(false);
 
 const joinTeamWithPlayers = ref(false);
 const joinTeamWithAI = ref(false);
@@ -1124,6 +1125,8 @@ const resetGameState = () => {
     isTeamLeader.value = false;
     teamLeaderName.value = '';
     suggestionInput.value = '';
+
+    hasNonLeaderSubmitted.value = false;
     
     console.log('Game state fully reset - after reset:', {
         currentQuestionIndex: currentQuestionIndex.value,
@@ -1403,40 +1406,52 @@ onMounted( () => {
             }
         },
         onGameComplete: async (data) => {
-            console.log('🔄 Game completed callback triggered for non-team leader');
+            console.log('🔄 Game completed callback triggered');
             
-            // Reset main component state
+            // For joinTeamWithPlayers games, non-leaders need to submit to hit controller
+            if (data.teamPlayerGame && !isTeamLeader.value && !hasNonLeaderSubmitted.value) {
+                console.log('Non-team leader submitting to controller to retrieve team answers');
+                hasNonLeaderSubmitted.value = true; // Prevent duplicate submissions
+                
+                try {
+                    // Submit empty answers - controller will replace with team leader's cached answers
+                    const emptyAnswers = new Array(currentGameQuestions.value.length).fill('');
+                    
+                    // Call the controller directly without going through the normal submitAnswers flow
+                    const response = await axios.post(`/games/${props.gameId}/submit-answer`, {
+                        answers: emptyAnswers,
+                        difficulty_id: selectedDifficulty.value,
+                        category_id: selectedCategory.value,
+                        teamPlayerGame: true,
+                        isTeamLeader: false,
+                        // Include AI answers if they were enabled
+                        ...(playWithAI.value && {
+                            aiAnswers: new Array(currentGameQuestions.value.length).fill(''),
+                            playWithAI: true
+                        }),
+                        ...(playWithBespokeAI.value && {
+                            bespokeAIAnswers: new Array(currentGameQuestions.value.length).fill(''),
+                            playWithBespokeAI: true,
+                            selectedAIModel: selectedAIModel.value
+                        })
+                    });
+                    
+                    console.log('Non-team leader submission successful:', response.data);
+                } catch (error) {
+                    console.error('Non-team leader submission failed:', error);
+                    addFlashMessage('Failed to sync with team answers', 'error');
+                }
+            }
+            
+            // Reset main component state for all players
             gameIsOver.value = true;
             isGameStarted.value = false;
             gameState.value.waitingForOthers = false;
             
             // Call the main component's resetGameState
             resetGameState();
-
-            addFlashMessage('Game completed! Your team has submitted answers.', 'success');
-        },
-
-        onNonLeaderSubmit: async () => {
-            console.log('🔄 Non-team leader submitting to process cached team answers');
             
-            try {
-                // Create empty answers array for non-leaders (controller will replace with cached team answers)
-                const emptyAnswers = new Array(currentGameQuestions.value.length).fill('');
-                
-                // Call submitAnswers with team player game settings
-                await submitAnswers(
-                    emptyAnswers,
-                    playerCount.value,
-                    selectedDifficulty.value,
-                    selectedCategory.value,
-                    false // isTeamLeader = false for non-leaders
-                );
-                
-                console.log('Non-team leader submission completed successfully');
-            } catch (error) {
-                console.error('Non-team leader submission failed:', error);
-                addFlashMessage('Failed to process team answers', 'error');
-            }
+            addFlashMessage('Game completed! Team answers have been submitted.', 'success');
         },
         onQuestionProgress: async (questionIndex, allAnswers = null) => {
             console.log('🔄 Received question progress event for question:', questionIndex);
