@@ -261,7 +261,7 @@ class AIGameService
 
 
 
-    public function submitAIAnswers($gameId, $userId, array $answers, $sessionId, $difficultyId = null, $categoryId = null)
+    public function submitAIAnswers($gameId, $userId, array $answers, $sessionId, $difficultyId = null, $categoryId = null, $isTeamLeader = null, $teamGameType = '')
     {
         Log::info('AI Service submitAIAnswers called', [
             'gameId' => $gameId,
@@ -304,6 +304,14 @@ class AIGameService
         }
         if ($categoryId !== null) {
             $answerJson['category_id'] = $categoryId;
+        }
+
+        if ($teamGameType && $teamGameType !== '') {
+            $answerJson['team_game_type'] = $teamGameType;
+        }
+
+        if ($isTeamLeader !== null) {
+            $answerJson['is_team_leader'] = $isTeamLeader;
         }
         
         $totalScore = 0;

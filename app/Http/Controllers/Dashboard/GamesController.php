@@ -267,8 +267,6 @@ class GamesController extends Controller
             'aiAnswers.*' => 'nullable|string',
             'bespokeAIAnswers' => 'sometimes|array',
             'bespokeAIAnswers.*' => 'nullable|string',
-            'teamPlayerLeader' => 'sometimes|boolean',
-            'teamAILeader' => 'sometimes|boolean',
             'playWithAI' => 'sometimes|boolean',
             'playWithBespokeAI' => 'sometimes|boolean',
             'bespokeAIModelId' => 'sometimes|nullable|integer|exists:bespoke_ai_models,id',
@@ -288,11 +286,16 @@ class GamesController extends Controller
         $difficultyId = $request->get('difficulty_id');
         $categoryId = $request->get('category_id');
 
-        $teamPlayerLeader = $request->get('teamPlayerLeader');
-        $teamAILeader = $request->get('teamPlayerLeader');
         $teamPlayerGame = $request->boolean('teamPlayerGame', false);
         $teamAIGame = $request->boolean('teamAIGame', false);
         $isTeamLeader = $request->boolean('isTeamLeader', false);
+
+        $teamGameType = '';
+        if ($teamPlayerGame) {
+            $teamGameType = 'teamPlayerGame';
+        } else if ($teamAIGame) {
+            $teamGameType = 'teamAIGame';
+        }
 
         if (is_null($difficultyId) || is_null($categoryId)) {
             $settingsKey = "game:{$gameId}:gameSettings";
@@ -492,7 +495,7 @@ class GamesController extends Controller
         }
 
         // Submit player answers (using final consolidated answers)
-        $this->gamesService->submitAnswers($gameId, $user->id, $finalPlayerAnswers, $sessionId, $difficultyId, $categoryId, $teamPlayerLeader, $teamAILeader);
+        $this->gamesService->submitAnswers($gameId, $user->id, $finalPlayerAnswers, $sessionId, $difficultyId, $categoryId, $isTeamLeader, $teamGameType);
 
         // Submit regular AI answers if enabled (using final consolidated answers)
         if ($request->boolean('playWithAI', false) && !empty($finalAIAnswers)) {
@@ -505,7 +508,9 @@ class GamesController extends Controller
                     $finalAIAnswers,
                     $sessionId,
                     $difficultyId,
-                    $categoryId
+                    $categoryId,
+                    $isTeamLeader,
+                    $teamGameType,
                 );
                 Log::info('Regular AI answers submitted successfully');
             } catch (\Exception $e) {
@@ -528,7 +533,9 @@ class GamesController extends Controller
                     $finalBespokeAIAnswers,
                     $sessionId,
                     $difficultyId,
-                    $categoryId
+                    $categoryId,
+                    $isTeamLeader,
+                    $teamGameType,
                 );
                 Log::info('Bespoke AI answers submitted successfully');
             } catch (\Exception $e) {

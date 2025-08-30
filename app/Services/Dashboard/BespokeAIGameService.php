@@ -301,7 +301,7 @@ class BespokeAIGameService
     /**
      * Submit bespoke AI answers for a complete game
      */
-    public function submitBespokeAIAnswers($gameId, $modelId, $userId, array $answers, $sessionId, $difficultyId = null, $categoryId = null)
+    public function submitBespokeAIAnswers($gameId, $modelId, $userId, array $answers, $sessionId, $difficultyId = null, $categoryId = null, $isTeamLeader = null, $teamGameType = '')
     {
         Log::info('Bespoke AI Service submitBespokeAIAnswers called', [
             'gameId' => $gameId,
@@ -350,6 +350,14 @@ class BespokeAIGameService
         }
         if ($categoryId !== null) {
             $answerJson['category_id'] = $categoryId;
+        }
+
+        if ($teamGameType && $teamGameType !== '') {
+            $answerJson['team_game_type'] = $teamGameType;
+        }
+
+        if ($isTeamLeader !== null) {
+            $answerJson['is_team_leader'] = $isTeamLeader;
         }
         
         $answerJson['model_id'] = $modelId;

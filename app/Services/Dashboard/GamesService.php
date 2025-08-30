@@ -590,7 +590,7 @@ class GamesService
 
     // Game submission methods:
 
-    public function submitAnswers($gameId, $userId, array $answers, $sessionId, $difficultyId = null, $categoryId = null)
+    public function submitAnswers($gameId, $userId, array $answers, $sessionId, $difficultyId = null, $categoryId = null, $isTeamLeader = null, $teamGameType = '')
     {
         Log::debug('Submitting answers', [
             'gameId' => $gameId, 
@@ -623,6 +623,14 @@ class GamesService
         }
         if ($categoryId !== null) {
             $answerJson['category_id'] = $categoryId;
+        }
+
+        if ($teamGameType && $teamGameType !== '') {
+            $answerJson['team_game_type'] = $teamGameType;
+        }
+
+        if ($isTeamLeader !== null) {
+            $answerJson['is_team_leader'] = $isTeamLeader;
         }
 
         $totalScore = 0;
