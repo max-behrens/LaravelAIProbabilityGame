@@ -474,6 +474,12 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
                     event: 'game.completed.multiplayer',
                     data: {
                         playerCount: playerCount,
+                        teamPlayerGame: teamPlayerGame.value,
+                        teamAIGame: teamAIGame.value,
+                        isTeamLeader: isTeamLeader,
+                        difficultyId: difficultyId,
+                        categoryId: categoryId,
+                        cleanAnswers: cleanAnswers,
                         timestamp: new Date().toISOString()
                     }
                 });
@@ -911,26 +917,39 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
       console.log('✅ Single player game completion processed - room is now available');
     });
 
-    // SIMPLIFIED: Multiplayer game completed - No more auto-submission needed
-    gameChannel.bind('game.completed.multiplayer', async (data) => {
-        console.log('🔔 Received game.completed.multiplayer event:', data);
-        
-        // All players have already submitted their answers individually
-        // This event just triggers UI updates and cleanup
-        
-        addFlashMessage('Game completed! All players have submitted their answers.', 'success');
-        
-        // Trigger live updates for all players
-        console.log('🔄 Triggering live updates for multiplayer completion...');
-        await Promise.all([
-            triggerScoresUpdate(),
-            triggerGameUpdate(),
-            triggerChartsUpdate()
-        ]);
-        
-        // Reset game state for all players
-        resetGameState();
-    });
+
+  gameChannel.bind('game.completed.multiplayer', async (data) => {
+      console.log('🔔 Received game.completed.multiplayer event:', data);
+      
+      // All players have already submitted their answers individually
+      // This event just triggers UI updates and cleanup
+      
+      addFlashMessage('Game completed! All players have submitted their answers.', 'success');
+
+      // UPDATED: Call the main component's reset for ALL players in team modes
+      if (data.teamPlayerGame) {
+          console.log('Team player game completed - triggering main component reset for all players');
+          if (callbacks.value.onGameComplete) {
+              await callbacks.value.onGameComplete(data);
+          }
+      } else {
+          // Non-team games: reset normally
+          resetGameState();
+      }
+      
+      // Trigger live updates for all players
+      console.log('🔄 Triggering live updates for multiplayer completion...');
+      await Promise.all([
+          triggerScoresUpdate(),
+          triggerGameUpdate(),
+          triggerChartsUpdate()
+      ]);
+      
+      // For non-team games, reset the player interactions state
+      if (!data.teamPlayerGame) {
+          resetGameState();
+      }
+  });
 
     // Team settings changed
   gameChannel.bind('team.settings.changed', async (data) => {

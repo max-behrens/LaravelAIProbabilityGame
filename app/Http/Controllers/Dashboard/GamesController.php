@@ -563,6 +563,7 @@ class GamesController extends Controller
             'team_ai_game' => $teamAIGame,
             'used_consolidated_answers' => $teamPlayerGame || $teamAIGame
         ]);
+
     }
 
     /**

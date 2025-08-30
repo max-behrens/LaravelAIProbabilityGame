@@ -182,14 +182,15 @@ const showQuestionInput = computed(() => {
                           !isWaitingForOthers.value && 
                           !gameIsOver.value && 
                           currentGameQuestions.value.length > 0;
+
+    console.log('showQuestionInput:', {
+        isGameStarted: isGameStarted.value,
+        isWaitingForOthers: isWaitingForOthers.value,
+        gameIsOver: gameIsOver.value,
+        hasQuestions: currentGameQuestions.value.length > 0
+    });
     
     if (!baseCondition) {
-        console.log('Base condition not met for showQuestionInput:', {
-            isGameStarted: isGameStarted.value,
-            isWaitingForOthers: isWaitingForOthers.value,
-            gameIsOver: gameIsOver.value,
-            hasQuestions: currentGameQuestions.value.length > 0
-        });
         return false;
     }
     
@@ -206,23 +207,6 @@ const showQuestionInput = computed(() => {
     // Team AI mode: show for everyone (all can submit)
     if (joinTeamWithAI.value) {
         return true;
-    }
-    
-    // Team Player mode: show for team leader only, OR for everyone on final question
-    if (joinTeamWithPlayers.value) {
-        const showForTeamLeader = isTeamLeader.value;
-        const showForFinalQuestion = currentQuestionIndex.value === currentGameQuestions.value.length - 1;
-        
-        console.log('Team player mode visibility check:', {
-            isTeamLeader: isTeamLeader.value,
-            currentQuestionIndex: currentQuestionIndex.value,
-            totalQuestions: currentGameQuestions.value.length,
-            showForTeamLeader,
-            showForFinalQuestion,
-            result: showForTeamLeader || showForFinalQuestion
-        });
-        
-        return showForTeamLeader || showForFinalQuestion;
     }
     
     // Default: show for everyone
@@ -1005,6 +989,8 @@ const nextOrSubmit = async () => {
                 }
             }
 
+            console.log('LOGLOGLOGLOGLOGLOGLOGLOGLOGLOG - NOS FINAL Q');
+
             // TEAM PLAYER GAME FIX: Non-leaders need to submit at the last question
             // but with empty answers since they'll get team leader's answers in the controller
             let submissionAnswers = answers.value.map(answer => answer);
@@ -1417,15 +1403,40 @@ onMounted( () => {
             }
         },
         onGameComplete: async (data) => {
-            console.log('🔄 Received game complete event. Resetting UI state...');
+            console.log('🔄 Game completed callback triggered for non-team leader');
+            
+            // Reset main component state
             gameIsOver.value = true;
             isGameStarted.value = false;
             gameState.value.waitingForOthers = false;
+            
+            // Call the main component's resetGameState
+            resetGameState();
 
-            setTimeout(() => {
-                resetGameState();
-                console.log('Auto-submitted user UI state fully reset - ready for new game');
-            }, 2000);
+            addFlashMessage('Game completed! Your team has submitted answers.', 'success');
+        },
+
+        onNonLeaderSubmit: async () => {
+            console.log('🔄 Non-team leader submitting to process cached team answers');
+            
+            try {
+                // Create empty answers array for non-leaders (controller will replace with cached team answers)
+                const emptyAnswers = new Array(currentGameQuestions.value.length).fill('');
+                
+                // Call submitAnswers with team player game settings
+                await submitAnswers(
+                    emptyAnswers,
+                    playerCount.value,
+                    selectedDifficulty.value,
+                    selectedCategory.value,
+                    false // isTeamLeader = false for non-leaders
+                );
+                
+                console.log('Non-team leader submission completed successfully');
+            } catch (error) {
+                console.error('Non-team leader submission failed:', error);
+                addFlashMessage('Failed to process team answers', 'error');
+            }
         },
         onQuestionProgress: async (questionIndex, allAnswers = null) => {
             console.log('🔄 Received question progress event for question:', questionIndex);
@@ -1579,7 +1590,7 @@ onUnmounted(() => {
                             </div>
 
                             <!-- Answer Input (only for team leader in team player game, or everyone else) -->
-                            <div v-if="canSubmitAnswers || (joinTeamWithPlayers && isLastQuestion)" class="flex flex-col sm:flex-row gap-4 justify-center mb-4">
+                            <div v-if="canSubmitAnswers" class="flex flex-col sm:flex-row gap-4 justify-center mb-4">
                                 <button 
                                     :disabled="submitting || isStealAnimating" 
                                     @click="stealAnimation"
@@ -1593,13 +1604,13 @@ onUnmounted(() => {
                                         :class="{
                                             'animate-pulse bg-white !text-white': isStealAnimating,
                                             'bg-gray-100 !text-white': !isStealAnimating,
-                                            'opacity-50 cursor-not-allowed': !canSubmitAnswers && joinTeamWithPlayers && !isLastQuestion
+                                            'opacity-50 cursor-not-allowed': !canSubmitAnswers
                                         }"
-                                        :disabled="isStealAnimating || (!canSubmitAnswers && joinTeamWithPlayers && !isLastQuestion)"
+                                        :disabled="isStealAnimating || (!canSubmitAnswers)"
                                         class="px-4 py-2 rounded w-full !placeholder-white transition-all duration-500"
                                         :placeholder="
                                             isStealAnimating ? '' : 
-                                            (!canSubmitAnswers && joinTeamWithPlayers && !isLastQuestion) ? 'Only team leader can answer' :
+                                            (!canSubmitAnswers) ? 'Only team leader can answer' :
                                             'Your answer'
                                         " 
                                     />
