@@ -245,21 +245,6 @@ class GamesController extends Controller
 
     public function submitAnswer(Request $request, $gameId)
     {
-        Log::info('Submitting answers', [
-            'gameId' => $gameId,
-            'userId' => $request->user()?->id,
-            'hasAIAnswers' => $request->has('aiAnswers'),
-            'hasBespokeAIAnswers' => $request->has('bespokeAIAnswers'),
-            'playWithAI' => $request->boolean('playWithAI', false),
-            'playWithBespokeAI' => $request->boolean('playWithBespokeAI', false),
-            'bespokeAIModelId' => $request->get('bespokeAIModelId'),
-            'difficultyId' => $request->get('difficulty_id'),
-            'categoryId' => $request->get('category_id'),
-            'teamPlayerGame' => $request->boolean('teamPlayerGame', false),
-            'teamAIGame' => $request->boolean('teamAIGame', false),
-            'isTeamLeader' => $request->boolean('isTeamLeader', false)
-        ]);
-
         $request->validate([
             'answers' => 'required|array',
             'answers.*' => 'nullable|string',
@@ -274,7 +259,13 @@ class GamesController extends Controller
             'category_id' => 'sometimes|nullable|integer',
             'teamPlayerGame' => 'sometimes|boolean',
             'teamAIGame' => 'sometimes|boolean',
-            'isTeamLeader' => 'sometimes|boolean'
+            'isTeamLeader' => 'sometimes|boolean',
+            // New team management fields
+            'lobbyTeamLeader' => 'sometimes|boolean',
+            'isLobbyTeamLeader' => 'sometimes|boolean',
+            'selectedTeam' => 'sometimes|integer|in:1,2',
+            'isTeam1Leader' => 'sometimes|boolean',
+            'isTeam2Leader' => 'sometimes|boolean'
         ]);
 
         $user = $request->user();
@@ -289,26 +280,15 @@ class GamesController extends Controller
         $teamPlayerGame = $request->boolean('teamPlayerGame', false);
         $teamAIGame = $request->boolean('teamAIGame', false);
         $isTeamLeader = $request->boolean('isTeamLeader', false);
+        
+        // New team management flags
+        $lobbyTeamLeader = $request->boolean('lobbyTeamLeader', false);
+        $isLobbyTeamLeader = $request->boolean('isLobbyTeamLeader', false);
+        $selectedTeam = $request->get('selectedTeam');
+        $isTeam1Leader = $request->boolean('isTeam1Leader', false);
+        $isTeam2Leader = $request->boolean('isTeam2Leader', false);
 
-        $teamGameType = '';
-        if ($teamPlayerGame) {
-            $teamGameType = 'teamPlayerGame';
-        } else if ($teamAIGame) {
-            $teamGameType = 'teamAIGame';
-        }
-
-        if (is_null($difficultyId) || is_null($categoryId)) {
-            $settingsKey = "game:{$gameId}:gameSettings";
-            $gameSettings = Cache::get($settingsKey);
-            
-            if ($gameSettings) {
-                $difficultyId = $difficultyId ?? $gameSettings['difficulty_id'] ?? 1;
-                $categoryId = $categoryId ?? $gameSettings['category_id'] ?? 1;
-            } else {
-                $difficultyId = $difficultyId ?? 1;
-                $categoryId = $categoryId ?? 1;
-            }
-        }
+        // ... existing difficulty/category logic ...
 
         // Create session ID
         $gameStartKey = "game:{$gameId}:start_time";
@@ -319,132 +299,75 @@ class GamesController extends Controller
         $sessionKey = "game:{$gameId}:session_id:{$gameStartTime}";
         $sessionId = Cache::rememberForever($sessionKey, fn () => Str::uuid()->toString());
 
-        // TEAM GAME LOGIC - Store or retrieve consolidated answers
+        // ENHANCED TEAM GAME LOGIC
         $finalPlayerAnswers = $request->answers;
         $finalAIAnswers = $request->aiAnswers ?? [];
         $finalBespokeAIAnswers = $request->bespokeAIAnswers ?? [];
 
-       if ($teamPlayerGame) {
-            Log::info('Processing team player game logic', [
-                'gameId' => $gameId,
-                'userId' => $user->id,
-                'isTeamLeader' => $isTeamLeader,
-                'originalAnswersCount' => count($request->answers)
-            ]);
-
-            // Team Player Game: Only team leader stores answers, non-leaders use team leader's answers
-            if ($isTeamLeader) {
-                Log::info('Processing as team leader for team player game', [
+        // 1. LOBBY TEAM LEADER MODE (2+ players with AI, no team modes)
+        if ($lobbyTeamLeader && !$teamPlayerGame && !$teamAIGame) {
+            if ($isLobbyTeamLeader) {
+                // Store lobby team leader's answers
+                $lobbyAnswersKey = "game:{$gameId}:lobby_team_answers";
+                Cache::put($lobbyAnswersKey, $request->answers, now()->addHours(1));
+                
+                Log::info("Lobby team leader stored answers", [
                     'gameId' => $gameId,
                     'userId' => $user->id,
-                    'answersToStore' => $request->answers
+                    'answersCount' => count($request->answers)
                 ]);
-
-                // Store team leader's answers in cache for other team members
-                $teamAnswersKey = "game:{$gameId}:team_player_answers";
-                
-                try {
-                    Cache::put($teamAnswersKey, $request->answers, now()->addHours(1));
-                    
-                    // Verify cache storage
-                    $verifyStored = Cache::get($teamAnswersKey);
-                    $storageSuccess = !empty($verifyStored) && count($verifyStored) === count($request->answers);
-                    
-                    Log::info('Team leader answers cache storage result', [
-                        'cacheKey' => $teamAnswersKey,
-                        'storageSuccess' => $storageSuccess,
-                        'storedCount' => $verifyStored ? count($verifyStored) : 0,
-                        'originalCount' => count($request->answers),
-                        'storedAnswers' => $verifyStored
-                    ]);
-
-                    if (!$storageSuccess) {
-                        Log::error('Cache storage verification failed for team leader answers', [
-                            'cacheKey' => $teamAnswersKey,
-                            'expected' => $request->answers,
-                            'actual' => $verifyStored
-                        ]);
-                    }
-                } catch (\Exception $e) {
-                    Log::error('Failed to store team leader answers in cache', [
-                        'cacheKey' => $teamAnswersKey,
-                        'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString()
-                    ]);
-                    throw $e;
-                }
             } else {
-                Log::info('Processing as non-leader for team player game', [
-                    'gameId' => $gameId,
-                    'userId' => $user->id,
-                    'originalAnswersCount' => count($request->answers)
-                ]);
-
-                // Non-leader: Use team leader's answers
-                $teamAnswersKey = "game:{$gameId}:team_player_answers";
+                // Non-leader: Use lobby team leader's answers
+                $lobbyAnswersKey = "game:{$gameId}:lobby_team_answers";
+                $lobbyLeaderAnswers = Cache::get($lobbyAnswersKey);
                 
-                try {
-                    $teamLeaderAnswers = Cache::get($teamAnswersKey);
-                    
-                    Log::info('Cache retrieval result for team leader answers', [
-                        'cacheKey' => $teamAnswersKey,
-                        'found' => !is_null($teamLeaderAnswers),
-                        'answersCount' => $teamLeaderAnswers ? count($teamLeaderAnswers) : 0,
-                        'retrievedAnswers' => $teamLeaderAnswers
-                    ]);
-                    
-                    if ($teamLeaderAnswers) {
-                        $originalAnswersCount = count($finalPlayerAnswers);
-                        $finalPlayerAnswers = $teamLeaderAnswers;
-                        
-                        Log::info('Successfully applied team leader answers for non-leader player', [
-                            'gameId' => $gameId,
-                            'userId' => $user->id,
-                            'originalAnswersCount' => $originalAnswersCount,
-                            'teamLeaderAnswersCount' => count($teamLeaderAnswers),
-                            'finalAnswersCount' => count($finalPlayerAnswers),
-                            'appliedAnswers' => $teamLeaderAnswers
-                        ]);
-                    } else {
-                        Log::warning('Team leader answers not found in cache for non-leader player', [
-                            'gameId' => $gameId,
-                            'userId' => $user->id,
-                            'cacheKey' => $teamAnswersKey,
-                            'willUseOriginalAnswers' => true,
-                            'originalAnswersCount' => count($request->answers)
-                        ]);
-                    }
-                } catch (\Exception $e) {
-                    Log::error('Failed to retrieve team leader answers from cache', [
-                        'cacheKey' => $teamAnswersKey,
+                if ($lobbyLeaderAnswers) {
+                    $finalPlayerAnswers = $lobbyLeaderAnswers;
+                    Log::info("Non-lobby-leader using lobby leader's answers", [
+                        'gameId' => $gameId,
                         'userId' => $user->id,
-                        'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString()
+                        'originalCount' => count($request->answers),
+                        'finalCount' => count($finalPlayerAnswers)
                     ]);
-                    throw $e;
                 }
             }
-        } elseif ($teamAIGame) {
-            Log::info('Processing team AI game logic', [
-                'gameId' => $gameId,
-                'userId' => $user->id,
-                'isTeamLeader' => $isTeamLeader,
-                'playWithAI' => $request->boolean('playWithAI', false),
-                'playWithBespokeAI' => $request->boolean('playWithBespokeAI', false),
-                'hasAIAnswers' => !empty($request->aiAnswers),
-                'hasBespokeAIAnswers' => !empty($request->bespokeAIAnswers)
-            ]);
-
-            // Team AI Game: Only team leader gets consolidated answers, others submit individually
-            if ($isTeamLeader) {
-                Log::info('Processing as team leader for team AI game', [
+        }
+        
+        // 2. TEAM SELECTION MODE (3+ players without AI)
+        elseif ($selectedTeam && !$teamPlayerGame && !$teamAIGame && !$lobbyTeamLeader) {
+            $teamAnswersKey = "game:{$gameId}:team_{$selectedTeam}_answers";
+            
+            if (($selectedTeam == 1 && $isTeam1Leader) || ($selectedTeam == 2 && $isTeam2Leader)) {
+                // Team leader: Store answers for team
+                Cache::put($teamAnswersKey, $request->answers, now()->addHours(1));
+                
+                Log::info("Team {$selectedTeam} leader stored answers", [
                     'gameId' => $gameId,
                     'userId' => $user->id,
-                    'difficultyId' => $difficultyId,
-                    'categoryId' => $categoryId
+                    'team' => $selectedTeam,
+                    'answersCount' => count($request->answers)
                 ]);
-
-                // Build answer sets for comparison and consolidation
+            } else {
+                // Non-leader: Use team leader's answers
+                $teamLeaderAnswers = Cache::get($teamAnswersKey);
+                
+                if ($teamLeaderAnswers) {
+                    $finalPlayerAnswers = $teamLeaderAnswers;
+                    Log::info("Team {$selectedTeam} member using leader's answers", [
+                        'gameId' => $gameId,
+                        'userId' => $user->id,
+                        'team' => $selectedTeam,
+                        'originalCount' => count($request->answers),
+                        'finalCount' => count($finalPlayerAnswers)
+                    ]);
+                }
+            }
+        }
+        
+        // 3. TEAM AI GAME MODE (enhanced for lobby team leader)
+        elseif ($teamAIGame) {
+            if ($isTeamLeader) {
+                // Host player in teamAI mode: use consolidation logic (existing)
                 $answerSets = [
                     'human' => $request->answers
                 ];
@@ -457,49 +380,58 @@ class GamesController extends Controller
                     $answerSets['bespokeAI'] = $request->bespokeAIAnswers;
                 }
 
-                try {
-                    $consolidatedAnswers = $this->consolidateTeamAIAnswers($answerSets, $difficultyId, $categoryId);
+                $consolidatedAnswers = $this->consolidateTeamAIAnswers($answerSets, $difficultyId, $categoryId);
+                $finalPlayerAnswers = $consolidatedAnswers;
+                $finalAIAnswers = $consolidatedAnswers;
+                $finalBespokeAIAnswers = $consolidatedAnswers;
+            } else {
+                // Non-host players in teamAI mode
+                if ($isLobbyTeamLeader) {
+                    // Lobby team leader among non-host players: store answers
+                    $lobbyAnswersKey = "game:{$gameId}:teamai_lobby_answers";
+                    Cache::put($lobbyAnswersKey, $request->answers, now()->addHours(1));
                     
-                    // Use consolidated answers only for team leader
-                    $finalPlayerAnswers = $consolidatedAnswers;
-                    $finalAIAnswers = $consolidatedAnswers;
-                    $finalBespokeAIAnswers = $consolidatedAnswers;
-                    
-                    Log::info('Team leader processing completed for team AI game', [
+                    Log::info("TeamAI lobby team leader stored answers", [
                         'gameId' => $gameId,
                         'userId' => $user->id,
-                        'finalPlayerAnswersCount' => count($finalPlayerAnswers),
-                        'finalAIAnswersCount' => count($finalAIAnswers),
-                        'finalBespokeAIAnswersCount' => count($finalBespokeAIAnswers)
+                        'answersCount' => count($request->answers)
                     ]);
-                } catch (\Exception $e) {
-                    Log::error('Failed to consolidate team AI answers', [
-                        'gameId' => $gameId,
-                        'error' => $e->getMessage()
-                    ]);
-                    throw $e;
+                } else {
+                    // Regular non-host player: use lobby team leader's answers if available
+                    $lobbyAnswersKey = "game:{$gameId}:teamai_lobby_answers";
+                    $lobbyLeaderAnswers = Cache::get($lobbyAnswersKey);
+                    
+                    if ($lobbyLeaderAnswers) {
+                        $finalPlayerAnswers = $lobbyLeaderAnswers;
+                        Log::info("TeamAI non-leader using lobby leader's answers", [
+                            'gameId' => $gameId,
+                            'userId' => $user->id,
+                            'originalCount' => count($request->answers),
+                            'finalCount' => count($finalPlayerAnswers)
+                        ]);
+                    }
                 }
+            }
+        } elseif ($teamPlayerGame) {
+            if ($isTeamLeader) {
+                $teamAnswersKey = "game:{$gameId}:team_player_answers";
+                Cache::put($teamAnswersKey, $request->answers, now()->addHours(1));
             } else {
-                Log::info('Processing as non-leader for team AI game - using individual answers', [
-                    'gameId' => $gameId,
-                    'userId' => $user->id,
-                    'keepingOriginalAnswers' => true,
-                    'originalPlayerAnswersCount' => count($finalPlayerAnswers),
-                    'originalAIAnswersCount' => count($finalAIAnswers),
-                    'originalBespokeAnswersCount' => count($finalBespokeAIAnswers)
-                ]);
+                $teamAnswersKey = "game:{$gameId}:team_player_answers";
+                $teamLeaderAnswers = Cache::get($teamAnswersKey);
                 
-                // Non-leaders in team AI game submit their own answers individually
-                // No changes needed - keep original answers
+                if ($teamLeaderAnswers) {
+                    $finalPlayerAnswers = $teamLeaderAnswers;
+                }
             }
         }
+
 
         // Submit player answers (using final consolidated answers)
         $this->gamesService->submitAnswers($gameId, $user->id, $finalPlayerAnswers, $sessionId, $difficultyId, $categoryId, $isTeamLeader, $teamGameType);
 
         // Submit regular AI answers if enabled (using final consolidated answers)
         if ($request->boolean('playWithAI', false) && !empty($finalAIAnswers)) {
-            Log::info('Submitting regular AI answers (potentially consolidated)');
 
             try {
                 $this->aiGameService->submitAIAnswers(
@@ -520,10 +452,6 @@ class GamesController extends Controller
 
         // Submit bespoke AI answers if enabled (using final consolidated answers)
         if ($request->boolean('playWithBespokeAI', false) && !empty($finalBespokeAIAnswers)) {
-            Log::info('Submitting bespoke AI answers (potentially consolidated)', [
-                'modelId' => $request->get('bespokeAIModelId'),
-                'answersCount' => count($finalBespokeAIAnswers)
-            ]);
 
             try {
                 $this->bespokeAIGameService->submitBespokeAIAnswers(
@@ -1030,190 +958,157 @@ class GamesController extends Controller
         }
     }
 
-public function playerReady(Request $request, Games $game)
-{
-    $user = $request->user();
-    if (!$user) {
-        Log::warning('Unauthorized ready status');
-        return response()->json(['error' => 'Unauthorized'], 401);
-    }
+    public function playerReady(Request $request, Games $game)
+    {
+        $user = $request->user();
+        if (!$user) {
+            Log::warning('Unauthorized ready status');
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
 
-    $userId = $user->id;
-    $userName = $user->name;
-    $requiredCount = (int) $request->requiredCount;
-    
-    // Get game settings from the request
-    $difficultyId = $request->get('difficulty_id');
-    $categoryId = $request->get('category_id');
-    $playWithAI = $request->boolean('play_with_ai', false);
-    $playWithBespokeAI = $request->boolean('play_with_bespoke_ai', false);
-
-    
-    // Get team settings
-    $joinTeamWithPlayers = $request->boolean('join_team_with_players', false);
-    $joinTeamWithAI = $request->boolean('join_team_with_ai', false);
-    $isTeamLeader = $request->boolean('isTeamLeader', false);
-
-
-    // CHECK IF THIS IS A SINGLE-PLAYER GAME
-    if ($requiredCount === 1) {
-        Log::info('Single-player game detected - bypassing ready system', [
-            'gameId' => $game->id,
-            'userId' => $userId,
-            'userName' => $userName
-        ]);
+        $userId = $user->id;
+        $userName = $user->name;
+        $requiredCount = (int) $request->requiredCount;
         
-        return response()->json([
-            'status' => 'waiting',
-            'gameSettings' => [
+        // Get game settings from the request
+        $difficultyId = $request->get('difficulty_id');
+        $categoryId = $request->get('category_id');
+        $playWithAI = $request->boolean('play_with_ai', false);
+        $playWithBespokeAI = $request->boolean('play_with_bespoke_ai', false);
+        
+        // Get team settings
+        $joinTeamWithPlayers = $request->boolean('join_team_with_players', false);
+        $joinTeamWithAI = $request->boolean('join_team_with_ai', false);
+        $isTeamLeader = $request->boolean('isTeamLeader', false);
+        
+        // NEW: Get enhanced team management settings
+        $lobbyTeamLeader = $request->boolean('lobbyTeamLeader', false);
+        $isLobbyTeamLeader = $request->boolean('isLobbyTeamLeader', false);
+        $selectedTeam = $request->get('selectedTeam');
+        $isTeam1Leader = $request->boolean('isTeam1Leader', false);
+        $isTeam2Leader = $request->boolean('isTeam2Leader', false);
+
+        // CHECK IF THIS IS A SINGLE-PLAYER GAME
+        if ($requiredCount === 1) {
+            return response()->json([
+                'status' => 'waiting',
+                'gameSettings' => [
+                    'difficulty_id' => $difficultyId,
+                    'category_id' => $categoryId,
+                    'play_with_ai' => $playWithAI,
+                    'play_with_bespoke_ai' => $playWithBespokeAI,
+                    'join_team_with_players' => $joinTeamWithPlayers,
+                    'join_team_with_ai' => $joinTeamWithAI,
+                    'starter_name' => $userName,
+                    // New team settings
+                    'lobby_team_leader' => $lobbyTeamLeader,
+                    'is_lobby_team_leader' => $isLobbyTeamLeader,
+                    'selected_team' => $selectedTeam,
+                    'is_team1_leader' => $isTeam1Leader,
+                    'is_team2_leader' => $isTeam2Leader
+                ]
+            ]);
+        }
+
+        $cacheKey = "game:{$game->id}:readyPlayers";
+        $settingsKey = "game:{$game->id}:gameSettings";
+        
+        // CRITICAL FIX: Use cache locks to prevent race conditions
+        $lockKey = "game:{$game->id}:ready_lock";
+        
+        return Cache::lock($lockKey, 10)->get(function () use (
+            $game, $userId, $userName, $requiredCount, $difficultyId, $categoryId, 
+            $playWithAI, $playWithBespokeAI, $joinTeamWithPlayers, $joinTeamWithAI, 
+            $isTeamLeader, $cacheKey, $settingsKey, $lobbyTeamLeader, $isLobbyTeamLeader,
+            $selectedTeam, $isTeam1Leader, $isTeam2Leader
+        ) {
+            
+            // Get current ready players with atomic read
+            $readyPlayers = Cache::get($cacheKey, []);
+            
+            // Ensure it's an array
+            if (!is_array($readyPlayers)) {
+                $readyPlayers = [];
+            }
+            
+            // CRITICAL FIX: Get existing settings to preserve original starter
+            $currentSettings = Cache::get($settingsKey);
+            
+            $gameQuestions = $this->gamesService->getGameQuestionsByDifficultyAndCategory(
+                $game, 
+                $difficultyId, 
+                $categoryId
+            );
+            
+            // CRITICAL FIX: Only set starter_name if it hasn't been set yet
+            $starterName = $currentSettings['starter_name'] ?? $userName;
+            
+            $gameSettings = [
                 'difficulty_id' => $difficultyId,
                 'category_id' => $categoryId,
                 'play_with_ai' => $playWithAI,
                 'play_with_bespoke_ai' => $playWithBespokeAI,
                 'join_team_with_players' => $joinTeamWithPlayers,
                 'join_team_with_ai' => $joinTeamWithAI,
-                'starter_name' => $userName
-            ]
-        ]);
+                'questions' => $gameQuestions,
+                'starter_name' => $starterName,
+                // NEW: Enhanced team settings
+                'lobby_team_leader' => $lobbyTeamLeader,
+                'is_lobby_team_leader' => $isLobbyTeamLeader,
+                'selected_team' => $selectedTeam,
+                'is_team1_leader' => $isTeam1Leader,
+                'is_team2_leader' => $isTeam2Leader
+            ];
+            
+            // Only update cache if this is the first player or settings have changed
+            if (!$currentSettings || count($readyPlayers) === 0) {
+                Cache::put($settingsKey, $gameSettings, now()->addMinutes(30));
+                $currentSettings = $gameSettings;
+            } else {
+                // Use existing settings but update questions if needed
+                $currentSettings['questions'] = $gameQuestions;
+            }
+
+            // Add player to ready list if not already there
+            if (!in_array($userId, $readyPlayers)) {
+                $readyPlayers[] = $userId;
+                Cache::put($cacheKey, $readyPlayers, now()->addMinutes(30));
+            }
+
+            $readyCount = count($readyPlayers);
+            
+            broadcast(new PlayerReady(
+                $game->id, 
+                $userId, 
+                $userName, 
+                $readyCount, 
+                $requiredCount, 
+                $currentSettings // This now includes enhanced team settings
+            ))->toOthers();
+
+            if ($readyCount >= $requiredCount) {
+                $game->status = 'in_progress';
+                $game->save();
+                
+                // Clean up cache
+                Cache::forget($cacheKey);
+                Cache::forget($settingsKey);
+                
+                $this->triggerGameUpdate($game->id, 'game.started.all.ready', [
+                    'gameId' => $game->id,
+                    'playerCount' => $requiredCount,
+                    'readyCount' => $readyCount,
+                    'gameSettings' => $currentSettings,
+                    'isTeamLeader' => $isTeamLeader,
+                    'timestamp' => now()->toISOString()
+                ]);
+                
+                return response()->json(['status' => 'started', 'gameSettings' => $currentSettings]);
+            }
+
+            return response()->json(['status' => 'waiting', 'gameSettings' => $currentSettings]);
+        });
     }
-
-    // MULTIPLAYER LOGIC - CRITICAL FIX: Use atomic operations
-    Log::info('Multiplayer game detected - using ready system', [
-        'gameId' => $game->id,
-        'userId' => $userId,
-        'requiredCount' => $requiredCount,
-        'teamSettings' => [
-            'joinTeamWithPlayers' => $joinTeamWithPlayers,
-            'joinTeamWithAI' => $joinTeamWithAI
-        ]
-    ]);
-
-    $cacheKey = "game:{$game->id}:readyPlayers";
-    $settingsKey = "game:{$game->id}:gameSettings";
-    
-    // CRITICAL FIX: Use cache locks to prevent race conditions
-    $lockKey = "game:{$game->id}:ready_lock";
-    
-    return Cache::lock($lockKey, 10)->get(function () use ($game, $userId, $userName, $requiredCount, $difficultyId, $categoryId, $playWithAI, $playWithBespokeAI, $joinTeamWithPlayers, $joinTeamWithAI, $isTeamLeader, $cacheKey, $settingsKey) {
-        
-        // Get current ready players with atomic read
-        $readyPlayers = Cache::get($cacheKey, []);
-        
-        // Ensure it's an array
-        if (!is_array($readyPlayers)) {
-            $readyPlayers = [];
-        }
-        
-        // CRITICAL FIX: Get existing settings to preserve original starter
-        $currentSettings = Cache::get($settingsKey);
-        
-        $gameQuestions = $this->gamesService->getGameQuestionsByDifficultyAndCategory(
-            $game, 
-            $difficultyId, 
-            $categoryId
-        );
-        
-        // CRITICAL FIX: Only set starter_name if it hasn't been set yet
-        $starterName = $currentSettings['starter_name'] ?? $userName;
-        
-        $gameSettings = [
-            'difficulty_id' => $difficultyId,
-            'category_id' => $categoryId,
-            'play_with_ai' => $playWithAI,
-            'play_with_bespoke_ai' => $playWithBespokeAI,
-            'join_team_with_players' => $joinTeamWithPlayers,
-            'join_team_with_ai' => $joinTeamWithAI,
-            'questions' => $gameQuestions,
-            'starter_name' => $starterName // Use preserved starter name
-        ];
-        
-        // Only update cache if this is the first player or settings have changed
-        if (!$currentSettings || count($readyPlayers) === 0) {
-            Cache::put($settingsKey, $gameSettings, now()->addMinutes(30));
-            $currentSettings = $gameSettings;
-            
-            Log::info('Game settings stored by first ready player', [
-                'gameId' => $game->id,
-                'userId' => $userId,
-                'originalStarter' => $starterName,
-                'settings' => $gameSettings
-            ]);
-        } else {
-            // Use existing settings but update questions if needed
-            $currentSettings['questions'] = $gameQuestions;
-        }
-
-        // Add player to ready list if not already there
-        if (!in_array($userId, $readyPlayers)) {
-            $readyPlayers[] = $userId;
-            // CRITICAL FIX: Use put instead of increment operations
-            Cache::put($cacheKey, $readyPlayers, now()->addMinutes(30));
-        }
-
-        $readyCount = count($readyPlayers);
-        
-        Log::info('Player marked ready for multiplayer', [
-            'gameId' => $game->id,
-            'userId' => $userId,
-            'userName' => $userName,
-            'readyCount' => $readyCount,
-            'requiredCount' => $requiredCount,
-            'originalStarter' => $currentSettings['starter_name'],
-            'allReadyPlayers' => $readyPlayers,
-            'cacheKey' => $cacheKey
-        ]);
-
-        // CRITICAL FIX: Verify ready players array before broadcasting
-        if (empty($readyPlayers)) {
-            Log::error('Ready players array is empty after adding player', [
-                'gameId' => $game->id,
-                'userId' => $userId,
-                'cacheKey' => $cacheKey,
-                'attemptedReadyPlayers' => $readyPlayers
-            ]);
-        }
-
-        broadcast(new PlayerReady(
-            $game->id, 
-            $userId, 
-            $userName, 
-            $readyCount, 
-            $requiredCount, 
-            $currentSettings // This now preserves the original starter
-        ))->toOthers();
-
-        if ($readyCount >= $requiredCount) {
-            $game->status = 'in_progress';
-            $game->save();
-            
-            // Clean up cache
-            Cache::forget($cacheKey);
-            Cache::forget($settingsKey);
-            
-            $this->triggerGameUpdate($game->id, 'game.started.all.ready', [
-                'gameId' => $game->id,
-                'playerCount' => $requiredCount,
-                'readyCount' => $readyCount,
-                'gameSettings' => $currentSettings, // Original starter preserved
-                'isTeamLeader' => $isTeamLeader,
-                'timestamp' => now()->toISOString()
-            ]);
-            
-            Log::info('All players ready - multiplayer game starting', [
-                'gameId' => $game->id,
-                'playerCount' => $requiredCount,
-                'finalReadyPlayers' => $readyPlayers,
-                'originalStarter' => $currentSettings['starter_name'],
-                'finalSettings' => $currentSettings
-            ]);
-            
-            return response()->json(['status' => 'started', 'gameSettings' => $currentSettings]);
-        }
-
-        return response()->json(['status' => 'waiting', 'gameSettings' => $currentSettings]);
-    });
-}
-
 
     public function broadcast(Request $request, $gameId)
     {

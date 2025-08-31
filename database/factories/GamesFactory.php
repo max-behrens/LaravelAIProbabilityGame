@@ -21,7 +21,7 @@ class GamesFactory extends Factory
     {
         return [
             'game_type_id' => GameType::inRandomOrder()->first()->id ?? GameType::factory(),
-            'max_players' => 2, // Or any default number
+            'max_players' => 4,
         ];
     }
 

@@ -32,6 +32,7 @@ const props = defineProps({
     auth: Object,
 });
 
+
 // Reactive state
 const currentGame = ref({ users: [] });
 const gameScores = ref([]);
@@ -46,6 +47,7 @@ const submitting = ref(false);
 const currentQuestionIndex = ref(0);
 const answers = ref([]);
 const isGameStarted = ref(false);
+const notInActiveGame = ref(false);
 const gameIsOver = ref(false); // Flag to indicate game is finished, but not necessarily reset yet
 const gameGraphRef = ref(null);
 const gameHeatmapRef = ref(null);
@@ -76,8 +78,14 @@ const joinTeamWithPlayers = ref(false);
 const joinTeamWithAI = ref(false);
 const suggestionInput = ref('');
 const isTeamMode = ref(false);
-const isTeamLeader = ref(false);
 const teamLeaderName = ref('');
+
+// Team selection state for 3+ players without AI
+const selectedTeam = ref(1); // 1 or 2
+const lobbyTeamLeader = ref(null);
+const isLobbyTeamLeader = ref(false);
+const team1Players = ref([]);
+const team2Players = ref([]);
 
 
 // Initialize player interactions first
@@ -90,6 +98,9 @@ const {
     preAnsweredQuestions,
     preReadyPlayers,
     isWaitingToStart,
+    team1Leader,
+    team2Leader,
+    playerTeamAssignments,
     fetchPlayers,
     changePlayerCount,
     answerQuestion,
@@ -172,9 +183,74 @@ const isLastQuestion = computed(() => {
     return currentQuestionIndex.value === currentGameQuestions.value.length - 1;
 });
 
+const isTeamLeader = computed(() => {
+    // Lobby team leader mode
+    if (shouldShowLobbyTeamLeader.value) {
+        return isLobbyTeamLeader.value;
+    }
+    
+    // Team selection mode (3+ players without AI)
+    if (shouldShowTeamSelection.value) {
+        return isTeam1Leader.value || isTeam2Leader.value;
+    }
+    
+    // Existing team modes
+    if (joinTeamWithPlayers.value || joinTeamWithAI.value) {
+        return isTeamLeader.value; // Use the existing logic
+    }
+    
+    return false;
+});
+
 // Watch for game state changes
 const isWaitingForOthers = computed(() => gameState.value.waitingForOthers);
 const isGameInProgress = computed(() => gameState.value.gameInProgress);
+
+const isTeam1Leader = computed(() => {
+    return selectedTeam.value === 1 && team1Leader.value === props.auth.user.name;
+});
+
+const isTeam2Leader = computed(() => {
+    return selectedTeam.value === 2 && team2Leader.value === props.auth.user.name;
+});
+
+const canBecomeTeam1Leader = computed(() => {
+    return selectedTeam.value === 1 && 
+           !team1Leader.value && 
+           !isWaitingForOthers.value && 
+           !gameIsOver.value;
+});
+
+const canBecomeTeam2Leader = computed(() => {
+    return selectedTeam.value === 2 && 
+           !team2Leader.value && 
+           !isWaitingForOthers.value && 
+           !gameIsOver.value;
+});
+
+const canUnselectTeam1Leader = computed(() => {
+    return team1Leader.value === props.auth.user.name && 
+           !isWaitingForOthers.value && 
+           !gameIsOver.value;
+});
+
+const canUnselectTeam2Leader = computed(() => {
+    return team2Leader.value === props.auth.user.name && 
+           !isWaitingForOthers.value && 
+           !gameIsOver.value;
+});
+
+const isTeam1RadioDisabled = computed(() => {
+    return isWaitingForOthers.value || 
+           gameIsOver.value || 
+           team2Leader.value === props.auth.user.name; // Disable if leader of other team
+});
+
+const isTeam2RadioDisabled = computed(() => {
+    return isWaitingForOthers.value || 
+           gameIsOver.value || 
+           team1Leader.value === props.auth.user.name; // Disable if leader of other team
+});
 
 // New computed property for controlling question input visibility
 const showQuestionInput = computed(() => {
@@ -376,30 +452,90 @@ const showSinglePlayerAIWarning = computed(() => {
     return playerCount.value === 1 && !playWithAI.value && !playWithBespokeAI.value;
 });
 
+const validateTeamSetup = () => {
+    if (shouldShowTeamSelection.value) {
+        // Validate team selection mode
+        if (!selectedTeam.value) {
+            addFlashMessage('Please select a team before starting!', 'warning');
+            return false;
+        }
+        
+        // // Check if the current user is the team leader for their selected team
+        // const isValidLeader = (selectedTeam.value === 1 && team1Leader.value === props.auth.user.name) ||
+        //                     (selectedTeam.value === 2 && team2Leader.value === props.auth.user.name);
+        
+        // if (!isValidLeader) {
+        //     const teamName = selectedTeam.value === 1 ? 'Team 1' : 'Team 2';
+        //     addFlashMessage(`${teamName} needs a leader before starting! Click "Become ${teamName} Leader" first.`, 'warning');
+        //     return false;
+        // }
+    }
+    
+    if (shouldShowLobbyTeamLeader.value) {
+        // Validate lobby team leader mode
+        if (!lobbyTeamLeader.value) {
+            addFlashMessage('Please select a lobby team leader before starting!', 'warning');
+            return false;
+        }
+    }
+    
+    return true;
+};
+
 
 // Updated game control functions
 const startGame = async () => {
     currentQuestionIndex.value = 0;
     answers.value = [];
 
+    if (!validateTeamSetup()) {
+        return; // Stop if team setup is invalid
+    }
+
     try {
         console.log('Starting game with player count:', playerCount.value);
         
-        // Set team mode and leader status
-        if (playerCount.value > 1 && isTeamMode.value) {
-            isTeamLeader.value = true; // First player to start is team leader
-            teamLeaderName.value = props.auth.user.name;
+        // Determine team leadership based on game mode
+        if (playerCount.value > 1) {
+            if (shouldShowLobbyTeamLeader.value) {
+                // Lobby team leader mode: only lobby team leader can start
+                if (!isLobbyTeamLeader.value) {
+                    addFlashMessage('Only the lobby team leader can start the game!', 'warning');
+                    return;
+                }
+                isTeamMode.value = true;
+                teamLeaderName.value = props.auth.user.name;
+            } else if (shouldShowTeamSelection.value) {
+                // Team selection mode: only team leaders can start
+                // FIXED: Check if current user is actually a team leader
+                // const isValidTeamLeader = (selectedTeam.value === 1 && team1Leader.value === props.auth.user.name) ||
+                //                         (selectedTeam.value === 2 && team2Leader.value === props.auth.user.name);
+                
+                // if (!isValidTeamLeader) {
+                //     const requiredLeader = selectedTeam.value === 1 ? 'Team 1' : 'Team 2';
+                //     addFlashMessage(`Only the ${requiredLeader} leader can start the game!`, 'warning');
+                //     return;
+                // }
+                isTeamMode.value = true;
+                teamLeaderName.value = props.auth.user.name;
+                isTeamLeader.value = true; // Set this explicitly
+            } else if (joinTeamWithPlayers.value || joinTeamWithAI.value) {
+                // Existing team modes
+                isTeamLeader.value = true;
+                teamLeaderName.value = props.auth.user.name;
+                isTeamMode.value = true;
+            }
         }
         
         const playerCountNum = parseInt(playerCount.value);
         
         if (playerCountNum > 1) {
-            console.log('Starting multiplayer game with team settings...');
+            console.log('Starting multiplayer game...');
             const response = await axios.get(`/games/${props.gameId}/validate-multiplayer-start`);
 
             if (!response.data.canStartMultiplayer) {
                 addFlashMessage(
-                    'Cannot start multiplayer game. At least one other player must also have "2 Players" selected to start a multiplayer game.', 
+                    'Cannot start multiplayer game. At least one other player must also have the same player count selected.', 
                     'warning'
                 );
                 return;
@@ -411,7 +547,8 @@ const startGame = async () => {
 
         await axios.post(`/games/${props.gameId}/reset-session`);
         
-        const response = await axios.post(`/games/${props.gameId}/player-ready`, {
+        // Enhanced player ready request with new team data
+        const readyData = {
             userId: props.auth.user.id,
             userName: props.auth.user.name,
             requiredCount: playerCount.value,
@@ -420,12 +557,20 @@ const startGame = async () => {
             play_with_ai: playWithAI.value,
             play_with_bespoke_ai: playWithBespokeAI.value,
             selected_ai_model: selectedAIModel.value,
-            // Add team settings
             join_team_with_players: joinTeamWithPlayers.value,
             join_team_with_ai: joinTeamWithAI.value,
-            isTeamLeader: isTeamLeader.value
-        });
+            isTeamLeader: isTeamLeader.value,
+            // New team management data
+            lobbyTeamLeader: shouldShowLobbyTeamLeader.value,
+            isLobbyTeamLeader: isLobbyTeamLeader.value,
+            selectedTeam: selectedTeam.value,
+            isTeam1Leader: isTeam1Leader.value,
+            isTeam2Leader: isTeam2Leader.value
+        };
+        
+        const response = await axios.post(`/games/${props.gameId}/player-ready`, readyData);
 
+        // Rest of existing startGame logic...
         if (response.data.status === 'waiting') {
             if (playerCount.value === 1) {
                 if (showSinglePlayerAIWarning.value) {
@@ -436,6 +581,7 @@ const startGame = async () => {
                     gameIsOver.value = false;
                     addFlashMessage('Game started!', 'success');
                     
+                    // Broadcast single player start...
                     try {
                         await axios.post(`/api/games/${props.gameId}/broadcast`, {
                             event: 'game.started.single',
@@ -484,11 +630,48 @@ const startGame = async () => {
     }
 };
 
+const getDisabledInputPlaceholder = () => {
+    if (shouldShowLobbyTeamLeader.value) {
+        return 'Only lobby team leader can answer';
+    } else if (shouldShowTeamSelection.value) {
+        return `Only Team ${selectedTeam.value} leader can answer`;
+    } else if (joinTeamWithPlayers.value) {
+        return 'Only team leader can answer';
+    } else if (joinTeamWithAI.value && playerCount.value === 2) {
+        return 'Only lobby team leader can answer';
+    }
+    return 'Only team leader can answer';
+};
+
+const getWaitingMessage = () => {
+    if (shouldShowLobbyTeamLeader.value) {
+        return `Waiting for ${lobbyTeamLeader.value} to answer...`;
+    } else if (shouldShowTeamSelection.value) {
+        const leaderName = selectedTeam.value === 1 ? team1Leader.value : team2Leader.value;
+        return `Waiting for Team ${selectedTeam.value} leader${leaderName ? ` (${leaderName})` : ''} to answer...`;
+    } else if (joinTeamWithPlayers.value) {
+        return `Waiting for ${teamLeaderName.value} to answer...`;
+    } else if (joinTeamWithAI.value && playerCount.value === 2) {
+        return 'Waiting for lobby team leader to answer...';
+    }
+    return 'Waiting for team leader to answer...';
+};
+
+const handleTeamAI2PlayerLogic = () => {
+    if (joinTeamWithAI.value && playerCount.value === 2) {
+        // In 2-player TeamAI mode, the non-host automatically becomes lobby team leader
+        // This will be handled by the applyGameSettings when the non-host receives the ready event
+        console.log('TeamAI 2-player mode: non-host will become lobby team leader');
+    }
+};
+
+
+
 const originalTeamLeader = ref(null);
 
 // Modified applyGameSettings function
 const applyGameSettings = async (settings) => {
-    console.log('Applying game settings from ready player:', settings);
+    console.log('Applying enhanced game settings:', settings);
     
     // Update local settings
     selectedDifficulty.value = settings.difficulty_id;
@@ -500,7 +683,7 @@ const applyGameSettings = async (settings) => {
         playWithAISection.value = true;
     }
     
-    // Apply team settings for ALL players
+    // Apply existing team settings
     if (settings.join_team_with_players !== undefined) {
         joinTeamWithPlayers.value = settings.join_team_with_players;
     }
@@ -508,55 +691,66 @@ const applyGameSettings = async (settings) => {
         joinTeamWithAI.value = settings.join_team_with_ai;
     }
     
-    // Set team mode for ALL players
-    isTeamMode.value = joinTeamWithPlayers.value || joinTeamWithAI.value;
+    // Apply NEW team settings
+    if (settings.lobby_team_leader !== undefined) {
+        if (settings.is_lobby_team_leader && props.auth.user.name === settings.starter_name) {
+            isLobbyTeamLeader.value = true;
+            lobbyTeamLeader.value = props.auth.user.name;
+        } else if (settings.lobby_team_leader) {
+            lobbyTeamLeader.value = settings.starter_name;
+        }
+    }
     
-    // CRITICAL FIX: Only set team leadership ONCE - on first game settings application
+    if (settings.selected_team !== undefined) {
+        selectedTeam.value = settings.selected_team;
+    }
+    
+    if (settings.is_team1_leader && props.auth.user.name === settings.starter_name) {
+        isTeamLeader.value = true;
+        team1Leader.value = props.auth.user.name;
+    } else if (settings.is_team2_leader && props.auth.user.name === settings.starter_name) {
+        isTeamLeader.value = true;
+        team2Leader.value = props.auth.user.name;
+    }
+    
+    // Set team mode
+    isTeamMode.value = joinTeamWithPlayers.value || joinTeamWithAI.value || 
+                       shouldShowLobbyTeamLeader.value || shouldShowTeamSelection.value;
+    
+    // Handle team leadership for existing modes
     if (joinTeamWithPlayers.value && playerCount.value > 1) {
-        // If we haven't established the original team leader yet, do it now
         if (!originalTeamLeader.value) {
             originalTeamLeader.value = settings.starter_name;
-            console.log('Original team leader established:', originalTeamLeader.value);
         }
         
-        // Always use the ORIGINAL team leader, not the current settings starter
         const trueTeamLeaderName = originalTeamLeader.value;
         
         if (props.auth.user.name === trueTeamLeaderName) {
-            // Current user IS the original starter, so they ARE the team leader
             isTeamLeader.value = true;
             teamLeaderName.value = props.auth.user.name;
         } else {
-            // Current user is NOT the original starter, so they are NOT the team leader
             isTeamLeader.value = false;
             teamLeaderName.value = trueTeamLeaderName;
         }
-        
-        console.log('Player Team leadership determined:', {
-            currentUser: props.auth.user.name,
-            originalTeamLeader: originalTeamLeader.value,
-            settingsStarter: settings.starter_name,
-            isTeamLeader: isTeamLeader.value,
-            teamLeaderName: teamLeaderName.value
-        });
     }
     
-    // Keep the existing joinTeamWithAI logic unchanged since it works fine
     if (joinTeamWithAI.value && playerCount.value > 1) {
-        if (props.auth.user.name === settings.starter_name) {
-            isTeamLeader.value = true;
-            teamLeaderName.value = props.auth.user.name;
+        if (playerCount.value === 2) {
+            // 2-player teamAI: non-host becomes lobby team leader
+            if (props.auth.user.name !== settings.starter_name) {
+                isLobbyTeamLeader.value = true;
+                lobbyTeamLeader.value = props.auth.user.name;
+            } else {
+                isTeamLeader.value = true;
+                teamLeaderName.value = props.auth.user.name;
+            }
         } else {
-            isTeamLeader.value = false;
-            teamLeaderName.value = settings.starter_name;
+            // 3+ player teamAI: use lobby team leader system
+            if (props.auth.user.name === settings.starter_name) {
+                isTeamLeader.value = true;
+                teamLeaderName.value = props.auth.user.name;
+            }
         }
-        
-        console.log('AI Team leadership determined:', {
-            currentUser: props.auth.user.name,
-            starter: settings.starter_name,
-            isTeamLeader: isTeamLeader.value,
-            teamLeaderName: teamLeaderName.value
-        });
     }
     
     if (settings.selected_ai_model) {
@@ -571,15 +765,22 @@ const applyGameSettings = async (settings) => {
     }
 
     let message = `Game settings updated to match ${originalTeamLeader.value || settings.starter_name}'s preferences!`;
-    if (isTeamMode.value) {
+    
+    if (shouldShowLobbyTeamLeader.value) {
+        message += ` Lobby team leader mode activated.`;
+    } else if (shouldShowTeamSelection.value) {
+        message += ` Team selection mode activated.`;
+    } else if (isTeamMode.value) {
         if (joinTeamWithPlayers.value) {
-            message += ` Team Player mode activated with ${originalTeamLeader.value || settings.starter_name} as team leader.`;
+            message += ` Team Player mode activated.`;
         } else if (joinTeamWithAI.value) {
-            message += ` Team AI mode activated with ${settings.starter_name} coordinating.`;
+            message += ` Team AI mode activated.`;
         }
     }
+    
     addFlashMessage(message, 'info');
 };
+
 
 // Join the game with real-time updates
 const joinGame = async () => {
@@ -611,50 +812,117 @@ const leaveGame = async () => {
     }
 };
 
+
+// Add these computed properties:
+
+const shouldShowTeamSelection = computed(() => {
+    return playerCount.value >= 3 && 
+           !joinTeamWithPlayers.value && 
+           !joinTeamWithAI.value && 
+           !playWithAI.value && 
+           !playWithBespokeAI.value;
+});
+
+const shouldShowLobbyTeamLeader = computed(() => {
+    return playerCount.value >= 2 && 
+           !joinTeamWithPlayers.value && 
+           !joinTeamWithAI.value && 
+           (playWithAI.value || playWithBespokeAI.value);
+});
+
+
 // Add team mode computed properties
 const canSubmitAnswers = computed(() => {
-    if (playerCount.value === 1) return true; // Single player can always submit
-    if (!isTeamMode.value) return true; // Not in team mode, everyone can submit
-    if (joinTeamWithAI.value) return true; // All players can submit in AI Team setting
+    if (!isGameStarted.value) {
+        return false;
+    }
+
+    if (playerCount.value === 1) return true;
+    
+    // Lobby team leader mode (2+ players with AI, no team modes)
+    if (shouldShowLobbyTeamLeader.value) {
+        return isLobbyTeamLeader.value;
+    }
+    
+    // 3+ players without AI - team selection mode
+    if (shouldShowTeamSelection.value) {
+        return isTeam1Leader.value || isTeam2Leader.value || isTeam1Leader.value; // Fixed to use computed properties
+    }
+    
+    // TeamAI game mode
+    if (joinTeamWithAI.value) {
+        if (playerCount.value === 2) {
+            return !isTeamLeader.value; // Non-host is the lobby team leader
+        } else {
+            return isLobbyTeamLeader.value;
+        }
+    }
+    
+    // Team player mode
     if (joinTeamWithPlayers.value) {
-        // In team player mode, only team leader can submit answers (except on final question where everyone submits)
         return isTeamLeader.value;
     }
+    
+    // Default multiplayer without team modes
     return true;
 });
 
 const shouldShowSuggestionInput = computed(() => {
-    // Only show in team modes with multiple players
-    if (!isTeamMode.value || playerCount.value === 1) {
-        return false;
-    }
-
-    // Don't allow teamPlayerGame team leader to send suggestions.
-    if (joinTeamWithAI.value && isTeamLeader.value) {
-        return false;
-    }
+    if (playerCount.value === 1) return false;
     
-    // Show during game for all team modes
     const duringGame = isGameStarted.value && !gameIsOver.value;
-    
-    // Show after game completion for team player game (so non-leaders can still suggest)
     const afterTeamPlayerGame = gameIsOver.value && joinTeamWithPlayers.value;
     
-    console.log('Suggestion input visibility check:', {
-        isTeamMode: isTeamMode.value,
-        playerCount: playerCount.value,
-        isGameStarted: isGameStarted.value,
-        gameIsOver: gameIsOver.value,
-        joinTeamWithPlayers: joinTeamWithPlayers.value,
-        duringGame,
-        afterTeamPlayerGame,
-        result: duringGame || afterTeamPlayerGame
-    });
+    // Lobby team leader mode
+    if (shouldShowLobbyTeamLeader.value) {
+        return duringGame || afterTeamPlayerGame;
+    }
+    
+    // Team selection mode (3+ players without AI)
+    if (shouldShowTeamSelection.value) {
+        return duringGame || afterTeamPlayerGame;
+    }
+    
+    // TeamAI game
+    if (joinTeamWithAI.value) {
+        if (playerCount.value === 2) {
+            return duringGame && isTeamLeader.value; // Only host can send suggestions
+        } else {
+            return duringGame; // All can send suggestions
+        }
+    }
+    
+    // Existing team modes
+    if (!isTeamMode.value) return false;
+    if (joinTeamWithPlayers.value && isTeamLeader.value) return false;
     
     return duringGame || afterTeamPlayerGame;
 });
 
 const getSuggestionPlaceholder = () => {
+    if (shouldShowLobbyTeamLeader.value) {
+        return isLobbyTeamLeader.value ? 
+            'Send suggestion to team members...' : 
+            'Send suggestion to team leader...';
+    }
+    
+    if (shouldShowTeamSelection.value) {
+        if (isTeam1Leader.value) {
+            return 'Send suggestion to Team 1 members...';
+        } else if (isTeam2Leader.value) {
+            return 'Send suggestion to Team 2 members...';
+        } else {
+            const teamNum = selectedTeam.value;
+            return `Send suggestion to Team ${teamNum} leader...`;
+        }
+    }
+    
+    if (joinTeamWithAI.value && playerCount.value === 2) {
+        return isTeamLeader.value ? 
+            'Send suggestion to other player...' : 
+            'Send suggestion to host...';
+    }
+    
     if (joinTeamWithPlayers.value) {
         return isTeamLeader.value ? 
             'Send suggestion to team members...' : 
@@ -666,16 +934,172 @@ const getSuggestionPlaceholder = () => {
     }
     return 'Send suggestion...';
 };
-
 const getSuggestionButtonText = () => {
+    if (shouldShowLobbyTeamLeader.value) {
+        return isLobbyTeamLeader.value ? 'Send To Team' : 'Send To Leader';
+    }
+    
+    if (shouldShowTeamSelection.value) {
+        if (isTeamLeader.value) {
+            return `Send To Team ${selectedTeam.value}`;
+        } else {
+            return `Send To Leader`;
+        }
+    }
+    
+    if (joinTeamWithAI.value && playerCount.value === 2) {
+        return isTeamLeader.value ? 'Send To Player' : 'Send To Host';
+    }
+    
+    // Existing logic
     if (joinTeamWithPlayers.value) {
-        return isTeamLeader.value ? 
-            'Send To Team' : 
-            'Send To Leader';
+        return isTeamLeader.value ? 'Send To Team' : 'Send To Leader';
     } else if (joinTeamWithAI.value) {
         return 'Send To Others';
     }
     return 'Send Suggestion';
+};
+
+const selectTeam = async (teamNumber) => {
+    const oldTeam = selectedTeam.value;
+    selectedTeam.value = teamNumber;
+    
+    // Update local team assignment tracking
+    playerTeamAssignments.value.set(props.auth.user.id, teamNumber);
+    
+    // Update team leadership status if this player was already a leader
+    if (oldTeam === 1 && team1Leader.value === props.auth.user.name && teamNumber !== 1) {
+        // Player was Team 1 leader but switched teams - remove leadership
+        team1Leader.value = null;
+        isTeamLeader.value = false;
+    } else if (oldTeam === 2 && team2Leader.value === props.auth.user.name && teamNumber !== 2) {
+        // Player was Team 2 leader but switched teams - remove leadership
+        team2Leader.value = null;
+        isTeamLeader.value = false;
+    } else if (teamNumber === 1 && team1Leader.value === props.auth.user.name) {
+        isTeamLeader.value = true;
+    } else if (teamNumber === 2 && team2Leader.value === props.auth.user.name) {
+        isTeamLeader.value = true;
+    }
+    
+    // Update team player lists immediately for current player
+    updateTeamPlayerLists();
+    
+    // Broadcast team selection with enhanced data
+    try {
+        await axios.post(`/api/games/${props.gameId}/broadcast`, {
+            event: 'player.team.selected',
+            data: {
+                userId: props.auth.user.id,
+                userName: props.auth.user.name,
+                teamNumber: teamNumber,
+                oldTeamNumber: oldTeam,
+                // Include leadership changes
+                wasTeam1Leader: oldTeam === 1 && team1Leader.value === null,
+                wasTeam2Leader: oldTeam === 2 && team2Leader.value === null,
+                timestamp: new Date().toISOString()
+            }
+        });
+        
+        addFlashMessage(`You selected Team ${teamNumber}`, 'info');
+    } catch (error) {
+        console.error('Failed to broadcast team selection:', error);
+    }
+};
+
+
+const selectLobbyTeamLeader = async () => {
+    isLobbyTeamLeader.value = true;
+    lobbyTeamLeader.value = props.auth.user.name;
+    
+    // Broadcast lobby team leader selection
+    try {
+        await axios.post(`/api/games/${props.gameId}/broadcast`, {
+            event: 'lobby.team.leader.selected',
+            data: {
+                userId: props.auth.user.id,
+                userName: props.auth.user.name,
+                timestamp: new Date().toISOString()
+            }
+        });
+        
+        addFlashMessage('You are now the lobby team leader!', 'success');
+    } catch (error) {
+        console.error('Failed to broadcast lobby team leader selection:', error);
+    }
+};
+
+const selectTeamLeader = async (teamNumber) => {
+    const currentUserName = props.auth.user.name;
+    const isCurrentlyLeader = (teamNumber === 1 && team1Leader.value === currentUserName) ||
+                             (teamNumber === 2 && team2Leader.value === currentUserName);
+    
+    if (isCurrentlyLeader) {
+        // Unselect as team leader
+        if (teamNumber === 1) {
+            team1Leader.value = null;
+        } else {
+            team2Leader.value = null;
+        }
+        isTeamLeader.value = false;
+        
+        // Broadcast team leader unselection
+        try {
+            await axios.post(`/api/games/${props.gameId}/broadcast`, {
+                event: 'team.leader.unselected',
+                data: {
+                    userId: props.auth.user.id,
+                    userName: props.auth.user.name,
+                    teamNumber: teamNumber,
+                    timestamp: new Date().toISOString()
+                }
+            });
+            
+            addFlashMessage(`You are no longer Team ${teamNumber} leader`, 'info');
+        } catch (error) {
+            console.error('Failed to broadcast team leader unselection:', error);
+        }
+    } else {
+        // Select as team leader
+        if (teamNumber === 1) {
+            // Remove from Team 2 leadership if applicable
+            if (team2Leader.value === currentUserName) {
+                team2Leader.value = null;
+            }
+            team1Leader.value = currentUserName;
+        } else {
+            // Remove from Team 1 leadership if applicable
+            if (team1Leader.value === currentUserName) {
+                team1Leader.value = null;
+            }
+            team2Leader.value = currentUserName;
+        }
+        
+        // Only set isTeamLeader if this player is actually on the team they're leading
+        if (selectedTeam.value === teamNumber) {
+            isTeamLeader.value = true;
+        }
+        
+        // Broadcast team leader selection
+        try {
+            await axios.post(`/api/games/${props.gameId}/broadcast`, {
+                event: 'team.leader.selected',
+                data: {
+                    userId: props.auth.user.id,
+                    userName: props.auth.user.name,
+                    teamNumber: teamNumber,
+                    // Include if they were previously leader of other team
+                    previousTeam1Leader: teamNumber === 2 && team1Leader.value === null,
+                    previousTeam2Leader: teamNumber === 1 && team2Leader.value === null,
+                    timestamp: new Date().toISOString()
+                }
+            });
+            
+            addFlashMessage(`You are now Team ${teamNumber} leader!`, 'success');
+        } catch (error) {
+            console.error('Failed to broadcast team leader selection:', error);
+        }
+    }
 };
 
 const toggleAICheckboxes = async () => {
@@ -734,8 +1158,6 @@ const onTeamAISettingChange = async () => {
 };
 
 const updateGameSettings = async () => {
-    // Broadcast team setting change WITH FULL GAME SETTINGS
-
     if (!playWithAI.value && !playWithBespokeAI.value) {
         playWithAISection.value = false;
     }
@@ -748,7 +1170,6 @@ const updateGameSettings = async () => {
                 userName: props.auth.user.name,
                 joinTeamWithPlayers: joinTeamWithPlayers.value,
                 joinTeamWithAI: joinTeamWithAI.value,
-                // Add full game settings so other players can update their waiting indicator
                 gameSettings: {
                     difficulty_id: selectedDifficulty.value,
                     category_id: selectedCategory.value,
@@ -758,7 +1179,13 @@ const updateGameSettings = async () => {
                     join_team_with_players: joinTeamWithPlayers.value,
                     join_team_with_ai: joinTeamWithAI.value,
                     starter_name: props.auth.user.name,
-                    questions: currentGameQuestions.value // Include current questions
+                    questions: currentGameQuestions.value,
+                    // NEW: Enhanced team settings
+                    lobby_team_leader: shouldShowLobbyTeamLeader.value,
+                    is_lobby_team_leader: isLobbyTeamLeader.value,
+                    selected_team: selectedTeam.value,
+                    is_team1_leader: isTeam1Leader.value,
+                    is_team2_leader: isTeam2Leader.value
                 },
                 timestamp: new Date().toISOString()
             }
@@ -766,39 +1193,52 @@ const updateGameSettings = async () => {
     } catch (error) {
         console.error('Failed to broadcast team setting change:', error);
     }
-}
+};
 
 const sendSuggestion = async () => {
-    if (!suggestionInput.value.trim() || !isTeamMode.value) return;
+    if (!suggestionInput.value.trim()) return;
     
     try {
-        // For Team AI Game: non-leaders send suggestions to other non-leaders only
-        // For Team Player Game: suggestions go to/from team leader as before
-        const isToTeamLeader = joinTeamWithPlayers.value && !isTeamLeader.value;
-        const isToOtherPlayers = joinTeamWithAI.value && !isTeamLeader.value;
+        let eventData = {
+            userId: props.auth.user.id,
+            userName: props.auth.user.name,
+            suggestion: suggestionInput.value.trim(),
+            timestamp: new Date().toISOString()
+        };
+        
+        // Lobby team leader mode
+        if (shouldShowLobbyTeamLeader.value) {
+            eventData.gameMode = 'lobbyTeamLeader';
+            eventData.isLobbyTeamLeader = isLobbyTeamLeader.value;
+            eventData.isToLeader = !isLobbyTeamLeader.value;
+        }
+        // Team selection mode
+        else if (shouldShowTeamSelection.value) {
+            eventData.gameMode = 'teamSelection';
+            eventData.senderTeam = selectedTeam.value;
+            eventData.isTeamLeader = isTeamLeader.value;
+            eventData.isToLeader = !isTeamLeader.value;
+        }
+        // TeamAI 2-player mode
+        else if (joinTeamWithAI.value && playerCount.value === 2) {
+            eventData.gameMode = 'teamAI2Player';
+            eventData.isHost = isTeamLeader.value;
+            eventData.isToHost = !isTeamLeader.value;
+        }
+        // Existing team modes
+        else {
+            eventData.gameMode = joinTeamWithPlayers.value ? 'teamPlayer' : 'teamAI';
+            eventData.isToLeader = joinTeamWithPlayers.value && !isTeamLeader.value;
+            eventData.isToOtherPlayers = joinTeamWithAI.value && !isTeamLeader.value;
+            eventData.isTeamLeader = isTeamLeader.value;
+        }
         
         await axios.post(`/api/games/${props.gameId}/broadcast`, {
             event: 'team.suggestion',
-            data: {
-                userId: props.auth.user.id,
-                userName: props.auth.user.name,
-                suggestion: suggestionInput.value.trim(),
-                isToLeader: isToTeamLeader,
-                isToOtherPlayers: isToOtherPlayers,
-                isTeamLeader: isTeamLeader.value,
-                gameMode: joinTeamWithPlayers.value ? 'teamPlayer' : 'teamAI',
-                timestamp: new Date().toISOString()
-            }
+            data: eventData
         });
         
-        let messageType = 'to team members';
-        if (joinTeamWithPlayers.value) {
-            messageType = isTeamLeader.value ? 'to team members' : 'to team leader';
-        } else if (joinTeamWithAI.value) {
-            messageType = isTeamLeader.value ? 'to team members' : 'to other players';
-        }
-        
-        addFlashMessage(`Suggestion sent ${messageType}: "${suggestionInput.value.trim()}"`, 'info');
+        addFlashMessage(`Suggestion sent: "${suggestionInput.value.trim()}"`, 'info');
         suggestionInput.value = '';
     } catch (error) {
         console.error('Failed to send suggestion:', error);
@@ -807,14 +1247,32 @@ const sendSuggestion = async () => {
 };
 
 
-
 // Handle player count changes - FIXED to ensure numeric value
 const onPlayerCountChange = async (newCount) => {
     const numericCount = parseInt(newCount);
+    const oldCount = playerCount.value;
     playerCount.value = numericCount;
     
+    // Reset team states when player count changes
+    if (oldCount !== numericCount) {
+        // Reset team selections when switching modes
+        selectedTeam.value = 1;
+        team1Leader.value = null;
+        team2Leader.value = null;
+        lobbyTeamLeader.value = null;
+        isLobbyTeamLeader.value = false;
+        isTeamLeader.value = false;
+        isTeamMode.value = false;
+        
+        // Reset team mode checkboxes when going to/from single player
+        if (numericCount === 1) {
+            joinTeamWithPlayers.value = false;
+            joinTeamWithAI.value = false;
+        }
+        
+    }
+    
     if (isInGame.value) {
-        // Immediately update backend cache
         try {
             await changePlayerCount(numericCount);
         } catch (error) {
@@ -823,10 +1281,52 @@ const onPlayerCountChange = async (newCount) => {
     }
 };
 
+const updateTeamPlayerLists = () => {
+    console.log('Updating team player lists with current assignments...');
+    
+    // Clear existing team assignments
+    team1Players.value = [];
+    team2Players.value = [];
+    
+    // Assign players based on their actual team selections
+    players.value.forEach(player => {
+        console.log('PLAYER: ' + player.id);
+        const assignedTeam = playerTeamAssignments.value.get(player.id);
+        console.log('assignedTeam: ' + JSON.stringify(assignedTeam));
+        if (assignedTeam === 1) {
+            team1Players.value.push(player);
+        } else if (assignedTeam === 2) {
+            team2Players.value.push(player);
+        } else {
+            // For players who haven't selected a team yet, assign to Team 1 by default
+            // but don't broadcast this - let them choose manually
+            if (player.id === props.auth.user.id) {
+                // Current user hasn't selected yet - don't auto-assign
+                console.log('Current user has not selected a team yet');
+            }
+        }
+    });
+    
+    console.log('Team assignments updated:', {
+        team1: team1Players.value.map(p => p.name),
+        team2: team2Players.value.map(p => p.name),
+        assignments: Object.fromEntries(playerTeamAssignments.value)
+    });
+};
+
 const nextOrSubmit = async () => {
     // Check if player can submit answers (team mode restriction)
     if (!canSubmitAnswers.value) {
-        addFlashMessage(`Only the team leader (${teamLeaderName.value}) can submit answers in team mode.`, 'warning');
+        let leaderName = '';
+        if (shouldShowLobbyTeamLeader.value) {
+            leaderName = lobbyTeamLeader.value;
+        } else if (shouldShowTeamSelection.value) {
+            leaderName = selectedTeam.value === 1 ? team1Leader.value : team2Leader.value;
+        } else {
+            leaderName = teamLeaderName.value;
+        }
+        
+        addFlashMessage(`Only the team leader (${leaderName}) can submit answers.`, 'warning');
         return;
     }
 
@@ -1025,7 +1525,15 @@ const nextOrSubmit = async () => {
                 playerCount.value, 
                 selectedDifficulty.value, 
                 selectedCategory.value,
-                isTeamLeader.value
+                isTeamLeader.value,
+                // NEW PARAMETERS:
+                {
+                    lobbyTeamLeader: shouldShowLobbyTeamLeader.value,
+                    isLobbyTeamLeader: isLobbyTeamLeader.value,
+                    selectedTeam: selectedTeam.value,
+                    isTeam1Leader: isTeam1Leader.value,
+                    isTeam2Leader: isTeam2Leader.value
+                }
             );
 
             if (result.submitted) {
@@ -1114,19 +1622,10 @@ const startNewGame = () => {
 
 
 const resetGameState = () => {
-    console.log('Resetting game state - before reset:', {
-        currentQuestionIndex: currentQuestionIndex.value,
-        answersLength: answers.value.length,
-        isGameStarted: isGameStarted.value,
-        gameIsOver: gameIsOver.value,
-        isTeamMode: isTeamMode.value,
-        isTeamLeader: isTeamLeader.value
-    });
+    console.log('Enhanced reset - clearing all team states');
     
-    // Reset question index to 0
+    // Reset question index and answers
     currentQuestionIndex.value = 0;
-    
-    // Clear all answers
     answers.value = [];
     
     // Reset game state flags
@@ -1137,22 +1636,29 @@ const resetGameState = () => {
     gameState.value.waitingForOthers = false;
     gameState.value.playersReady.clear();
     
-    // Reset team settings
+    // Reset ALL team settings
     isTeamMode.value = false;
     isTeamLeader.value = false;
     teamLeaderName.value = '';
     suggestionInput.value = '';
-
-    hasNonLeaderSubmitted.value = false;
     
-    console.log('Game state fully reset - after reset:', {
-        currentQuestionIndex: currentQuestionIndex.value,
-        answersLength: answers.value.length,
-        isGameStarted: isGameStarted.value,
-        gameIsOver: gameIsOver.value,
-        isTeamMode: isTeamMode.value,
-        isTeamLeader: isTeamLeader.value
-    });
+    // Reset NEW team states
+    selectedTeam.value = 1;
+    team1Leader.value = null;
+    team2Leader.value = null;
+    team1Players.value = []; // Now properly defined
+    team2Players.value = []; // Now properly defined
+    lobbyTeamLeader.value = null;
+    isLobbyTeamLeader.value = false;
+    
+    // Reset team mode flags
+    joinTeamWithPlayers.value = false;
+    joinTeamWithAI.value = false;
+    
+    hasNonLeaderSubmitted.value = false;
+    originalTeamLeader.value = null;
+    
+    console.log('Enhanced game state fully reset');
 };
 
 // Vertical Nav Section:
@@ -1413,6 +1919,7 @@ onMounted( () => {
             console.log('🔄 Refreshing game details...');
             await fetchCurrentGame();
         },
+        onUpdateTeamLists: updateTeamPlayerLists,
         onChartsUpdate: async () => {
             console.log('🔄 Refreshing charts...');
             if (gameGraphRef.value?.refreshChart) {
@@ -1421,6 +1928,10 @@ onMounted( () => {
             if (gameHeatmapRef.value?.refreshHeatmap) {
                 await gameHeatmapRef.value.refreshHeatmap();
             }
+        },
+        onUpdateTeamAssignments: (userId, teamNumber) => {
+            playerTeamAssignments.value.set(userId, teamNumber);
+            updateTeamPlayerLists(); // Refresh the lists after assignment
         },
         onGameComplete: async (data) => {
             console.log('🔄 Game completed callback triggered');
@@ -1491,18 +2002,23 @@ onMounted( () => {
                 }
             }
         },
-        onAutoStart: () => {
+        onAutoStart: async (isWaitingToStart) => {
             console.log('🚀 Auto-starting game via callback...');
             
             if (playerCount.value === 1 && !playWithAI.value && !playWithBespokeAI.value) {
                 addFlashMessage('Cannot start game. Please enable "Play With ChatGPT" or "Play With Learning Model" or add more players.', 'warning');
                 return;
             }
+            console.log('IS WAITING' + isWaitingToStart);
             
-            isGameStarted.value = true;
-            gameIsOver.value = false;
-            isWaitingToStart.value = false;
-            preReadyPlayers.value.clear();
+            if (isWaitingToStart) {
+                isGameStarted.value = true;
+                gameIsOver.value = false;
+                isWaitingToStart = false;
+                preReadyPlayers.value.clear();
+            } else {
+                notInActiveGame.value = true;
+            }
             
             addFlashMessage('All players ready! Your game has started automatically!', 'success');
         },
@@ -1598,30 +2114,8 @@ onUnmounted(() => {
                             <div class="text-center mb-4 text-white text-xl font-semibold">
                                 {{ currentGameQuestions[currentQuestionIndex]?.question }}
                             </div>
-                            
-                            <!-- Team Mode Indicator -->
-                            <div v-if="isTeamMode && playerCount > 1" class="text-center mb-4">
-                                <div class="inline-block px-4 py-2 bg-blue-900 text-blue-200 rounded-lg border border-blue-700">
-                                    <div v-if="joinTeamWithPlayers">
-                                        <div v-if="isTeamLeader" class="text-sm font-semibold">
-                                            You are the team leader - you submit answers for your team vs AI
-                                        </div>
-                                        <div v-else class="text-sm font-semibold">
-                                            {{ teamLeaderName }} is your team leader vs AI - send suggestions to help
-                                        </div>
-                                    </div>
-                                    <div v-else-if="joinTeamWithAI">
-                                        <div v-if="isTeamLeader" class="text-sm font-semibold">
-                                            You + AI are teamed up vs other players
-                                        </div>
-                                        <div v-else class="text-sm font-semibold">
-                                            {{ teamLeaderName }} + AI are teamed up vs you and others
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
 
-                            <!-- Answer Input (only for team leader in team player game, or everyone else) -->
+                            <!-- Enhanced Answer Input Section -->
                             <div v-if="canSubmitAnswers" class="flex flex-col sm:flex-row gap-4 justify-center mb-4">
                                 <button 
                                     :disabled="submitting || isStealAnimating" 
@@ -1642,7 +2136,7 @@ onUnmounted(() => {
                                         class="px-4 py-2 rounded w-full !placeholder-white transition-all duration-500"
                                         :placeholder="
                                             isStealAnimating ? '' : 
-                                            (!canSubmitAnswers) ? 'Only team leader can answer' :
+                                            (!canSubmitAnswers) ? getDisabledInputPlaceholder() :
                                             'Your answer'
                                         " 
                                     />
@@ -1724,8 +2218,8 @@ onUnmounted(() => {
                             </div>
                         </div>
 
-                        <!-- Single Player Game In Progress Indicator -->
-                        <div v-if="gameState.gameInProgress" 
+                        <!-- Game In Progress Indicator -->
+                        <div v-if="notInActiveGame && !showQuestionInput" 
                             class="basis-full mb-6 text-center">
                             <div class="p-6 bg-orange-900 text-orange-200 rounded-lg border border-orange-700">
                                 <div class="flex items-center justify-center mb-4">
@@ -1754,7 +2248,7 @@ onUnmounted(() => {
 
                                 
                                 <button @click="startGame"
-                                    :disabled="!isInGame || (isGameInProgress && !gameIsOver) || isWaitingToStart"
+                                    :disabled="!isInGame || (isGameInProgress && !gameIsOver) || isWaitingToStart || notInActiveGame"
                                     class="bg-green-900 hover:bg-green-800 text-green-200 font-bold py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed">
                                     {{ isWaitingToStart ? 'Ready - Waiting...' : (isWaitingForOthers ? 'Waiting...' : 'Start Game') }}
                                 </button>
@@ -1771,7 +2265,7 @@ onUnmounted(() => {
                                 </div>
 
                                 <!-- Waiting menu for multiplayer start -->
-                                <div v-if="!isWaitingToStart && !isGameStarted && gameState.playersReady.size > 0 && !gameIsOver && !gameState.waitingForOthers" class="basis-full mb-6 text-center">
+                                <div v-if="!isWaitingToStart && !isGameStarted && gameState.playersReady.size > 0 && !gameIsOver && !gameState.waitingForOthers && !notInActiveGame" class="basis-full mb-6 text-center">
                                     <div class="p-4 bg-yellow-900 text-yellow-200 rounded border border-yellow-700">
                                         <div class="text-lg font-semibold mb-3">
                                             {{ gameState.starterName }} is ready to start!
@@ -1833,7 +2327,7 @@ onUnmounted(() => {
                                 </button>
                             </div>
 
-                            <!-- Row 2: Settings -->
+                            <!-- Row 2: Enhanced Settings with Team Management -->
                             <div class="flex flex-wrap justify-center items-center gap-6">
                                 <!-- Number of Players -->
                                 <div class="flex items-center gap-2">
@@ -1843,6 +2337,9 @@ onUnmounted(() => {
                                         class="border rounded px-2 py-1 bg-gray-700 text-white disabled:opacity-50">
                                         <option value="1">1 Player</option>
                                         <option value="2">2 Players</option>
+                                        <option value="3">3 Players</option>
+                                        <option value="4">4 Players</option>
+                                        <option value="5">5 Players</option>
                                     </select>
                                 </div>
 
@@ -1896,6 +2393,227 @@ onUnmounted(() => {
                                     <input type="checkbox" v-model="playWithAISection" @click="toggleAICheckboxes"
                                         :disabled="isGameInProgress || isWaitingForOthers || gameIsOver" />
                                     <label>Play With AI</label>
+                                </div>
+                            </div>
+
+                            <!-- Team Selection for 3+ players without AI -->
+                            <div v-if="shouldShowTeamSelection" class="mt-6 p-4 bg-gray-700 rounded-lg">
+                                <h3 class="text-white font-semibold text-center mb-4">Choose Your Team</h3>
+                                
+                                <div class="flex gap-8 justify-center">
+                                    <!-- Team 1 -->
+                                    <div class="flex flex-col items-center gap-3 p-4 bg-gray-600 rounded border-2 min-w-[200px]" 
+                                        :class="{ 'border-blue-500': selectedTeam === 1, 'border-gray-500': selectedTeam !== 1 }">
+                                        <h4 class="text-white font-medium">Team 1</h4>
+                                        
+                                        <label class="flex items-center gap-2 text-white cursor-pointer">
+                                            <input type="radio" 
+                                                name="teamSelection" 
+                                                :value="1" 
+                                                v-model="selectedTeam"
+                                                @change="selectTeam(1)"
+                                                :disabled="isTeam1RadioDisabled" />
+                                            Join Team 1
+                                        </label>
+                                        
+                                        <div class="text-center">
+                                            <div class="text-sm text-gray-300 mb-2">Team Leader:</div>
+                                            <div v-if="team1Leader" class="text-green-400 font-medium mb-2">{{ team1Leader }}</div>
+                                            <div v-else class="text-yellow-400 text-xs mb-2">No leader selected</div>
+                                            
+                                            <!-- Become/Unselect Team 1 Leader Button -->
+                                            <button v-if="canBecomeTeam1Leader" 
+                                                    @click="selectTeamLeader(1)"
+                                                    class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">
+                                                Become Team 1 Leader
+                                            </button>
+                                            
+                                            <button v-if="canUnselectTeam1Leader" 
+                                                    @click="selectTeamLeader(1)"
+                                                    class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700">
+                                                Step Down as Leader
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="text-center">
+                                            <div class="text-sm text-gray-300 mb-1">Players:</div>
+                                            <div class="text-xs text-gray-400 max-h-24 overflow-y-auto">
+                                                <div v-for="player in team1Players" :key="player.id" 
+                                                    :class="{ 'text-green-400 font-semibold': player.name === team1Leader }"
+                                                    class="text-white py-1">
+                                                    {{ player.name }}
+                                                    <span v-if="player.name === team1Leader" class="text-xs text-green-300">(Leader)</span>
+                                                </div>
+                                                <div v-if="team1Players.length === 0" class="text-gray-500 py-1">No players yet</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Team 2 -->
+                                    <div class="flex flex-col items-center gap-3 p-4 bg-gray-600 rounded border-2 min-w-[200px]" 
+                                        :class="{ 'border-red-500': selectedTeam === 2, 'border-gray-500': selectedTeam !== 2 }">
+                                        <h4 class="text-white font-medium">Team 2</h4>
+                                        
+                                        <label class="flex items-center gap-2 text-white cursor-pointer">
+                                            <input type="radio" 
+                                                name="teamSelection" 
+                                                :value="2" 
+                                                v-model="selectedTeam"
+                                                @change="selectTeam(2)"
+                                                :disabled="isTeam2RadioDisabled" />
+                                            Join Team 2
+                                        </label>
+                                        
+                                        <div class="text-center">
+                                            <div class="text-sm text-gray-300 mb-2">Team Leader:</div>
+                                            <div v-if="team2Leader" class="text-green-400 font-medium mb-2">{{ team2Leader }}</div>
+                                            <div v-else class="text-yellow-400 text-xs mb-2">No leader selected</div>
+                                            
+                                            <!-- Become/Unselect Team 2 Leader Button -->
+                                            <button v-if="canBecomeTeam2Leader" 
+                                                    @click="selectTeamLeader(2)"
+                                                    class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700">
+                                                Become Team 2 Leader
+                                            </button>
+                                            
+                                            <button v-if="canUnselectTeam2Leader" 
+                                                    @click="selectTeamLeader(2)"
+                                                    class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700">
+                                                Step Down as Leader
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="text-center">
+                                            <div class="text-sm text-gray-300 mb-1">Players:</div>
+                                            <div class="text-xs text-gray-400 max-h-24 overflow-y-auto">
+                                                <div v-for="player in team2Players" :key="player.id" 
+                                                    :class="{ 'text-green-400 font-semibold': player.name === team2Leader }"
+                                                    class="text-white py-1">
+                                                    {{ player.name }}
+                                                    <span v-if="player.name === team2Leader" class="text-xs text-green-300">(Leader)</span>
+                                                </div>
+                                                <div v-if="team2Players.length === 0" class="text-gray-500 py-1">No players yet</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Team Assignment Status -->
+                                <div class="mt-4 text-center text-sm text-gray-300">
+                                    <div v-if="selectedTeam">
+                                        You are on Team {{ selectedTeam }}
+                                        <span v-if="isTeamLeader" class="text-green-400 font-semibold"> (Leader)</span>
+                                    </div>
+                                    <div v-else class="text-yellow-400">Please select a team to continue</div>
+                                </div>
+                            </div>
+
+                            <!-- Lobby Team Leader Selection for 2+ players with AI -->
+                            <div v-if="shouldShowLobbyTeamLeader" class="mt-6 p-4 bg-gray-700 rounded-lg">
+                                <h3 class="text-white font-semibold text-center mb-4">Lobby Team Leader</h3>
+                                
+                                <div class="text-center">
+                                    <div v-if="lobbyTeamLeader" class="text-green-400 font-medium mb-2">
+                                        Lobby Team Leader: {{ lobbyTeamLeader }}
+                                    </div>
+                                    <div v-else class="text-yellow-400 text-sm mb-3">
+                                        Select a lobby team leader to coordinate team answers vs AI
+                                    </div>
+                                    
+                                    <button v-if="!lobbyTeamLeader && !isGameInProgress" 
+                                            @click="selectLobbyTeamLeader"
+                                            class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">
+                                        Become Lobby Team Leader
+                                    </button>
+                                </div>
+                                
+                                <div v-if="lobbyTeamLeader" class="mt-4 text-center">
+                                    <div class="text-sm text-gray-300 mb-1">Team Members:</div>
+                                    <div class="text-xs text-gray-400">
+                                        <div v-for="player in players.filter(p => p.name !== lobbyTeamLeader)" :key="player.id" class="text-white">
+                                            {{ player.name }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+
+                            <!-- NON-LEADER VIEW (enhanced for different team modes) -->
+                            <div v-else-if="isGameStarted && !gameIsOver" class="basis-full mb-6">
+                                <div class="text-center mb-2 text-gray-400 text-sm font-medium">
+                                    Question {{ currentQuestionIndex + 1 }} / {{ currentGameQuestions.length }}
+                                </div>
+                                <div class="text-center mb-4 text-white text-xl font-semibold">
+                                    {{ currentGameQuestions[currentQuestionIndex]?.question }}
+                                </div>
+                                
+                                <!-- View-only answer field for non-leaders -->
+                                <div class="flex flex-col sm:flex-row gap-4 justify-center mb-4">
+                                    <div class="relative w-full sm:w-2/3">
+                                        <input 
+                                            :value="getWaitingMessage()"
+                                            disabled
+                                            class="px-4 py-2 rounded w-full bg-gray-600 text-gray-300 cursor-not-allowed"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Enhanced Team Mode Indicator -->
+                        <div v-if="(isTeamMode || shouldShowLobbyTeamLeader || shouldShowTeamSelection) && playerCount > 1 && showQuestionInput" class="text-center mb-4">
+                            <div class="inline-block px-4 py-2 bg-blue-900 text-blue-200 rounded-lg border border-blue-700">
+                                <!-- Existing team modes -->
+                                <div v-if="joinTeamWithPlayers">
+                                    <div v-if="isTeamLeader" class="text-sm font-semibold">
+                                        You are the team leader - you submit answers for your team vs AI
+                                    </div>
+                                    <div v-else class="text-sm font-semibold">
+                                        {{ teamLeaderName }} is your team leader vs AI - send suggestions to help
+                                    </div>
+                                </div>
+                                <div v-else-if="joinTeamWithAI">
+                                    <div v-if="playerCount === 2">
+                                        <div v-if="isTeamLeader" class="text-sm font-semibold">
+                                            You + AI are teamed up vs other player
+                                        </div>
+                                        <div v-else class="text-sm font-semibold">
+                                            You are the lobby team leader vs {{ teamLeaderName }} + AI
+                                        </div>
+                                    </div>
+                                    <div v-else>
+                                        <div v-if="isTeamLeader" class="text-sm font-semibold">
+                                            You + AI are teamed up vs lobby team
+                                        </div>
+                                        <div v-else-if="isLobbyTeamLeader" class="text-sm font-semibold">
+                                            You are the lobby team leader vs {{ teamLeaderName }} + AI
+                                        </div>
+                                        <div v-else class="text-sm font-semibold">
+                                            {{ lobbyTeamLeader }} is your lobby team leader vs {{ teamLeaderName }} + AI
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- New lobby team leader mode (with AI, no team modes) -->
+                                <div v-else-if="shouldShowLobbyTeamLeader">
+                                    <div v-if="isLobbyTeamLeader" class="text-sm font-semibold">
+                                        You are the lobby team leader - coordinate team answers vs AI
+                                    </div>
+                                    <div v-else-if="lobbyTeamLeader" class="text-sm font-semibold">
+                                        {{ lobbyTeamLeader }} is your lobby team leader vs AI - send suggestions to help
+                                    </div>
+                                </div>
+                                
+                                <!-- Team selection mode (no AI) -->
+                                <div v-else-if="shouldShowTeamSelection">
+                                    <div v-if="isTeamLeader" class="text-sm font-semibold">
+                                        You are Team {{ selectedTeam }} leader - submit answers for your team
+                                    </div>
+                                    <div v-else class="text-sm font-semibold">
+                                        Send suggestions to your Team {{ selectedTeam }} leader
+                                        <span v-if="selectedTeam === 1 && team1Leader">({{ team1Leader }})</span>
+                                        <span v-else-if="selectedTeam === 2 && team2Leader">({{ team2Leader }})</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
