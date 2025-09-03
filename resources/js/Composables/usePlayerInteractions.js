@@ -25,9 +25,15 @@ export function usePlayerInteractions(gameId, auth) {
   const preReadyPlayers = ref(new Set());
   const isWaitingToStart = ref(false);
 
+  const playerTeamAssignments = ref(new Map()); 
+
+
   // Store pre-submitted answers for auto-submission
   const preSubmittedAnswers = ref(null);
   const preSubmittedAIAnswers = ref(null);
+
+  const team1Leader = ref(null);
+  const team2Leader = ref(null);
   
   //  Store pre-answered questions for auto-progression
   const preAnsweredQuestions = ref(new Map()); // questionIndex -> answer
@@ -64,6 +70,7 @@ export function usePlayerInteractions(gameId, auth) {
   const teamAIGame = computed(() => {
     return gameState.value.gameSettings?.join_team_with_ai ?? false;
   });
+  
 
 
   // Function to set AI module reference
@@ -260,7 +267,7 @@ export function usePlayerInteractions(gameId, auth) {
   };
 
   // Updated answerQuestion function with difficulty and category support
-  const answerQuestion = async (questionIndex, answer, playerCount = 1, isTeamLeader = false) => {
+  const answerQuestion = async (questionIndex, answer, playerCount = 1, isTeamLeader = false, shouldProgressTeamSelection = false) => {
     if (!isInGame.value) return { submitted: false, waitingForOthers: false };
     
     try {
@@ -310,6 +317,7 @@ export function usePlayerInteractions(gameId, auth) {
             answeredCount: gameState.value.playersPreAnswered.get(questionIndex).size,
             requiredCount: playerCount,
             isTeamLeader: isTeamLeader,
+            shouldProgressTeamSelection: shouldProgressTeamSelection,
             timestamp: new Date().toISOString()
           }
         });
@@ -329,6 +337,7 @@ export function usePlayerInteractions(gameId, auth) {
             data: {
               questionIndex: questionIndex,
               playerCount: playerCount,
+              shouldProgressTeamSelection: shouldProgressTeamSelection,
               timestamp: new Date().toISOString()
             }
           });
@@ -357,151 +366,202 @@ export function usePlayerInteractions(gameId, auth) {
   };
 
   // Updated submitAnswers function with difficulty and category support
-const submitAnswers = async (answers, playerCount, difficultyId = null, categoryId = null, isTeamLeader = false) => {
-    if (!isInGame.value) return { submitted: false, waitingForOthers: false };
+  const submitAnswers = async (  answers,
+      playerCount,
+      difficultyId = null,
+      categoryId = null,
+      isTeamLeader = false,
+      lobbyTeamLeader = false,
+      isLobbyTeamLeader = false,
+      selectedTeam = null,
+      isTeam1Leader = false,
+      isTeam2Leader = false,
+      currentTeam1Leader = '',
+      currentTeam2Leader = '',
+      shouldProgressTeamSelection = false) => {
 
-    try {
-        const aiAnswers = prepareAIAnswersForSubmission();
-        const bespokeAIAnswers = prepareBespokeAIAnswersForSubmission();
+      if (!isInGame.value) return { submitted: false, waitingForOthers: false };
 
-        if (playerCount === 1) {
-            // Single player logic remains unchanged
-            console.log('🚀 Single player submitting answers...');
-            
-            const requestData = {
-                answers: answers,
-                difficulty_id: difficultyId,
-                category_id: categoryId
-            };
+      try {
+          const aiAnswers = prepareAIAnswersForSubmission();
+          const bespokeAIAnswers = prepareBespokeAIAnswersForSubmission();
 
-            if (aiModule?.playWithAI.value) {
-                requestData.aiAnswers = aiAnswers;
-                requestData.playWithAI = true;
-            }
+          if (playerCount === 1) {
+              // Single player logic remains unchanged
+              console.log('🚀 Single player submitting answers...');
+              
+              const requestData = {
+                  answers: answers,
+                  difficulty_id: difficultyId,
+                  category_id: categoryId
+              };
 
-            if (bespokeAIModule?.playWithBespokeAI.value) {
-                requestData.bespokeAIAnswers = bespokeAIAnswers;
-                requestData.playWithBespokeAI = true;
-            }
+              if (aiModule?.playWithAI.value) {
+                  requestData.aiAnswers = aiAnswers;
+                  requestData.playWithAI = true;
+              }
 
-            const response = await axios.post(`/games/${gameId}/submit-answer`, requestData);
-            
-            // Broadcast completion
-            await axios.post(`/api/games/${gameId}/broadcast`, {
-                event: 'player.submitted',
-                data: {
-                    userId: currentUserId.value,
-                    userName: currentUserName.value,
-                    submittedCount: gameState.value.playersSubmitted.size,
-                    requiredCount: playerCount,
-                    difficultyId: difficultyId,
-                    categoryId: categoryId,
-                    timestamp: new Date().toISOString()
-                }
-            });
+              if (bespokeAIModule?.playWithBespokeAI.value) {
+                  requestData.bespokeAIAnswers = bespokeAIAnswers;
+                  requestData.playWithBespokeAI = true;
+              }
 
-            addFlashMessage('Game completed successfully!', 'success');
-            
-            setTimeout(() => {
-                resetGameState();
-            }, 1000);
-            
-            return { submitted: true, waitingForOthers: false };
+              if (lobbyTeamLeader) {
+                  requestData.lobbyTeamLeader = lobbyTeamLeader;
+                  requestData.isLobbyTeamLeader = isLobbyTeamLeader;
+              }
+              
+              if (teamData.selectedTeam) {
+                  requestData.selectedTeam = teamData.selectedTeam;
+                  requestData.isTeam1Leader = teamData.isTeam1Leader;
+                  requestData.isTeam2Leader = teamData.isTeam2Leader;
+              }
 
-        } else {
-            // MULTIPLAYER LOGIC - Enhanced for team games
-            console.log('💾 Multiplayer: Submitting answers immediately');
+              const response = await axios.post(`/games/${gameId}/submit-answer`, requestData);
+              
+              // Broadcast completion
+              await axios.post(`/api/games/${gameId}/broadcast`, {
+                  event: 'player.submitted',
+                  data: {
+                      userId: currentUserId.value,
+                      userName: currentUserName.value,
+                      submittedCount: gameState.value.playersSubmitted.size,
+                      requiredCount: playerCount,
+                      difficultyId: difficultyId,
+                      categoryId: categoryId,
+                      timestamp: new Date().toISOString()
+                  }
+              });
 
-            const cleanAnswers = answers.map(answer => (answer === undefined ? '' : answer));
-            
-            const requestData = {
-                answers: cleanAnswers,
-                difficulty_id: difficultyId,
-                category_id: categoryId
-            };
+              addFlashMessage('Game completed successfully!', 'success');
+              
+              setTimeout(() => {
+                  resetGameState();
+              }, 1000);
+              
+              return { submitted: true, waitingForOthers: false };
 
-            if (aiModule?.playWithAI.value) {
-                requestData.aiAnswers = aiAnswers;
-                requestData.playWithAI = true;
-            }
+          } else {
+              // MULTIPLAYER LOGIC - Enhanced for team games
+              console.log('💾 Multiplayer: Submitting answers immediately');
 
-            if (bespokeAIModule?.playWithBespokeAI.value) {
-                requestData.bespokeAIAnswers = bespokeAIAnswers;
-                requestData.playWithBespokeAI = true;
-                requestData.selectedAIModel = bespokeAIModule.selectedAIModel.value;
-            }
+              const cleanAnswers = answers.map(answer => (answer === undefined ? '' : answer));
+              
+              const requestData = {
+                  answers: cleanAnswers,
+                  difficulty_id: difficultyId,
+                  category_id: categoryId
+              };
 
-            if (teamPlayerGame.value) {
-                requestData.teamPlayerGame = true;
-            }
-            if (teamAIGame.value) {
-                requestData.teamAIGame = true;
-            }
+              if (aiModule?.playWithAI.value) {
+                  requestData.aiAnswers = aiAnswers;
+                  requestData.playWithAI = true;
+              }
 
-            requestData.isTeamLeader = isTeamLeader;
+              if (bespokeAIModule?.playWithBespokeAI.value) {
+                  requestData.bespokeAIAnswers = bespokeAIAnswers;
+                  requestData.playWithBespokeAI = true;
+                  requestData.selectedAIModel = bespokeAIModule.selectedAIModel.value;
+              }
 
-            // SUBMIT TO SERVER IMMEDIATELY FOR ALL PLAYERS (including non-leaders in team games)
-            console.log('🚀 Multiplayer player submitting to server:', requestData);
+              if (teamPlayerGame.value) {
+                  requestData.teamPlayerGame = true;
+              }
+              if (teamAIGame.value) {
+                  requestData.teamAIGame = true;
+              }
 
-            await axios.post(`/games/${gameId}/submit-answer`, requestData);
+              requestData.isTeamLeader = isTeamLeader;
+              requestData.selectedTeam = selectedTeam;
+              requestData.isTeam1Leader = isTeam1Leader;
+              requestData.isTeam2Leader = isTeam2Leader;
+              requestData.shouldProgressTeamSelection = shouldProgressTeamSelection;
 
-            // Check if this is the last player to submit
-            const currentSubmissionCount = gameState.value.playersSubmitted.size;
-            const isLastPlayer = (currentSubmissionCount + 1) >= playerCount;
+              // SUBMIT TO SERVER IMMEDIATELY FOR ALL PLAYERS (including non-leaders in team games)
+              console.log('🚀 Multiplayer player submitting to server:', requestData);
 
-            // Add this player to the submitted set
-            gameState.value.playersSubmitted.add(currentUserId.value);
-            
-            // Broadcast submission status
-            await axios.post(`/api/games/${gameId}/broadcast`, {
-                event: 'player.submitted',
-                data: {
-                    userId: currentUserId.value,
-                    userName: currentUserName.value,
-                    submittedCount: gameState.value.playersSubmitted.size,
-                    requiredCount: playerCount,
-                    difficultyId: difficultyId,
-                    categoryId: categoryId,
-                    timestamp: new Date().toISOString()
-                }
-            });
+              await axios.post(`/games/${gameId}/submit-answer`, requestData);
 
-            if (isLastPlayer || (teamPlayerGame.value || teamAIGame.value)) {
-                console.log('✅ Last player - broadcasting game completion');
-                
-                // Broadcast final completion
-                await axios.post(`/api/games/${gameId}/broadcast`, {
-                    event: 'game.completed.multiplayer',
-                    data: {
-                        playerCount: playerCount,
-                        teamPlayerGame: teamPlayerGame.value,
-                        teamAIGame: teamAIGame.value,
-                        isTeamLeader: isTeamLeader,
-                        difficultyId: difficultyId,
-                        categoryId: categoryId,
-                        cleanAnswers: cleanAnswers,
-                        timestamp: new Date().toISOString()
-                    }
-                });
+              // Check if this is the last player to submit
+              const currentSubmissionCount = gameState.value.playersSubmitted.size;
+              const isLastPlayer = (currentSubmissionCount + 1) >= playerCount;
 
-                addFlashMessage('All players submitted! Game completed!', 'success');
+              // Add this player to the submitted set
+              gameState.value.playersSubmitted.add(currentUserId.value);
+              
+              // Broadcast submission status
+              await axios.post(`/api/games/${gameId}/broadcast`, {
+                  event: 'player.submitted',
+                  data: {
+                      userId: currentUserId.value,
+                      userName: currentUserName.value,
+                      submittedCount: gameState.value.playersSubmitted.size,
+                      requiredCount: playerCount,
+                      difficultyId: difficultyId,
+                      categoryId: categoryId,
+                      shouldProgressTeamSelection: shouldProgressTeamSelection,
+                      timestamp: new Date().toISOString()
+                  }
+              });
+
+              if (isLastPlayer || (teamPlayerGame.value || teamAIGame.value || (shouldProgressTeamSelection))) {
+                  console.log('✅ Last player - broadcasting game completion');
+                  
+                  // Broadcast final completion
+                  await axios.post(`/api/games/${gameId}/broadcast`, {
+                      event: 'game.completed.multiplayer',
+                      data: {
+                          playerCount: playerCount,
+                          teamPlayerGame: teamPlayerGame.value,
+                          teamAIGame: teamAIGame.value,
+                          isTeamLeader: isTeamLeader,
+                          isTeam1Leader: isTeam1Leader,
+                          isTeam2Leader: isTeam2Leader,
+                          currentTeam1Leader: currentTeam1Leader,
+                          currentTeam2Leader: currentTeam2Leader,
+                          shouldProgressTeamSelection: shouldProgressTeamSelection,
+                          difficultyId: difficultyId,
+                          categoryId: categoryId,
+                          cleanAnswers: cleanAnswers,
+                          timestamp: new Date().toISOString()
+                      }
+                  });
+
+                  addFlashMessage('All players submitted! Game completed!', 'success');
+        
+                  resetGameState();
+                  
+                  return { submitted: true, waitingForOthers: false };
+              } else {
+                  // Not the last player - wait for completion event
+                  addFlashMessage(`Your answers submitted! Waiting for other players... (${gameState.value.playersSubmitted.size}/${playerCount})`, 'info');
+                  return { submitted: false, waitingForOthers: true, preSubmitted: true };
+              }
+          }
+      } catch (err) {
+          error.value = err;
+          addFlashMessage('Failed to submit answers: ' + (err.response?.data?.message || err.message), 'error');
+          console.error('Failed to submit answers:', err);
+          return { submitted: false, waitingForOthers: false };
+      }
+  };
+
+  const updateTeamPlayerLists = () => {
+      // Get current players list
+      const currentPlayers = players.value;
       
-                resetGameState();
-                
-                return { submitted: true, waitingForOthers: false };
-            } else {
-                // Not the last player - wait for completion event
-                addFlashMessage(`Your answers submitted! Waiting for other players... (${gameState.value.playersSubmitted.size}/${playerCount})`, 'info');
-                return { submitted: false, waitingForOthers: true, preSubmitted: true };
-            }
-        }
-    } catch (err) {
-        error.value = err;
-        addFlashMessage('Failed to submit answers: ' + (err.response?.data?.message || err.message), 'error');
-        console.error('Failed to submit answers:', err);
-        return { submitted: false, waitingForOthers: false };
-    }
-};
+      // In a real implementation, you'd want to track team assignments persistently
+      // For now, we'll use a simple approach based on player order
+      const halfPoint = Math.ceil(currentPlayers.length / 2);
+      
+      team1Players.value = currentPlayers.slice(0, halfPoint);
+      team2Players.value = currentPlayers.slice(halfPoint);
+      
+      console.log('Team player lists updated:', {
+          team1: team1Players.value.map(p => p.name),
+          team2: team2Players.value.map(p => p.name)
+      });
+  };
 
   // Update the resetGameState function in usePlayerInteractions.js
   const resetGameState = () => {
@@ -575,32 +635,51 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
       console.error('❌ Failed to subscribe to channel:', channelName, error);
     });
 
-    // Player joined - Fixed to show correct messages
+  // Player joined - enhanced to update team lists
     gameChannel.bind('player.joined', (data) => {
-      console.log('🔔 Received player.joined event:', data);
-      console.log('Current user ID:', currentUserId.value, 'Event user ID:', data.userId);
+      console.log('Received player.joined event:', data);
       
       if (data.userId !== currentUserId.value) {
-        addFlashMessage(`${data.userName} joined the game!`, 'info');
-        // Refresh player list after a small delay
-        setTimeout(() => {
-          fetchPlayers();
-        }, 500);
+          addFlashMessage(`${data.userName} joined the game!`, 'info');
+          setTimeout(() => {
+              fetchPlayers();
+              // Call the callback to update team lists in main component
+              if (callbacks.value.onUpdateTeamLists) {
+                  callbacks.value.onUpdateTeamLists();
+              }
+          }, 500);
       }
     });
 
-    // Player left - Fixed to show correct messages
+    // Player left - enhanced to update team lists  
     gameChannel.bind('player.left', (data) => {
-      console.log('🔔 Received player.left event:', data);
-      console.log('Current user ID:', currentUserId.value, 'Event user ID:', data.userId);
-      
-      if (data.userId !== currentUserId.value) {
-        addFlashMessage(`${data.userName} left the game.`, 'info');
-        // Refresh player list after a small delay
-        setTimeout(() => {
-          fetchPlayers();
-        }, 500);
-      }
+        console.log('Received player.left event:', data);
+        
+        if (data.userId !== currentUserId.value) {
+            addFlashMessage(`${data.userName} left the game.`, 'info');
+            
+            // Check if the leaving player was a team leader
+            if (data.userName === lobbyTeamLeader.value) {
+                lobbyTeamLeader.value = null;
+                addFlashMessage('Lobby team leader left - select a new leader!', 'warning');
+            }
+            if (data.userName === team1Leader.value) {
+                team1Leader.value = null;
+                addFlashMessage('Team 1 leader left - select a new leader!', 'warning');
+            }
+            if (data.userName === team2Leader.value) {
+                team2Leader.value = null;
+                addFlashMessage('Team 2 leader left - select a new leader!', 'warning');
+            }
+            
+            setTimeout(() => {
+                fetchPlayers();
+                // Call the callback to update team lists in main component
+                if (callbacks.value.onUpdateTeamLists) {
+                    callbacks.value.onUpdateTeamLists();
+                }
+            }, 500);
+        }
     });
 
     // Player count changed
@@ -612,76 +691,137 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
     });
 
     // Player ready (multiplayer start)
-    gameChannel.bind('player.ready', async (data) => {
-        console.log('🔔 Received player.ready event:', data);
-        
-        if (data.userId !== currentUserId.value) {
-            // Another player clicked start
-            gameState.value.playersReady.add(data.userId);
-            
-            // NEW: Store game settings and starter info IMMEDIATELY
-            if (data.gameSettings) {
-                gameState.value.gameSettings = data.gameSettings;
-                gameState.value.starterName = data.gameSettings.starter_name;
-                console.log('Game settings received from ready player:', data.gameSettings);
+  gameChannel.bind('player.ready', async (data) => {
+      console.log('🔔 Received player.ready event:', data);
+      
+      if (data.userId !== currentUserId.value) {
+          // Another player clicked start
+          gameState.value.playersReady.add(data.userId);
+          
+          // Store game settings and team assignments
+          if (data.gameSettings) {
+              gameState.value.gameSettings = data.gameSettings;
+              gameState.value.starterName = data.gameSettings.starter_name;
+              console.log('Game settings received from ready player:', data.gameSettings);
 
-                // CRITICAL: Apply game settings IMMEDIATELY for waiting players
-                if (callbacks.value.onApplyGameSettings) {
-                    console.log('Immediately applying game settings for non-starter player');
-                    await callbacks.value.onApplyGameSettings(data.gameSettings);
-                }
-            }
-            
-            addFlashMessage(`${data.userName} is ready to start! (${data.readyCount}/${data.requiredCount} ready)`, 'info');
-            
-            // Check if all required players are now ready for auto-start
-            const allPlayersReady = data.readyCount >= data.requiredCount;
-            const iAmReady = preReadyPlayers.value.has(currentUserId.value);
-            const gameNotStartedYet = !gameState.value.gameInProgress;
-            
-            console.log('Auto-start check:', {
-                allPlayersReady,
-                iAmReady,
-                gameNotStartedYet,
-                readyCount: data.readyCount,
-                requiredCount: data.requiredCount,
-                isWaitingToStart: isWaitingToStart.value
-            });
-            
-            if (allPlayersReady && iAmReady && gameNotStartedYet && isWaitingToStart.value) {
-                console.log('Auto-starting game for ready player via callback...');
-                
-                // Use callback to notify main component to start the game
-                if (callbacks.value.onAutoStart) {
-                    callbacks.value.onAutoStart();
-                }
-            }
-        }
-    });
+              // CRITICAL: Apply game settings IMMEDIATELY for waiting players
+              if (callbacks.value.onApplyGameSettings) {
+                  console.log('Immediately applying game settings for non-starter player');
+                  await callbacks.value.onApplyGameSettings(data.gameSettings);
+              }
+          }
 
-    gameChannel.bind('game.started.all.ready', async (data) => {
-        console.log('🔔 Received game.started.all.ready event:', data);
-        
-        // CRITICAL: Apply game settings for ALL players BEFORE starting
-        if (data.gameSettings && callbacks.value.onApplyGameSettings) {
-            console.log('Applying game settings before auto-start:', data.gameSettings);
-            await callbacks.value.onApplyGameSettings(data.gameSettings);
-        }
-        
-        // If I'm waiting and this event is received, trigger auto-start
-        if (isWaitingToStart.value) {
-            console.log('🔄 Auto-starting game via all.ready callback...');
-            
-            // Use callback to notify main component to start the game
-            if (callbacks.value.onAutoStart) {
-                callbacks.value.onAutoStart();
-            }
-        }
-    });
+          // Handle team assignments from the ready event
+          if (data.currentTeamAssignments) {
+              console.log('Received team assignments:', data.currentTeamAssignments);
+              
+              // Update local team assignments
+              playerTeamAssignments.value.clear();
+              for (const [userId, teamNumber] of Object.entries(data.currentTeamAssignments)) {
+                  playerTeamAssignments.value.set(parseInt(userId), parseInt(teamNumber));
+              }
+              
+              // Update team lists if callback is available
+              if (callbacks.value.onUpdateTeamLists) {
+                  callbacks.value.onUpdateTeamLists();
+              }
+          }
+
+          // Handle individual team selections
+          if (data.selectedTeam) {
+              playerTeamAssignments.value.set(data.userId, data.selectedTeam);
+          }
+
+          // Update team leadership from ready data
+          if (data.isTeam1Leader) {
+              team1Leader.value = data.userName;
+          }
+          if (data.isTeam2Leader) {
+              team2Leader.value = data.userName;
+          }
+          if (data.isLobbyTeamLeader) {
+              lobbyTeamLeader.value = data.userName;
+          }
+          
+          addFlashMessage(`${data.userName} is ready to start! (${data.readyCount}/${data.requiredCount} ready)`, 'info');
+          
+          // Check if all required players are now ready for auto-start
+          const allPlayersReady = data.readyCount >= data.requiredCount;
+          const iAmReady = preReadyPlayers.value.has(currentUserId.value);
+          const gameNotStartedYet = !gameState.value.gameInProgress;
+          
+          console.log('Auto-start check:', {
+              allPlayersReady,
+              iAmReady,
+              gameNotStartedYet,
+              readyCount: data.readyCount,
+              requiredCount: data.requiredCount,
+              isWaitingToStart: isWaitingToStart.value
+          });
+          
+          if (allPlayersReady && iAmReady && gameNotStartedYet && isWaitingToStart.value) {
+              console.log('Auto-starting game for ready player via callback...');
+              
+              // Use callback to notify main component to start the game
+              if (callbacks.value.onAutoStart) {
+                  callbacks.value.onAutoStart(isWaitingToStart.value);
+              }
+          }
+      }
+  });
+
+  // Enhanced game.started.all.ready event handler
+  gameChannel.bind('game.started.all.ready', async (data) => {
+      console.log('🔔 Received game.started.all.ready event:', data);
+      
+      // CRITICAL: Apply game settings for ALL players BEFORE starting
+      if (data.gameSettings && callbacks.value.onApplyGameSettings) {
+          console.log('Applying game settings before auto-start:', data.gameSettings);
+          await callbacks.value.onApplyGameSettings(data.gameSettings);
+      }
+
+      // Apply team assignments if provided
+      if (data.teamAssignments) {
+          console.log('Applying team assignments from all.ready event:', data.teamAssignments);
+          
+          // Update local team assignments
+          playerTeamAssignments.value.clear();
+          for (const [userId, teamNumber] of Object.entries(data.teamAssignments)) {
+              playerTeamAssignments.value.set(parseInt(userId), parseInt(teamNumber));
+          }
+          
+          // Update team lists if callback is available
+          if (callbacks.value.onUpdateTeamLists) {
+              callbacks.value.onUpdateTeamLists();
+          }
+      }
+
+      // Update team leadership from all.ready data
+      if (data.team1Leader) {
+          team1Leader.value = data.team1Leader;
+      }
+      if (data.team2Leader) {
+          team2Leader.value = data.team2Leader;
+      }
+      if (data.lobbyTeamLeader) {
+          lobbyTeamLeader.value = data.lobbyTeamLeader;
+      }
+      
+      // If I'm waiting and this event is received, trigger auto-start
+      console.log('🔄 Auto-starting game via all.ready callback...');
+      
+      // Use callback to notify main component to start the game
+      if (callbacks.value.onAutoStart) {
+          callbacks.value.onAutoStart(isWaitingToStart.value);
+      }
+  });
 
     // Single player game started
     gameChannel.bind('game.started.single', (data) => {
       console.log('🔔 Received game.started.single event:', data);
+
+        gameState.value.playersReady.clear();
+
       if (data.userId !== currentUserId.value) {
         addFlashMessage(`${data.userName} started a single-player game. Please wait for them to finish.`, 'warning');
         gameState.value.gameInProgress = true;
@@ -690,6 +830,9 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
 
     // Multiplayer game started
     gameChannel.bind('game.started.multiplayer', (data) => {
+
+        gameState.value.playersReady.clear();
+        
       console.log('🔔 Received game.started.multiplayer event:', data);
       if (!gameState.value.playersReady.has(currentUserId.value)) {
         addFlashMessage(`Game started with ${data.playerCount} players!`, 'success');
@@ -710,7 +853,7 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
     gameChannel.bind('player.pre.answered', async (data) => {
       console.log('🔔 Received player.pre.answered event:', data);
       
-      if (data.userId !== currentUserId.value) {
+      if (data.userId !== currentUserId.value || data.shouldProgressTeamSelection) {
           // Another player pre-answered
           if (!gameState.value.playersPreAnswered.has(data.questionIndex)) {
               gameState.value.playersPreAnswered.set(data.questionIndex, new Set());
@@ -739,8 +882,10 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
               isTeamLeader: data.isTeamLeader
           });
           
-          if ((allPlayersAnswered && (iHavePreAnswered || shouldProgressTeamPlayer) && !iAlreadyReallyAnswered) || 
-              (teamPlayerGame.value && allPlayersAnswered)) {
+          if ((allPlayersAnswered && (iHavePreAnswered || shouldProgressTeamPlayer) && !iAlreadyReallyAnswered)
+             || (teamPlayerGame.value && allPlayersAnswered)
+              // 3 player shouldShowTeamSelection game.
+             || (iHavePreAnswered && data.answeredCount === 2)) {
               console.log('Auto-progressing answer for question', data.questionIndex);
               try {
                   // Mark as officially answered
@@ -752,6 +897,7 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
                       data: {
                           questionIndex: data.questionIndex,
                           playerCount: data.requiredCount,
+                          shouldProgressTeamSelection: data.shouldProgressTeamSelection,
                           timestamp: new Date().toISOString()
                       }
                   });
@@ -774,7 +920,7 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
       console.log('🔔 Received question.all.answered event:', data);
       
       // FOR TEAM PLAYER GAME: All players should progress, regardless of pre-answered status
-      if (preAnsweredQuestions.value.has(data.questionIndex) || teamPlayerGame.value) {
+      if (preAnsweredQuestions.value.has(data.questionIndex) || teamPlayerGame.value || data.shouldProgressTeamSelection) {
           console.log('🔄 Triggering auto-progression for question:', data.questionIndex);
           
           // Get all current answers to pass to the callback
@@ -883,7 +1029,7 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
   gameChannel.bind('player.submitted', async (data) => {
     console.log('🔔 Received player.submitted event:', data);
     
-    if (data.userId !== currentUserId.value) {
+    if (data.userId !== currentUserId.value || data.shouldProgressTeamSelection) {
       gameState.value.playersSubmitted.add(data.userId);
 
       // Provide UI feedback to the current user
@@ -924,9 +1070,13 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
       addFlashMessage('Game completed! All players have submitted their answers.', 'success');
 
       // For team player games, trigger the main component callback to handle non-leader submission
-      if (data.teamPlayerGame && callbacks.value.onGameComplete) {
+      if ((data.teamPlayerGame && callbacks.value.onGameComplete 
+          || (data.shouldProgressTeamSelection && (currentUserName.value !== data.currentTeam1Leader && currentUserName.value !== data.currentTeam2Leader)))) {
           console.log('Team player game completed - triggering main component callback');
           await callbacks.value.onGameComplete(data);
+      } else if (data.shouldProgressTeamSelection) {
+        // For team selection mode, just reset state without auto-submission
+        resetGameState();
       } else {
           // Non-team games: reset normally
           resetGameState();
@@ -959,8 +1109,6 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
           } else {
               addFlashMessage(`${data.userName} disabled team mode`, 'info');
           }
-
-          console.log('GAME SETTINGS RECEIVED: ' + JSON.stringify(data.gameSettings));
           
           // CRITICAL FIX: Apply game settings if provided
           if (data.gameSettings) {
@@ -983,23 +1131,117 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
         console.log('🔔 Received team.suggestion event:', data);
         
         if (data.userId !== currentUserId.value) {
-            // Filter suggestions based on game mode
             let shouldShowSuggestion = false;
+            let direction = '';
             
-            if (data.gameMode === 'teamPlayer') {
-                // Team Player Game: show suggestions to/from team leader
+            if (data.gameMode === 'lobbyTeamLeader') {
+                // Lobby team leader mode: leaders see suggestions from members, members see suggestions from leader
+                if (data.isLobbyTeamLeader && !isLobbyTeamLeader.value) {
+                    shouldShowSuggestion = true;
+                    direction = 'from lobby team leader';
+                } else if (!data.isLobbyTeamLeader && isLobbyTeamLeader.value) {
+                    shouldShowSuggestion = true;
+                    direction = 'from team member';
+                }
+            } else if (data.gameMode === 'teamSelection') {
+                // Team selection mode: only show suggestions within same team
+                if (data.senderTeam) {
+                    if (data.isTeamLeader) {
+                        shouldShowSuggestion = true;
+                        direction = `from Team ${data.senderTeam} leader`;
+                    } else if (!data.isTeamLeader) {
+                        shouldShowSuggestion = true;
+                        direction = `from Team ${data.senderTeam} member`;
+                    }
+                }
+            } else if (data.gameMode === 'teamAI2Player') {
+                // TeamAI 2-player mode: show suggestions between host and non-host
                 shouldShowSuggestion = true;
-            } else if (data.gameMode === 'teamAI') {
-                // Team AI Game: non-leaders only see suggestions from other non-leaders
-                if (!data.isTeamLeader) {
-                    shouldShowSuggestion = false; // Team leader doesn't see suggestions in AI team mode
+                direction = data.isHost ? 'from host' : 'from player';
+            } else {
+                // Existing team modes logic
+                if (data.gameMode === 'teamPlayer') {
+                    shouldShowSuggestion = true;
+                    direction = data.isToLeader ? 'to team leader' : (data.isToOtherPlayers ? 'to other players' : 'from team leader');
+                } else if (data.gameMode === 'teamAI') {
+                    if (!data.isTeamLeader) {
+                        shouldShowSuggestion = false; // Team leader doesn't see suggestions in AI team mode
+                    }
                 }
             }
             
             if (shouldShowSuggestion) {
-                const direction = data.isToLeader ? 'to team leader' : (data.isToOtherPlayers ? 'to other players' : 'from team leader');
                 addFlashMessage(`${data.userName} suggests ${direction}: "${data.suggestion}"`, 'info');
             }
+        }
+    });
+
+    // Player selected team
+    gameChannel.bind('player.team.selected', (data) => {
+        console.log('🔔 Received player.team.selected event:', data);
+        
+        if (data.userId !== currentUserId.value) {
+            // UPDATE: Store the team assignment locally
+            playerTeamAssignments.value.set(data.userId, data.teamNumber);
+            
+            addFlashMessage(`${data.userName} joined Team ${data.teamNumber}`, 'info');
+            
+            // Update team assignments immediately
+            setTimeout(() => {
+                fetchPlayers();
+                // Call the callback to update team lists in main component
+                if (callbacks.value.onUpdateTeamLists) {
+                    callbacks.value.onUpdateTeamLists();
+                }
+                if (callbacks.value.onUpdateTeamAssignments) {
+                    callbacks.value.onUpdateTeamAssignments(data.userId, data.teamNumber);
+                }
+            }, 500);
+        }
+    });
+    
+    // Lobby team leader selected
+    gameChannel.bind('lobby.team.leader.selected', (data) => {
+        console.log('🔔 Received lobby.team.leader.selected event:', data);
+        
+        if (data.userId !== currentUserId.value) {
+            lobbyTeamLeader.value = data.userName;
+            addFlashMessage(`${data.userName} became the lobby team leader!`, 'info');
+        }
+    });
+
+    // Team leader selected
+    gameChannel.bind('team.leader.selected', async (data) => {
+        console.log('🔔 Received team.leader.selected event:', data);
+        
+        if (data.userId !== currentUserId.value) {
+            // Handle leadership changes
+            if (data.previousTeam1Leader) {
+                team1Leader.value = null;
+            }
+            if (data.previousTeam2Leader) {
+                team2Leader.value = null;
+            }
+            
+            if (data.teamNumber === 1) {
+                team1Leader.value = data.userName;
+            } else {
+                team2Leader.value = data.userName;
+            }
+            addFlashMessage(`${data.userName} became Team ${data.teamNumber} leader!`, 'info');
+        }
+    });
+
+    gameChannel.bind('team.leader.unselected', async (data) => {
+        console.log('🔔 Received team.leader.unselected event:', data);
+        
+        if (data.userId !== currentUserId.value) {
+            if (data.teamNumber === 1) {
+                team1Leader.value = null;
+            } else {
+                team2Leader.value = null;
+            }
+            addFlashMessage(`${data.userName} stepped down as Team ${data.teamNumber} leader`, 'info');
         }
     });
 
@@ -1057,6 +1299,9 @@ const submitAnswers = async (answers, playerCount, difficultyId = null, category
     preAnsweredQuestions, //  Expose pre-answered questions
     preReadyPlayers,
     isWaitingToStart,
+    team1Leader,
+    team2Leader,
+    playerTeamAssignments,
     
     // Methods
     fetchPlayers,

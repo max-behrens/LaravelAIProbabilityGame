@@ -21,7 +21,7 @@ class GameSeeder extends Seeder
             foreach (range(1, 5) as $i) {
                 Games::factory()->create([
                     'game_type_id' => $type->id,
-                    'max_players'  => 2,  // or whatever default max
+                    'max_players'  => 4,
                 ]);
             }
         }
