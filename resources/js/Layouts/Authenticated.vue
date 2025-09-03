@@ -158,7 +158,7 @@ onBeforeUnmount(() => {
             </div>
             
               <!-- User Section - Fixed width to balance logo -->
-              <div class="main-width hidden lg:flex lg:items-center justify-end">
+              <div class="main-width px-4 hidden lg:flex lg:items-center justify-end">
                 <!-- User Name Display -->
                 <div class="text-sm text-gray-300">
                   {{ $page.props.auth?.user?.name || 'Loading...' }}

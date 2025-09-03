@@ -265,13 +265,16 @@ class GamesController extends Controller
             'isLobbyTeamLeader' => 'sometimes|boolean',
             'selectedTeam' => 'sometimes|integer|in:1,2',
             'isTeam1Leader' => 'sometimes|boolean',
-            'isTeam2Leader' => 'sometimes|boolean'
+            'isTeam2Leader' => 'sometimes|boolean',
+            'shouldProgressTeamSelection' => 'sometimes|boolean',
         ]);
 
         $user = $request->user();
         if (!$user) {
             return response()->json(['error' => 'Unauthorized'], 401);
         }
+
+
 
         // Get difficulty and category IDs
         $difficultyId = $request->get('difficulty_id');
@@ -280,15 +283,36 @@ class GamesController extends Controller
         $teamPlayerGame = $request->boolean('teamPlayerGame', false);
         $teamAIGame = $request->boolean('teamAIGame', false);
         $isTeamLeader = $request->boolean('isTeamLeader', false);
-        
+
         // New team management flags
         $lobbyTeamLeader = $request->boolean('lobbyTeamLeader', false);
         $isLobbyTeamLeader = $request->boolean('isLobbyTeamLeader', false);
         $selectedTeam = $request->get('selectedTeam');
         $isTeam1Leader = $request->boolean('isTeam1Leader', false);
         $isTeam2Leader = $request->boolean('isTeam2Leader', false);
+        $shouldProgressTeamSelection = $request->boolean('shouldProgressTeamSelection', false);
 
-        // ... existing difficulty/category logic ...
+
+        $teamGameType = '';
+        if ($teamPlayerGame) {
+            $teamGameType = 'teamPlayerGame';
+        } else if ($teamAIGame) {
+            $teamGameType = 'teamAIGame';
+        }
+
+        if (is_null($difficultyId) || is_null($categoryId)) {
+            $settingsKey = "game:{$gameId}:gameSettings";
+            $gameSettings = Cache::get($settingsKey);
+            
+            if ($gameSettings) {
+                $difficultyId = $difficultyId ?? $gameSettings['difficulty_id'] ?? 1;
+                $categoryId = $categoryId ?? $gameSettings['category_id'] ?? 1;
+            } else {
+                $difficultyId = $difficultyId ?? 1;
+                $categoryId = $categoryId ?? 1;
+            }
+        }
+        
 
         // Create session ID
         $gameStartKey = "game:{$gameId}:start_time";
@@ -334,25 +358,53 @@ class GamesController extends Controller
         }
         
         // 2. TEAM SELECTION MODE (3+ players without AI)
-        elseif ($selectedTeam && !$teamPlayerGame && !$teamAIGame && !$lobbyTeamLeader) {
+        elseif (!$teamPlayerGame && !$teamAIGame && !$lobbyTeamLeader) {
             $teamAnswersKey = "game:{$gameId}:team_{$selectedTeam}_answers";
-            
-            if (($selectedTeam == 1 && $isTeam1Leader) || ($selectedTeam == 2 && $isTeam2Leader)) {
+
+            if ($isTeamLeader === true) {
                 // Team leader: Store answers for team
                 Cache::put($teamAnswersKey, $request->answers, now()->addHours(1));
-                
-                Log::info("Team {$selectedTeam} leader stored answers", [
+
+                Log::info("TEAM LEADER - STORING ANSWERS", [
+                    'team' => $selectedTeam,
                     'gameId' => $gameId,
                     'userId' => $user->id,
-                    'team' => $selectedTeam,
                     'answersCount' => count($request->answers)
                 ]);
-            } else {
+
+            } else if ($isTeamLeader === false) {
+                // Simple deduplication: Check if this user already processed this team's answers
+                $userProcessedKey = "game:{$gameId}:user_{$user->id}_processed_team_{$selectedTeam}";
+
+                if (Cache::has($userProcessedKey)) {
+                    // Clear the processed flag to allow future submissions if needed
+                    Cache::forget($userProcessedKey);
+
+                    Log::info("NON TEAM LEADER - ALREADY PROCESSED", [
+                        'team' => $selectedTeam,
+                        'gameId' => $gameId,
+                        'userId' => $user->id,
+                        'message' => 'Duplicate submission blocked'
+                    ]);
+                    return;
+                }
+
                 // Non-leader: Use team leader's answers
                 $teamLeaderAnswers = Cache::get($teamAnswersKey);
                 
+                Log::info("NON TEAM LEADER - FETCHING LEADER ANSWERS", [
+                    'team' => $selectedTeam,
+                    'teamLeaderAnswers' => $teamLeaderAnswers,
+                    'gameId' => $gameId,
+                    'userId' => $user->id
+                ]);
+                
                 if ($teamLeaderAnswers) {
+                    // Set a flag that this user has processed this team's submission
+                    Cache::put($userProcessedKey, true, now()->addHours(1));
+                    
                     $finalPlayerAnswers = $teamLeaderAnswers;
+                    
                     Log::info("Team {$selectedTeam} member using leader's answers", [
                         'gameId' => $gameId,
                         'userId' => $user->id,
@@ -361,6 +413,8 @@ class GamesController extends Controller
                         'finalCount' => count($finalPlayerAnswers)
                     ]);
                 }
+            } else if ($shouldProgressTeamSelection === true) {
+                return;
             }
         }
         
@@ -981,12 +1035,15 @@ class GamesController extends Controller
         $joinTeamWithAI = $request->boolean('join_team_with_ai', false);
         $isTeamLeader = $request->boolean('isTeamLeader', false);
         
-        // NEW: Get enhanced team management settings
+        // Get enhanced team management settings
         $lobbyTeamLeader = $request->boolean('lobbyTeamLeader', false);
         $isLobbyTeamLeader = $request->boolean('isLobbyTeamLeader', false);
         $selectedTeam = $request->get('selectedTeam');
         $isTeam1Leader = $request->boolean('isTeam1Leader', false);
         $isTeam2Leader = $request->boolean('isTeam2Leader', false);
+
+        // NEW: Get current team assignments from request
+        $currentTeamAssignments = $request->get('currentTeamAssignments', []);
 
         // CHECK IF THIS IS A SINGLE-PLAYER GAME
         if ($requiredCount === 1) {
@@ -1005,13 +1062,16 @@ class GamesController extends Controller
                     'is_lobby_team_leader' => $isLobbyTeamLeader,
                     'selected_team' => $selectedTeam,
                     'is_team1_leader' => $isTeam1Leader,
-                    'is_team2_leader' => $isTeam2Leader
+                    'is_team2_leader' => $isTeam2Leader,
+                    // Include team assignments
+                    'team_assignments' => $currentTeamAssignments
                 ]
             ]);
         }
 
         $cacheKey = "game:{$game->id}:readyPlayers";
         $settingsKey = "game:{$game->id}:gameSettings";
+        $teamAssignmentsKey = "game:{$game->id}:teamAssignments";
         
         // CRITICAL FIX: Use cache locks to prevent race conditions
         $lockKey = "game:{$game->id}:ready_lock";
@@ -1019,8 +1079,8 @@ class GamesController extends Controller
         return Cache::lock($lockKey, 10)->get(function () use (
             $game, $userId, $userName, $requiredCount, $difficultyId, $categoryId, 
             $playWithAI, $playWithBespokeAI, $joinTeamWithPlayers, $joinTeamWithAI, 
-            $isTeamLeader, $cacheKey, $settingsKey, $lobbyTeamLeader, $isLobbyTeamLeader,
-            $selectedTeam, $isTeam1Leader, $isTeam2Leader
+            $isTeamLeader, $cacheKey, $settingsKey, $teamAssignmentsKey, $lobbyTeamLeader, $isLobbyTeamLeader,
+            $selectedTeam, $isTeam1Leader, $isTeam2Leader, $currentTeamAssignments
         ) {
             
             // Get current ready players with atomic read
@@ -1031,8 +1091,26 @@ class GamesController extends Controller
                 $readyPlayers = [];
             }
             
-            // CRITICAL FIX: Get existing settings to preserve original starter
+            // Get existing settings to preserve original starter
             $currentSettings = Cache::get($settingsKey);
+            
+            // NEW: Get and update team assignments
+            $existingTeamAssignments = Cache::get($teamAssignmentsKey, []);
+            
+            // Merge current player's team assignments with existing ones
+            if (!empty($currentTeamAssignments)) {
+                $existingTeamAssignments = array_merge($existingTeamAssignments, $currentTeamAssignments);
+                
+                // Store updated team assignments in cache
+                Cache::put($teamAssignmentsKey, $existingTeamAssignments, now()->addMinutes(30));
+                
+                Log::info('Team assignments updated in cache', [
+                    'gameId' => $game->id,
+                    'userId' => $userId,
+                    'newAssignments' => $currentTeamAssignments,
+                    'allAssignments' => $existingTeamAssignments
+                ]);
+            }
             
             $gameQuestions = $this->gamesService->getGameQuestionsByDifficultyAndCategory(
                 $game, 
@@ -1052,12 +1130,14 @@ class GamesController extends Controller
                 'join_team_with_ai' => $joinTeamWithAI,
                 'questions' => $gameQuestions,
                 'starter_name' => $starterName,
-                // NEW: Enhanced team settings
+                // Enhanced team settings
                 'lobby_team_leader' => $lobbyTeamLeader,
                 'is_lobby_team_leader' => $isLobbyTeamLeader,
                 'selected_team' => $selectedTeam,
                 'is_team1_leader' => $isTeam1Leader,
-                'is_team2_leader' => $isTeam2Leader
+                'is_team2_leader' => $isTeam2Leader,
+                // Include team assignments in settings
+                'team_assignments' => $existingTeamAssignments,
             ];
             
             // Only update cache if this is the first player or settings have changed
@@ -1065,8 +1145,9 @@ class GamesController extends Controller
                 Cache::put($settingsKey, $gameSettings, now()->addMinutes(30));
                 $currentSettings = $gameSettings;
             } else {
-                // Use existing settings but update questions if needed
+                // Use existing settings but update questions and team assignments if needed
                 $currentSettings['questions'] = $gameQuestions;
+                $currentSettings['team_assignments'] = $existingTeamAssignments;
             }
 
             // Add player to ready list if not already there
@@ -1077,13 +1158,32 @@ class GamesController extends Controller
 
             $readyCount = count($readyPlayers);
             
+            // Enhanced broadcast data with team assignments
+            $broadcastData = [
+                'gameId' => $game->id,
+                'userId' => $userId,
+                'userName' => $userName,
+                'readyCount' => $readyCount,
+                'requiredCount' => $requiredCount,
+                'gameSettings' => $currentSettings,
+                'isTeamLeader' => $isTeamLeader,
+                'isLobbyTeamLeader' => $isLobbyTeamLeader,
+                'isTeam1Leader' => $isTeam1Leader,
+                'isTeam2Leader' => $isTeam2Leader,
+                'selectedTeam' => $selectedTeam,
+                // Include current team assignments in broadcast
+                'currentTeamAssignments' => $existingTeamAssignments,
+                'timestamp' => now()->toISOString()
+            ];
+            
             broadcast(new PlayerReady(
                 $game->id, 
                 $userId, 
                 $userName, 
                 $readyCount, 
                 $requiredCount, 
-                $currentSettings // This now includes enhanced team settings
+                $currentSettings, // This now includes team assignments
+                $broadcastData // Pass enhanced data to event
             ))->toOthers();
 
             if ($readyCount >= $requiredCount) {
@@ -1093,6 +1193,8 @@ class GamesController extends Controller
                 // Clean up cache
                 Cache::forget($cacheKey);
                 Cache::forget($settingsKey);
+                // Keep team assignments for the duration of the game
+                // Cache::forget($teamAssignmentsKey); // Don't delete team assignments yet
                 
                 $this->triggerGameUpdate($game->id, 'game.started.all.ready', [
                     'gameId' => $game->id,
@@ -1100,6 +1202,10 @@ class GamesController extends Controller
                     'readyCount' => $readyCount,
                     'gameSettings' => $currentSettings,
                     'isTeamLeader' => $isTeamLeader,
+                    'teamAssignments' => $existingTeamAssignments, // Include in all.ready event
+                    'team1Leader' => $isTeam1Leader ? $userName : null,
+                    'team2Leader' => $isTeam2Leader ? $userName : null,
+                    'lobbyTeamLeader' => $isLobbyTeamLeader ? $userName : null,
                     'timestamp' => now()->toISOString()
                 ]);
                 
