@@ -310,7 +310,7 @@ onUnmounted(() => {
 
 <template>
 
-  <div class="h-[50vh] flex items-center justify-center relative overflow-visible">
+  <div class="h-[100vh] sm:h-[50vh] flex items-center justify-center relative overflow-visible">
     <!-- Background slideshow -->
     <div class="absolute inset-0 z-0 overflow-visible">
       <div class="absolute inset-0 overflow-visible">
@@ -391,7 +391,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Game Wins Chart - Top Center -->
-    <div class="flex flex-col main-width">
+    <div class="flex flex-col main-width mt-20">
       <!-- Filter Buttons -->
       <div class="z-20 mb-2 flex space-x-2 justify-center">
         <button
@@ -579,7 +579,7 @@ onUnmounted(() => {
     <!-- Next button -->
     <button
       @click="nextSlide"
-      class="absolute sm:top-1/2 top-1/2 sm:right-6 right-1 main-width z-30 -translate-y-1/2 
+      class="absolute sm:top-1/2 top-1/2 sm:right-6 right-1 main-width z-30 mt-10 -translate-y-1/2 
             bg-white/20 hover:bg-white/30 !text-white p-2 rounded-full 
             transition-all duration-300 backdrop-blur-sm hover:scale-110"
       aria-label="Next slide"
@@ -592,7 +592,7 @@ onUnmounted(() => {
     <!-- Down button -->
     <button
       @click="scrollToFeatured"
-      class="absolute z-30 main-width bg-white/20 hover:bg-white/30 !text-white p-3 rounded-full transition-all duration-300 backdrop-blur-sm hover:scale-110 
+      class="absolute z-30 mt-20 main-width bg-white/20 hover:bg-white/30 !text-white p-3 rounded-full transition-all duration-300 backdrop-blur-sm hover:scale-110 
             bottom-12 left-4 -translate-x-1/2 sm:bottom-auto sm:left-4 sm:translate-x-0"
       aria-label="Scroll to featured section"
     >

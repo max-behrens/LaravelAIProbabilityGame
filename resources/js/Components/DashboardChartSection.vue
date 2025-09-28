@@ -443,7 +443,7 @@ onUnmounted(() => {
     <div class="lg:col-span-3 w-full">
 
                 <!-- Mobile: Collapsible filters -->
-                <details class="block lg:hidden mb-6 px-2">
+                <details class="block lg:hidden mb-6 px-2 mt-20 sm:mt-2">
                     <summary class="cursor-pointer select-none bg-gray-700 text-white px-4 py-2 rounded-lg">
                       Filters
                     </summary>
