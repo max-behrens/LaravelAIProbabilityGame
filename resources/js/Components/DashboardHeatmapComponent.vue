@@ -74,7 +74,7 @@ const generateAllColumns = () => {
   const expandedColumns = [];
   dates.forEach(date => {
     const sessionsForDate = sessionsByDate[date] || [];
-    const numColumns = Math.ceil(sessionsForDate.length / 10) || 1;
+    const numColumns = Math.ceil(sessionsForDate.length / 5) || 1;
     
     for (let colIndex = 0; colIndex < numColumns; colIndex++) {
       if (colIndex === 0) {
@@ -303,7 +303,7 @@ const heatmapSeries = computed(() => {
     sessionsByDate[date].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   });
   
-  const maxSessionsPerColumn = 10;
+  const maxSessionsPerColumn = 5;
   
   const series = [];
   for (let sessionIndex = 0; sessionIndex < maxSessionsPerColumn; sessionIndex++) {

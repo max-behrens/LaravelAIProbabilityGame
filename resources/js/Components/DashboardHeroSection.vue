@@ -309,39 +309,84 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="min-h-screen flex items-center justify-center relative">
+
+  <div class="h-[50vh] flex items-center justify-center relative overflow-visible">
+    <!-- Background slideshow -->
+    <div class="absolute inset-0 z-0 overflow-visible">
+      <div class="absolute inset-0 overflow-visible">
+        <div
+          v-for="(slide, index) in slides"
+          :key="`slide-${index}`"
+          class="absolute inset-0 overflow-visible"
+          :class="[
+            'transition-opacity duration-1000 ease-in-out',
+            index === currentSlide && imagesReady ? 'opacity-100' : 'opacity-0'
+          ]"
+        >
+        <img
+          :src="slide.src"
+          :alt="slide.alt"
+          @load="handleImageLoad(index)"
+          :class="[
+            'absolute w-full h-full mt-20 object-cover transition-opacity duration-1000 ease-in-out',
+            loadedImages[index] ? 'opacity-60' : 'opacity-0'
+          ]"
+          :style="{
+            top: '-10vh',
+            height: 'calc(100% + 12vh)',
+            mask: 'linear-gradient(to bottom, black 60%, transparent 100%)',
+            WebkitMask: 'linear-gradient(to bottom, black 60%, transparent 100%)'
+          }"
+        />
+
+          <!-- Top fade overlay -->
+          <div 
+            class="absolute left-0 w-full bg-gradient-to-b from-black via-black to-transparent z-10"
+            :style="{
+              top: '-17vh',
+              height: '30vh'
+            }"
+          ></div>
+
+
+        </div>
+      </div>
+      <!-- Main overlay for better text readability -->
+    </div>
+
+
 
     <!-- Top Left Navigation Buttons -->
-    <div class="main-width absolute top-8 left-8 z-20 flex flex-col space-y-2">
+    <div class="main-width absolute top-4 left-4 z-20 flex flex-col space-y-2">
     <!-- Heatmap -->
     <button
       @click="scrollToHeatmap"
-      class="theme-button-heatmap px-4 py-2 !text-white rounded-lg backdrop-blur-sm hover:scale-105 flex items-center space-x-2"
+      class="theme-button-heatmap px-4 py-3 !text-white rounded-lg backdrop-blur-sm hover:scale-105 flex items-center space-x-2"
     >
-      <ChartColumnStacked class="w-5 h-5 mr-2" />
-      Scores Per Game
+      <ChartColumnStacked class="w-5 h-5 mr-1" />
+      <span class="text-sm">Scores Per Game</span>
     </button>
 
     <!-- Line Chart -->
     <button
       @click="scrollToLineChart"
-      class="theme-button-linechart px-4 py-2 !text-white rounded-lg backdrop-blur-sm hover:scale-105 flex items-center space-x-2"
+      class="theme-button-linechart px-3 py-2 !text-white rounded-lg backdrop-blur-sm hover:scale-105 flex items-center space-x-2"
     >
-      <LineChartIcon class="w-5 h-5 mr-2" />
-      Scores Over Time
+      <LineChartIcon class="w-5 h-5 mr-1" />
+      <span class="text-sm">Scores Over Time</span>
     </button>
     </div>
 
     <!-- Top Right Leaderboard Button -->
-    <div class="main-width absolute top-8 right-8 z-20">
+    <div class="main-width absolute top-4 right-4 z-20">
       <!-- Leaderboard -->
       <button
         @click="goToLeaderboard"
-        class="theme-button px-4 py-2 !text-white rounded-lg backdrop-blur-sm hover:scale-105 flex items-center space-x-2"
+        class="theme-button px-4 py-3 !text-white rounded-lg backdrop-blur-sm hover:scale-105 flex items-center space-x-2"
         aria-label="Go to leaderboard"
       >
         <Trophy class="w-5 h-5" />
-        <span class="hidden sm:inline">Leaderboard</span>
+        <span class="hidden sm:inline text-md">Leaderboard</span>
       </button>
     </div>
 
@@ -351,38 +396,40 @@ onUnmounted(() => {
       <div class="z-20 mb-2 flex space-x-2 justify-center">
         <button
           @click="cycleDifficulty"
-          class="px-3 py-1 bg-white/20 hover:bg-white/30 text-white text-xs rounded backdrop-blur-sm transition-all"
+          class="px-2 py-1 bg-white/20 hover:bg-white/30 text-white text-xs rounded backdrop-blur-sm transition-all"
           v-if="difficulties && difficulties.length > 0"
         >
           Difficulty: {{ currentDifficultyText }}
         </button>
         <button
           @click="cycleCategory"
-          class="px-3 py-1 bg-white/20 hover:bg-white/30 text-white text-xs rounded backdrop-blur-sm transition-all"
+          class="px-2 py-1 bg-white/20 hover:bg-white/30 text-white text-xs rounded backdrop-blur-sm transition-all"
           v-if="categories && categories.length > 0"
         >
           Category: {{ currentCategoryText }}
         </button>
       </div>
 
-      <div class="z-20 rounded-lg p-4 min-w-64">
+      <div class="z-20 rounded-lg p-3 min-w-64">
         <div class="flex items-center justify-center">
-          <h3 class="!text-white text-sm font-semibold">Game Wins</h3>
           <!-- Loading spinner -->
           <div 
             v-if="currentGameWinsLoading"
-            class="ml-2 animate-spin rounded-full h-4 w-4 border-b-2 border-white"
+            class="ml-2 animate-spin rounded-full h-3 w-3 border-b-2 border-white"
           ></div>
         </div>
         
         <!-- Labels -->
-        <div class="flex justify-between text-xs mb-1">
+        <div class="flex justify-between !text-md mb-1">
           <div class="text-blue-200">Players: {{ currentGameWins.player_wins }}</div>
+          <div class="mr-8">
+          <h3 class="!text-white !text-lg font-semibold">Game Wins</h3>
+          </div>
           <div class="text-red-200">AI: {{ currentGameWins.ai_wins }}</div>
         </div>
         
         <!-- Single combined bar -->
-        <div class="bg-gray-600/30 h-6 rounded-full overflow-hidden flex relative">
+        <div class="bg-gray-600/30 h-5 rounded-full overflow-hidden flex relative">
           <!-- Player section -->
           <div 
             class="bg-blue-500/60 transition-all duration-500 flex items-center justify-start pl-2" 
@@ -410,63 +457,36 @@ onUnmounted(() => {
         </div>
         
         <!-- Total games count -->
-        <div class="text-center text-xs text-gray-100 mt-3">
+        <div class="text-center text-xs text-gray-100 mt-2">
           Total Games: {{ currentGameWins.player_wins + currentGameWins.ai_wins }}
         </div>
-      </div>
-
-      <!-- Background slideshow -->
-      <div class="absolute inset-0 z-0">
-        <div class="absolute inset-0">
-          <div
-            v-for="(slide, index) in slides"
-            :key="`slide-${index}`"
-            class="absolute inset-0"
-            :class="[
-              'transition-opacity duration-1000 ease-in-out',
-              index === currentSlide && imagesReady ? 'opacity-100' : 'opacity-0'
-            ]"
-          >
-            <img
-              :src="slide.src"
-              :alt="slide.alt"
-              @load="handleImageLoad(index)"
-              :class="[
-                'absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out',
-                loadedImages[index] ? 'opacity-100' : 'opacity-0'
-              ]"
-            />
-          </div>
-        </div>
-        <!-- Overlay for better text readability -->
-        <div class="absolute inset-0 bg-black opacity-40"></div>
       </div>
 
 
       <div class="flex flex-col">
         <!-- Content -->
-        <div class="text-center z-10 px-6">
+        <div class="text-center z-30 px-6">
           <transition name="fade" appear mode="out-in">
-            <div :key="currentSlide" class="max-w-4xl mx-auto fade-sides-bg rounded-lg p-4 relative">
+            <div :key="currentSlide" class="max-w-7xl mx-auto fade-sides-bg rounded-lg p-3 relative">
               
               <!-- Coming Soon Badge - Only for Object Detection Game (slide 0) -->
               <div 
                 v-if="currentSlide === 0 && slides[currentSlide]?.title === 'Object Detection Game'"
                 class="coming-soon-badge"
               >
-                <span class="text-sm font-bold text-white">COMING SOON</span>
+                <span class="text-xs font-bold text-white">COMING SOON</span>
               </div>
               
-              <h1 class="text-5xl md:text-7xl font-bold mb-6 !text-white" style="font-size: 20pt !important;">
+              <h1 class="text-5xl md:text-4xl font-bold mb-4 !text-white" style="font-size: 20pt !important;">
                 {{ slides[currentSlide]?.title }}
               </h1>
 
               <!-- Icons Section -->
-              <div class="flex justify-center items-center space-x-8 mb-8">
+              <div class="flex justify-center items-center space-x-6 mb-6">
                 <!-- Multiplayer Icon -->
                 <div class="flex flex-col items-center game-feature-icon">
-                  <div class="bg-white/20 rounded-full p-4 mb-2 hover:bg-white/30 transition-all duration-300 hover:-translate-y-1">
-                    <svg class="w-8 h-8 !text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div class="bg-white/20 rounded-full p-3 mb-2 hover:bg-white/30 transition-all duration-300 hover:-translate-y-1">
+                    <svg class="w-6 h-6 !text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                   </div>
@@ -475,9 +495,9 @@ onUnmounted(() => {
 
                 <!-- Form with Steal/Image Icon -->
                 <div class="flex flex-col items-center game-feature-icon">
-                  <div class="bg-white/20 rounded-full p-4 mb-2 hover:bg-white/30 transition-all duration-300 hover:-translate-y-1 relative">
+                  <div class="bg-white/20 rounded-full p-3 mb-2 hover:bg-white/30 transition-all duration-300 hover:-translate-y-1 relative">
                     <!-- Base Form Icon -->
-                    <svg class="w-8 h-8 !text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-6 h-6 !text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     
@@ -486,7 +506,7 @@ onUnmounted(() => {
                       <!-- Steal icon for Object Detection Game (slide 0) -->
                       <svg 
                         v-if="currentSlide === 0" 
-                        class="w-6 h-6 !text-white" 
+                        class="w-5 h-5 !text-white" 
                         fill="none" 
                         stroke="currentColor" 
                         viewBox="0 0 24 24"
@@ -496,7 +516,7 @@ onUnmounted(() => {
                       <!-- Image icon for Fake or Steal (slide 1) -->
                       <svg 
                         v-else 
-                        class="w-6 h-6 !text-white" 
+                        class="w-5 h-5 !text-white" 
                         fill="none" 
                         stroke="currentColor" 
                         viewBox="0 0 24 24"
@@ -512,8 +532,8 @@ onUnmounted(() => {
 
                 <!-- AI Model Icon -->
                 <div class="flex flex-col items-center game-feature-icon">
-                  <div class="bg-white/20 rounded-full p-4 mb-2 hover:bg-white/30 transition-all duration-300 hover:-translate-y-1">
-                    <svg class="w-8 h-8 !text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div class="bg-white/20 rounded-full p-3 mb-2 hover:bg-white/30 transition-all duration-300 hover:-translate-y-1">
+                    <svg class="w-6 h-6 !text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
                   </div>
@@ -521,22 +541,22 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <div class="flex flex-col sm:flex-row gap-4 justify-center mb-6">
+              <div class="flex flex-col sm:flex-row gap-3 justify-center mb-4">
                 <a
                   :href="slides[currentSlide]?.button1.href"
-                  class="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-large rounded-lg transition-colors"
+                  class="inline-flex items-center px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors text-sm"
                 >
                   {{ slides[currentSlide]?.button1.text }}
                 </a>
                 <a
                   :href="slides[currentSlide]?.button2.href"
-                  class="inline-flex items-center px-6 py-3 bg-transparent !text-black border border-white bg-white/70 hover:bg-white hover:text-slate-900 font-large rounded-lg transition-colors"
+                  class="inline-flex items-center px-5 py-2 bg-transparent !text-black border border-white bg-white/70 hover:bg-white hover:text-slate-900 font-medium rounded-lg transition-colors text-sm"
                 >
                   {{ slides[currentSlide]?.button2.text }}
                 </a>
               </div>
-              <div class="text-xl md:text-2xl text-blue-200 mb-4">
-                <span style="font-size: 15pt !important;">{{ slides[currentSlide]?.description }}</span>
+              <div class="text-lg md:text-xl text-blue-200 mb-2">
+                <span style="font-size: 13pt !important;">{{ slides[currentSlide]?.description }}</span>
               </div>
             </div>
           </transition>
@@ -544,12 +564,12 @@ onUnmounted(() => {
       </div>
 
       <!-- Navigation dots -->
-      <div class="flex justify-center mt-3 space-x-3 z-20">
+      <div class="flex justify-center mt-2 space-x-2 z-30">
         <button
           v-for="(slide, index) in slides"
           :key="index"
           @click="goToSlide(index)"
-          class="w-4 h-4 rounded-full transition-all hover:scale-110"
+          class="w-3 h-3 rounded-full transition-all hover:scale-110"
           :class="index === currentSlide ? 'bg-white/80 shadow-lg' : 'bg-white/50 hover:bg-white/30'"
           aria-label="Go to slide"
         ></button>
@@ -559,12 +579,12 @@ onUnmounted(() => {
     <!-- Next button -->
     <button
       @click="nextSlide"
-      class="absolute sm:top-1/2 top-1/2 sm:right-10 right-1 main-width z-20 -translate-y-1/2 
-            bg-white/20 hover:bg-white/30 !text-white p-3 rounded-full 
+      class="absolute sm:top-1/2 top-1/2 sm:right-6 right-1 main-width z-30 -translate-y-1/2 
+            bg-white/20 hover:bg-white/30 !text-white p-2 rounded-full 
             transition-all duration-300 backdrop-blur-sm hover:scale-110"
       aria-label="Next slide"
     >
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
       </svg>
     </button>
@@ -572,17 +592,17 @@ onUnmounted(() => {
     <!-- Down button -->
     <button
       @click="scrollToFeatured"
-      class="absolute z-20 main-width bg-white/20 hover:bg-white/30 !text-white p-4 rounded-full transition-all duration-300 backdrop-blur-sm hover:scale-110 
-            bottom-20 left-8 -translate-x-1/2 sm:bottom-auto sm:left-4 sm:translate-x-0"
+      class="absolute z-30 main-width bg-white/20 hover:bg-white/30 !text-white p-3 rounded-full transition-all duration-300 backdrop-blur-sm hover:scale-110 
+            bottom-12 left-4 -translate-x-1/2 sm:bottom-auto sm:left-4 sm:translate-x-0"
       aria-label="Scroll to featured section"
     >
       <div class="animate-bounce">
-        <svg class="w-6 h-6 group-hover:translate-y-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-5 h-5 group-hover:translate-y-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
         </svg>
       </div>
     </button>
-  </section>
+  </div>
 </template>
 
 <style scoped>

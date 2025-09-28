@@ -437,11 +437,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="py-3 bg-gray-800 rounded-lg">
-      <div class="container mx-auto px-4 lg:px-20">
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-2">
-              <div class="lg:col-span-3">
+ <section class="rounded-lg" 
+         style="background: linear-gradient(to bottom, transparent 0%, rgb(31 41 55) 10%, rgb(31 41 55) 100%);">
+  <div class="flex justify-center mx-auto px-20">
+    <div class="lg:col-span-3 w-full">
 
+                <!-- Mobile: Collapsible filters -->
                 <details class="block lg:hidden mb-6 px-2">
                     <summary class="cursor-pointer select-none bg-gray-700 text-white px-4 py-2 rounded-lg">
                       Filters
@@ -597,301 +598,351 @@ onUnmounted(() => {
                     </div>
                   </details>
 
-                <!-- Mobile: Stack filters vertically, Desktop: Keep horizontal -->
-                <div class="hidden lg:flex flex-row justify-center gap-2 lg:gap-4 mb-6 px-2 lg:px-6">
-                      <!-- Chart Toggle - Full width on mobile -->
-                      <div class="flex items-center gap-2 w-full lg:min-w-[180px] lg:max-w-xs lg:mr-20">
-                          <button
-                              @click="toggleChart"
-                              :class="[
-                                  'flex items-center p-3 rounded-lg text-white cursor-pointer text-sm md:text-base h-full w-full',
-                                  'transition-all duration-300 ease-in-out',
-                                  chartToggleColor + ' hover:brightness-90'
-                              ]"
-                          >
-                              <!-- Left - Title and Description -->
-                              <div class="flex-1 text-left p-2">
-                                  <div class="font-medium truncate">{{ currentChart.title }}</div>
-                                  <div class="text-xs opacity-75 truncate text-wrap">{{ currentChart.description }}</div>
-                              </div>
-                              <!-- Right - Icon -->
-                              <div class="flex-shrink-0 p-2">
-                                  <component :is="currentChart.icon" class="w-8 h-8 lg:w-10 lg:h-10" />
-                              </div>
-                          </button>
-                          
-                          <button
-                            @click="toggleChart"
-                            :class="[
-                                'flex justify-center items-center p-3 mt-0 lg:mt-2 rounded-lg shadow-md text-white cursor-pointer h-12 w-12',
-                                'transition-all duration-300 ease-in-out hover:brightness-90',
-                            ]"
-                          >
-                              <!-- Right Arrow Icon -->
-                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none"
-                                  viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-                              </svg>
-                          </button>
-                      </div>
+                <!-- Desktop: Two-column layout -->
+                <div class="hidden lg:grid lg:grid-cols-12 lg:gap-6 mb-6">
+                    <!-- Chart Section - Takes up most of the space (8/12 columns) -->
+                    <div class="lg:col-span-8">
+                        <div class="space-y-8 p-2 lg:p-6 rounded-lg relative">
+                            <section>
+                                <div class="w-full">
+                                    <transition name="chart-fade" mode="out-in">
+                                        <div :key="currentChartIndex" class="w-full">
+                                            <DashboardLineChartComponent
+                                                v-if="currentChart.component === 'DashboardLineChartComponent'"
+                                                :game-type-id="activeGameId"
+                                                :start-date="dateRange[0]"
+                                                :end-date="dateRange[1]"
+                                                :is-exponential-scale="isExponentialScale"
+                                                :user-ids="activeUserIds"
+                                                :difficulty-id="difficultyId"
+                                                :category-id="categoryId"
+                                                :show-ai-scores="showAiScores" 
+                                                @pointClicked="handleChartPointClick"
+                                                class="w-full" />
+                                            <DashboardHeatmapComponent
+                                                v-else-if="currentChart.component === 'DashboardHeatmapComponent'"
+                                                :game-type-id="activeGameId"
+                                                :start-date="dateRange[0]"
+                                                :end-date="dateRange[1]"
+                                                :user-ids="activeUserIds"
+                                                :and-users="andUsers"
+                                                :difficulty-id="difficultyId"
+                                                :category-id="categoryId"
+                                                :show-ai-scores="showAiScores"
+                                                class="w-full"
+                                            />
+                                        </div>
+                                    </transition>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
 
-                      <!-- Game Filters - Stack on mobile, side by side on desktop -->
-                      <div class="flex flex-col lg:flex-col space-y-3 flex-grow w-full lg:min-w-[180px] lg:max-w-xs">
-                        <button
-                          v-for="(filter, index) in gameFilters"
-                          :key="filter.id"
-                          :class="[
-                            'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
-                            'transition-all duration-300 ease-in-out',
-                            activeGameId === filter.id
-                              ? optionColors[index].replace('/50', '') // stronger bg when active
-                              : optionColors[index],                   // semi-transparent bg normally
-                            'hover:brightness-90',
-                            activeGameId === filter.id ? 'ring-2 ring-gray-400' : ''
-                          ]"
-                          @click="selectGameFilter(filter.id)"
-                        >
-                          <component :is="gameIcons[index]" class="w-5 h-5 shrink-0" />
-                          <span class="font-medium truncate">{{ filter.name }}</span>
-                        </button>
-                      </div>
-
-                      <!-- Difficulty and Category - Stack on mobile -->
-                      <div class="flex flex-col space-y-3 w-full lg:flex-grow lg:h-full">
-                          <!-- Difficulty Filter Button -->
-                          <button
-                              @click="rotateDifficulty"
-                              :class="[
-                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
-                                  'transition-all duration-300 ease-in-out',
-                                  'bg-green-600/50 hover:brightness-90',
-                                  difficultyId ? 'bg-green-700 ring-2 ring-green-400' : ''
-                              ]"
-                          >
-                              <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                              </svg>
-                              <span class="font-medium truncate">
-                                  {{ difficultyId ? difficulties.find(d => d.id === difficultyId)?.name : 'All Difficulties' }}
-                              </span>
-                          </button>
-
-                          <!-- Category Filter Button -->
-                          <button
-                              @click="rotateCategory"
-                              :class="[
-                                  'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base',
-                                  'transition-all duration-300 ease-in-out',
-                                  'bg-pink-600/50 hover:brightness-90',
-                                  categoryId ? 'bg-pink-700 ring-2 ring-pink-400' : ''
-                              ]"
-                          >
-                              <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
-                              </svg>
-                              <span class="font-medium truncate">
-                                  {{ categoryId ? categories.find(c => c.id === categoryId)?.name : 'All Categories' }}
-                              </span>
-                          </button>
-                      </div>
-
-                      <!-- Date Filter - Full width on mobile -->
-                      <div class="mb-1 w-full h-full lg:w-auto">
-                          <button
-                              @click="showDateModal = true"
-                              :class="[
-                                  'flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full w-full',
-                                  'transition-all duration-300 ease-in-out',
-                                  dateFilterColor + ' hover:brightness-90',
-                                  (dateRange[0] && dateRange[1]) ? 'bg-orange-900/50 ring-2 ring-orange-400' : ''
-                              ]"
-                          >
-                              <CalendarDaysIcon class="w-5 h-5 shrink-0" />
-                              <span class="font-medium truncate">{{ dateFilterTitle }}</span>
-                          </button>
-                      </div>
-
-                      <!-- AI Scores Toggle - Full width on mobile -->
-                      <div class="mb-1 w-full h-full lg:w-auto">
-                          <button
-                              @click="toggleAiScores"
-                              :class="[
-                                  'flex items-center justify-center space-x-2 p-4 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full w-full',
-                                  'transition-all duration-300 ease-in-out',
-                                  aiFilterColor + ' hover:brightness-90',
-                                  showAiScores ? 'bg-lime-700 ring-2 ring-lime-400' : ''
-                              ]"
-                          >
-                              <BrainCircuitIcon class="w-5 h-5 shrink-0" />
-                              <span class="font-medium truncate">{{ showAiScores ? 'AI Scores ON' : 'AI Scores OFF' }}</span>
-                          </button>
-                      </div>
-
-                      <!-- Advanced Filters Toggle - Full width on mobile -->
-                      <div class="mb-1 w-full h-full lg:w-auto">
-                          <button
-                              @click="showAdvancedFilters = !showAdvancedFilters"
-                              :class="[
-                                  'w-full flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base h-full',
-                                  'transition-all duration-300 ease-in-out',
-                                  'bg-gray-600/50 hover:bg-gray-700',
-                                  showAdvancedFilters ? 'bg-gray-700' : ''
-                              ]"
-                          >
-                               <span class="text-xl shrink-0">
-                                   <template v-if="showAdvancedFilters">
-                                       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-up"><path d="m18 15-6-6-6 6"/></svg>
-                                   </template>
-                                   <template v-else>
-                                       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>
-                                   </template>
-                               </span>
-                              <span class="font-medium truncate px-1">Advanced</span>
-                          </button>
-                      </div>
-                  </div>
-
-                  <!-- Advanced Filters Section -->
-                  <transition name="fade-slide-y">
-                      <div v-if="showAdvancedFilters" class="mb-6 px-2 lg:px-6">
-                          <div class="bg-gray-800 p-4 lg:p-6 rounded-lg shadow-md space-y-6">
-                              <!-- User Filter Section -->
-                              <div>
-                                  <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
-                                      <h4 class="text-white font-semibold text-lg">{{ userFilterTitle }}</h4>
-                                      <div class="flex space-x-2">
-                                          <button
-                                            v-if="activeUserIds.length > 1"
-                                            @click="toggleAndUsers"
-                                            :class="[
-                                              'px-3 py-1 text-white text-xs rounded-md transition-colors',
-                                              andUsers ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
-                                            ]"
-                                          >
-                                            {{ andUsers ? 'AND Users' : 'OR Users' }}
-                                          </button>
-                                          <button
-                                              v-if="activeUserIds.length > 0"
-                                              @click="clearAllUserSelections"
-                                              class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded-md transition-colors"
-                                          >
-                                              Clear All ({{ activeUserIds.length }})
-                                          </button>
-                                      </div>
-                                  </div>
-                                  
-                                  <div class="flex flex-col space-y-2">
-                                      <input
-                                          type="text"
-                                          v-model="userSearchTerm"
-                                          placeholder="Search users..."
-                                          class="w-full p-2 rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                      />
-                                      
-                                      <!-- Selected users chips -->
-                                      <div v-if="activeUserIds.length > 0" class="flex flex-wrap gap-1 p-2 bg-gray-700 rounded-md min-h-[2rem]">
-                                          <span
-                                              v-for="userId in activeUserIds"
-                                              :key="userId"
-                                              class="inline-flex items-center px-2 py-1 bg-teal-600 text-white text-xs rounded-md"
-                                          >
-                                              {{ allUsers.find(u => u.id === userId)?.name || 'Unknown User' }}
-                                              <button
-                                                  @click="selectUserFilter(userId)"
-                                                  class="ml-1 text-teal-200 hover:text-white font-bold"
-                                                  title="Remove user"
-                                              >
-                                                  ×
-                                              </button>
-                                          </span>
-                                      </div>
-                                      
-                                      <!-- User list -->
-                                      <div class="max-h-48 overflow-y-auto custom-scrollbar rounded-md">
-                                          <button
-                                              v-for="user in filteredUsers"
-                                              :key="user.id"
-                                              :class="[
-                                                  'flex items-center space-x-2 px-3 py-1.5 rounded-md mt-2 text-white cursor-pointer w-full text-left',
-                                                  'transition-all duration-100 ease-in-out hover:brightness-110',
-                                                  userFilterColor,
-                                                  activeUserIds.includes(user.id) ? 'bg-teal-700 ring-1 ring-teal-400' : ''
-                                              ]"
-                                              @click="selectUserFilter(user.id)"
-                                          >
-                                              <span class="text-base">
-                                                  <UserIcon class="w-4 h-4" />
-                                              </span>
-                                              <span class="font-normal text-sm flex-grow">{{ user.name }}</span>
-                                              <span v-if="activeUserIds.includes(user.id)" class="text-teal-200 font-bold">✓</span>
-                                          </button>
-                                          
-                                          <p v-if="filteredUsers.length === 0 && userSearchTerm.trim()" class="text-gray-400 text-center text-sm py-2">
-                                              No users found matching "{{ userSearchTerm }}"
-                                          </p>
-                                          <p v-else-if="allUsers.length === 0" class="text-gray-400 text-center text-sm py-2">
-                                              Loading users...
-                                          </p>
-                                      </div>
-                                  </div>
-                              </div>
-                              
-                              <!-- Exponential Scale Filter (only show for line chart) -->
-                              <div v-if="currentChart.component === 'DashboardLineChartComponent'">
-                                  <h4 class="text-white font-semibold text-lg mb-4">Performance Scale</h4>
-                                  <button
-                                      @click="toggleExponentialScale"
+                    <!-- Filters Sidebar - Takes up remaining space (4/12 columns) -->
+                    <div class="lg:col-span-4 mt-4">
+                        <div class="bg-gray-700 rounded-lg p-4 space-y-4 sticky top-4">
+                            <!-- Chart Toggle -->
+                            <div class="space-y-2">
+                                <h3 class="text-white font-semibold text-sm mb-2">Chart Type</h3>
+                                <div class="flex items-center gap-2">
+                                    <button
+                                        @click="toggleChart"
+                                        :class="[
+                                            'flex items-center p-3 rounded-lg text-white cursor-pointer text-sm w-full',
+                                            'transition-all duration-300 ease-in-out',
+                                            chartToggleColor + ' hover:brightness-90'
+                                        ]"
+                                    >
+                                        <div class="flex-1 text-left">
+                                            <div class="font-medium text-sm">{{ currentChart.title }}</div>
+                                            <div class="text-xs opacity-75">{{ currentChart.description }}</div>
+                                        </div>
+                                        <div class="flex-shrink-0">
+                                            <component :is="currentChart.icon" class="w-6 h-6" />
+                                        </div>
+                                    </button>
+                                    
+                                    <button
+                                      @click="toggleChart"
                                       :class="[
-                                          'flex items-center justify-center space-x-2 p-3 rounded-lg shadow-md text-white cursor-pointer text-sm md:text-base w-full',
-                                          'transition-all duration-300 ease-in-out',
-                                          performanceFilterColor + ' hover:brightness-90',
-                                          isExponentialScale ? 'bg-purple-700 ring-2 ring-purple-400' : ''
+                                          'flex justify-center items-center p-2 rounded-lg shadow-md text-white cursor-pointer h-10 w-10',
+                                          'transition-all duration-300 ease-in-out hover:brightness-90 bg-gray-600',
                                       ]"
-                                  >
-                                      <ScalingIcon class="w-5 h-5 shrink-0" />
-                                      <span class="font-medium truncate">{{ isExponentialScale ? 'Exponential ON' : 'Exponential OFF' }}</span>
-                                  </button>
-                              </div>
-                          </div>
-                      </div>
-                  </transition>
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none"
+                                            viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
 
-                  <!-- CHART SECTION - changes here for mobile -->
-                  <div class="space-y-8 p-2 lg:p-6 rounded-lg relative">
-                      <section>
-                          <div class="w-full">
-                              <transition name="chart-fade" mode="out-in">
-                                  <div :key="currentChartIndex" class="w-full">
-                                      <DashboardLineChartComponent
-                                          v-if="currentChart.component === 'DashboardLineChartComponent'"
-                                          :game-type-id="activeGameId"
-                                          :start-date="dateRange[0]"
-                                          :end-date="dateRange[1]"
-                                          :is-exponential-scale="isExponentialScale"
-                                          :user-ids="activeUserIds"
-                                          :difficulty-id="difficultyId"
-                                          :category-id="categoryId"
-                                          :show-ai-scores="showAiScores" 
-                                          @pointClicked="handleChartPointClick"
-                                          class="w-full" />
-                                      <DashboardHeatmapComponent
-                                          v-else-if="currentChart.component === 'DashboardHeatmapComponent'"
-                                          :game-type-id="activeGameId"
-                                          :start-date="dateRange[0]"
-                                          :end-date="dateRange[1]"
-                                          :user-ids="activeUserIds"
-                                          :and-users="andUsers"
-                                          :difficulty-id="difficultyId"
-                                          :category-id="categoryId"
-                                          :show-ai-scores="showAiScores"
-                                          class="w-full"
-                                      />
-                                  </div>
-                              </transition>
-                          </div>
-                      </section>
-                  </div>
-              </div>
+                            <!-- Date Filter -->
+                            <div class="space-y-2">
+                                <h3 class="text-white font-semibold text-sm mb-2">Date Range</h3>
+                                <button
+                                    @click="showDateModal = true"
+                                    :class="[
+                                        'flex items-center space-x-2 p-3 rounded-lg text-white cursor-pointer text-sm w-full',
+                                        'transition-all duration-300 ease-in-out',
+                                        dateFilterColor + ' hover:brightness-90',
+                                        (dateRange[0] && dateRange[1]) ? 'bg-orange-900/50 ring-2 ring-orange-400' : ''
+                                    ]"
+                                >
+                                    <CalendarDaysIcon class="w-5 h-5 shrink-0" />
+                                    <span class="font-medium">{{ dateFilterTitle }}</span>
+                                </button>
+                            </div>
+
+                            <!-- Game Filters -->
+                            <div class="space-y-2">
+                              <h3 class="text-white font-semibold text-sm mb-2">Games</h3>
+                              <div class="w-full flex space-x-2">
+                                <button
+                                  v-for="(filter, index) in gameFilters"
+                                  :key="filter.id"
+                                  :class="[
+                                    'flex items-center space-x-2 p-3 rounded-lg text-white cursor-pointer text-sm w-1/2',
+                                    'transition-all duration-300 ease-in-out',
+                                    activeGameId === filter.id
+                                      ? optionColors[index].replace('/50', '') + ' ring-2 ring-gray-400'
+                                      : optionColors[index],
+                                    'hover:brightness-90'
+                                  ]"
+                                  @click="selectGameFilter(filter.id)"
+                                >
+                                  <component :is="gameIcons[index]" class="w-5 h-5 shrink-0" />
+                                  <span class="font-medium">{{ filter.name }}</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            <!-- Difficulty and Category -->
+                            <div class="space-y-2">
+                              <h3 class="text-white font-semibold text-sm mb-2">Game Filters</h3>
+                              <div class="flex space-x-2">
+                                <!-- Difficulty Filter -->
+                                <button
+                                  @click="rotateDifficulty"
+                                  :class="[
+                                    'flex items-center space-x-2 p-3 rounded-lg text-white cursor-pointer text-sm flex-1',
+                                    'transition-all duration-300 ease-in-out',
+                                    'bg-green-600/50 hover:brightness-90',
+                                    difficultyId ? 'bg-green-700 ring-2 ring-green-400' : ''
+                                  ]"
+                                >
+                                  <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                  </svg>
+                                  <span class="font-medium">
+                                    {{ difficultyId ? difficulties.find(d => d.id === difficultyId)?.name : 'All Difficulties' }}
+                                  </span>
+                                </button>
+
+                                <!-- Category Filter -->
+                                <button
+                                  @click="rotateCategory"
+                                  :class="[
+                                    'flex items-center space-x-2 p-3 rounded-lg text-white cursor-pointer text-sm flex-1',
+                                    'transition-all duration-300 ease-in-out',
+                                    'bg-pink-600/50 hover:brightness-90',
+                                    categoryId ? 'bg-pink-700 ring-2 ring-pink-400' : ''
+                                  ]"
+                                >
+                                  <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                                  </svg>
+                                  <span class="font-medium">
+                                    {{ categoryId ? categories.find(c => c.id === categoryId)?.name : 'All Categories' }}
+                                  </span>
+                                </button>
+                              </div>
+                            </div>
+
+
+                            <!-- AI Scores Toggle -->
+                            <div class="space-y-2">
+                                <h3 class="text-white font-semibold text-sm mb-2">AI Features</h3>
+                                <button
+                                    @click="toggleAiScores"
+                                    :class="[
+                                        'flex items-center space-x-2 p-3 rounded-lg text-white cursor-pointer text-sm w-full',
+                                        'transition-all duration-300 ease-in-out',
+                                        aiFilterColor + ' hover:brightness-90',
+                                        showAiScores ? 'bg-lime-700 ring-2 ring-lime-400' : ''
+                                    ]"
+                                >
+                                    <BrainCircuitIcon class="w-5 h-5 shrink-0" />
+                                    <span class="font-medium">{{ showAiScores ? 'AI Scores ON' : 'AI Scores OFF' }}</span>
+                                </button>
+                            </div>
+
+                            <!-- Advanced Filters Toggle -->
+                            <div class="space-y-2">
+                                <button
+                                    @click="showAdvancedFilters = !showAdvancedFilters"
+                                    :class="[
+                                        'w-full flex items-center space-x-2 p-3 rounded-lg text-white cursor-pointer text-sm',
+                                        'transition-all duration-300 ease-in-out',
+                                        'bg-gray-600/50 hover:bg-gray-700',
+                                        showAdvancedFilters ? 'bg-gray-700' : ''
+                                    ]"
+                                >
+                                     <span class="text-xl shrink-0">
+                                         <template v-if="showAdvancedFilters">
+                                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-up"><path d="m18 15-6-6-6 6"/></svg>
+                                         </template>
+                                         <template v-else>
+                                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>
+                                         </template>
+                                     </span>
+                                    <span class="font-medium">Advanced</span>
+                                </button>
+
+                                <!-- Advanced Filters Section -->
+                                <transition name="fade-slide-y">
+                                    <div v-if="showAdvancedFilters" class="mt-4">
+                                        <div class="bg-gray-800 p-4 rounded-lg shadow-md space-y-4">
+                                            <!-- User Filter Section -->
+                                            <div>
+                                                <div class="flex flex-col justify-between mb-3 gap-2">
+                                                    <h4 class="text-white font-semibold text-sm">{{ userFilterTitle }}</h4>
+                                                    <div class="flex space-x-2">
+                                                        <button
+                                                          v-if="activeUserIds.length > 1"
+                                                          @click="toggleAndUsers"
+                                                          :class="[
+                                                            'px-2 py-1 text-white text-xs rounded-md transition-colors',
+                                                            andUsers ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
+                                                          ]"
+                                                        >
+                                                          {{ andUsers ? 'AND Users' : 'OR Users' }}
+                                                        </button>
+                                                        <button
+                                                            v-if="activeUserIds.length > 0"
+                                                            @click="clearAllUserSelections"
+                                                            class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded-md transition-colors"
+                                                        >
+                                                            Clear ({{ activeUserIds.length }})
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="space-y-2">
+                                                    <input
+                                                        type="text"
+                                                        v-model="userSearchTerm"
+                                                        placeholder="Search users..."
+                                                        class="w-full p-2 text-sm rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                                    />
+                                                    
+                                                    <!-- Selected users chips -->
+                                                    <div v-if="activeUserIds.length > 0" class="flex flex-wrap gap-1 p-2 bg-gray-700 rounded-md min-h-[2rem]">
+                                                        <span
+                                                            v-for="userId in activeUserIds"
+                                                            :key="userId"
+                                                            class="inline-flex items-center px-2 py-1 bg-teal-600 text-white text-xs rounded-md"
+                                                        >
+                                                            {{ allUsers.find(u => u.id === userId)?.name || 'Unknown User' }}
+                                                            <button
+                                                                @click="selectUserFilter(userId)"
+                                                                class="ml-1 text-teal-200 hover:text-white font-bold"
+                                                                title="Remove user"
+                                                            >
+                                                                ×
+                                                            </button>
+                                                        </span>
+                                                    </div>
+                                                    
+                                                    <!-- User list -->
+                                                    <div class="max-h-32 overflow-y-auto custom-scrollbar rounded-md">
+                                                        <button
+                                                            v-for="user in filteredUsers"
+                                                            :key="user.id"
+                                                            :class="[
+                                                                'flex items-center space-x-2 px-3 py-1.5 rounded-md mt-2 text-white cursor-pointer w-full text-left',
+                                                                'transition-all duration-100 ease-in-out hover:brightness-110',
+                                                                userFilterColor,
+                                                                activeUserIds.includes(user.id) ? 'bg-teal-700 ring-1 ring-teal-400' : ''
+                                                            ]"
+                                                            @click="selectUserFilter(user.id)"
+                                                        >
+                                                            <span class="text-base">
+                                                                <UserIcon class="w-4 h-4" />
+                                                            </span>
+                                                            <span class="font-normal text-xs flex-grow">{{ user.name }}</span>
+                                                            <span v-if="activeUserIds.includes(user.id)" class="text-teal-200 font-bold">✓</span>
+                                                        </button>
+                                                        
+                                                        <p v-if="filteredUsers.length === 0 && userSearchTerm.trim()" class="text-gray-400 text-center text-xs py-2">
+                                                            No users found matching "{{ userSearchTerm }}"
+                                                        </p>
+                                                        <p v-else-if="allUsers.length === 0" class="text-gray-400 text-center text-xs py-2">
+                                                            Loading users...
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Exponential Scale Filter (only show for line chart) -->
+                                            <div v-if="currentChart.component === 'DashboardLineChartComponent'">
+                                                <h4 class="text-white font-semibold text-sm mb-2">Performance Scale</h4>
+                                                <button
+                                                    @click="toggleExponentialScale"
+                                                    :class="[
+                                                        'flex items-center space-x-2 p-3 rounded-lg text-white cursor-pointer text-sm w-full',
+                                                        'transition-all duration-300 ease-in-out',
+                                                        performanceFilterColor + ' hover:brightness-90',
+                                                        isExponentialScale ? 'bg-purple-700 ring-2 ring-purple-400' : ''
+                                                    ]"
+                                                >
+                                                    <ScalingIcon class="w-5 h-5 shrink-0" />
+                                                    <span class="font-medium">{{ isExponentialScale ? 'Exponential ON' : 'Exponential OFF' }}</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </transition>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mobile: Chart section (when filters are collapsed) -->
+                <div class="block lg:hidden space-y-8 p-2 rounded-lg relative">
+                    <section>
+                        <div class="w-full">
+                            <transition name="chart-fade" mode="out-in">
+                                <div :key="currentChartIndex" class="w-full">
+                                    <DashboardLineChartComponent
+                                        v-if="currentChart.component === 'DashboardLineChartComponent'"
+                                        :game-type-id="activeGameId"
+                                        :start-date="dateRange[0]"
+                                        :end-date="dateRange[1]"
+                                        :is-exponential-scale="isExponentialScale"
+                                        :user-ids="activeUserIds"
+                                        :difficulty-id="difficultyId"
+                                        :category-id="categoryId"
+                                        :show-ai-scores="showAiScores" 
+                                        @pointClicked="handleChartPointClick"
+                                        class="w-full" />
+                                    <DashboardHeatmapComponent
+                                        v-else-if="currentChart.component === 'DashboardHeatmapComponent'"
+                                        :game-type-id="activeGameId"
+                                        :start-date="dateRange[0]"
+                                        :end-date="dateRange[1]"
+                                        :user-ids="activeUserIds"
+                                        :and-users="andUsers"
+                                        :difficulty-id="difficultyId"
+                                        :category-id="categoryId"
+                                        :show-ai-scores="showAiScores"
+                                        class="w-full"
+                                    />
+                                </div>
+                            </transition>
+                        </div>
+                    </section>
+                </div>
           </div>
       </div>
   </section>
